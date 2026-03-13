@@ -1,0 +1,13 @@
+StreamVault v2.0.0 (Build 2)
+
+• HLS.js direct stream playback — no more iframe spinning
+• Extracts real stream URL from webplayer.online wrappers
+• Three-tier playback: HLS.js → native video → iframe fallback
+• JSON bulk import — upload or paste a JSON file with streams
+• JSON export — backup your entire library
+• New fields: icon URL, EPG link, EPG title per stream
+• Channel icons shown in library list
+• Category badges in stream listings
+• Progress bar in player
+• Retry and iframe fallback buttons on playback errors
+• Migrates existing data from Build 1
