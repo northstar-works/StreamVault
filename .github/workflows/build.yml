@@ -109,7 +109,7 @@ jobs:
 
           # Create proper fdroid config
           cat > config.yml << 'EOF'
-          repo_url: placeholder
+          repo_url: https://sidscri.github.io/StreamVault/fdroid/repo
           repo_name: StreamVault F-Droid Repo
           repo_description: Personal F-Droid repository for StreamVault media player
           archive_older: 0
