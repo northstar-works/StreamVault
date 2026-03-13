@@ -85,42 +85,51 @@ jobs:
           name: StreamVault-release
           path: apk-output
 
-      - name: List downloaded APKs
-        run: |
-          echo "=== Downloaded APKs ==="
-          find apk-output -name "*.apk" -ls
-
       - name: Install fdroidserver
         run: |
           sudo apt-get update
-          sudo apt-get install -y fdroidserver apksigner
+          sudo apt-get install -y fdroidserver
 
       - name: Build F-Droid repo
         run: |
           mkdir -p fdroid-workdir/repo
           cp apk-output/*.apk fdroid-workdir/repo/
+          cd fdroid-workdir
 
-          cat > fdroid-workdir/config.yml << 'ENDCONFIG'
-          repo_url: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/fdroid/repo
+          # Generate a signing keystore for the repo index
+          keytool -genkey -v \
+            -keystore keystore.p12 \
+            -storetype pkcs12 \
+            -alias repokey \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass repopass \
+            -dname "CN=StreamVault Repo, O=StreamVault, L=Unknown, ST=Unknown, C=US"
+
+          # Create proper fdroid config
+          cat > config.yml << 'EOF'
+          repo_url: placeholder
           repo_name: StreamVault F-Droid Repo
-          repo_description: Personal F-Droid repository for StreamVault
-          archive_older: 3
-          ENDCONFIG
+          repo_description: Personal F-Droid repository for StreamVault media player
+          archive_older: 0
+          repo_keyalias: repokey
+          keystore: keystore.p12
+          keystorepass: repopass
+          keypass: repopass
+          keydname: CN=StreamVault Repo, O=StreamVault, L=Unknown, ST=Unknown, C=US
+          EOF
 
-          sed -i 's/^[[:space:]]*//' fdroid-workdir/config.yml
+          sed -i 's/^[[:space:]]*//' config.yml
 
           echo "=== config.yml ==="
-          cat fdroid-workdir/config.yml
-          echo "=== APKs in repo ==="
-          ls -la fdroid-workdir/repo/
+          cat config.yml
 
-          cd fdroid-workdir
-          fdroid update --create-metadata --allow-disabled-algorithms -v 2>&1 || {
-            echo "fdroid update had issues — continuing with direct APK hosting"
-          }
+          # Generate the repo index
+          fdroid update --create-metadata --allow-disabled-algorithms -v
 
-          echo "=== Generated repo contents ==="
-          ls -laR repo/
+          echo "=== Repo contents after fdroid update ==="
+          ls -la repo/
 
       - name: Assemble Pages site
         run: |
@@ -131,10 +140,13 @@ jobs:
           mkdir -p _site/fdroid
           cp -r fdroid-workdir/repo _site/fdroid/
 
-          find _site/fdroid/repo -name "*.apk" -exec cp {} _site/fdroid/repo/StreamVault.apk \; 2>/dev/null || true
+          # Verify critical F-Droid index files exist
+          echo "=== Checking for F-Droid index files ==="
+          ls -la _site/fdroid/repo/index-v1.jar || echo "WARNING: index-v1.jar missing!"
+          ls -la _site/fdroid/repo/index-v2.json || echo "WARNING: index-v2.json missing (OK for older F-Droid)"
+          ls -la _site/fdroid/repo/entry.jar || echo "WARNING: entry.jar missing"
 
-          echo "=== _site contents ==="
-          find _site -type f | head -50
+          find _site/fdroid/repo -name "*.apk" -exec cp {} _site/fdroid/repo/StreamVault.apk \; 2>/dev/null || true
 
           cat > _site/index.html << 'HTMLEOF'
           <!DOCTYPE html>
@@ -186,17 +198,20 @@ jobs:
           <li>Tap <strong>Add</strong> and pull to refresh</li>
           </ol>
           </div>
-          <div class="footer"><a href="https://github.com/${OWNER}/${REPO}">View source on GitHub</a></div>
+          <div class="footer"><a href="https://github.com/sidscri/StreamVault">View source on GitHub</a></div>
           </div>
           <div class="toast" id="toast">Copied!</div>
           <script>
-          var u=window.location.href.replace(/\/$/,'') +'/fdroid/repo';
+          var u=window.location.href.replace(/\/$/,'')+'/fdroid/repo';
           document.getElementById('repo-url').insertAdjacentText('afterbegin',u);
           function copyUrl(){navigator.clipboard.writeText(u).then(function(){var t=document.getElementById('toast');t.classList.add('show');setTimeout(function(){t.classList.remove('show')},2000)})}
           </script>
           </body>
           </html>
           HTMLEOF
+
+          echo "=== Final site structure ==="
+          find _site -type f
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
