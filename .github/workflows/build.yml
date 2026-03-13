@@ -82,7 +82,7 @@ jobs:
       - name: Download Release APK
         uses: actions/download-artifact@v4
         with:
-          name: StreamVault-release
+          name: StreamVault-debug
           path: apk-output
 
       - name: Install fdroidserver
