@@ -1,0 +1,9 @@
+Initial release of StreamVault.
+
+• Media library with add, edit, and delete
+• Category tagging and filtering
+• Search across titles and URLs
+• Integrated streaming video player
+• Overlay controls (back, prev, play/pause, next)
+• Persistent local storage
+• Dark theme UI

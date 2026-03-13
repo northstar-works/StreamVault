@@ -1,0 +1,16 @@
+StreamVault is a personal media streaming organizer that lets you save, categorize, and play streaming URLs through an integrated video player.
+
+Features:
+• Add media with custom titles, URLs, and categories
+• Organize your library with category filters and search
+• Integrated full-screen video player with overlay controls
+• Tap-to-show controls: back, previous, play/pause, next
+• Skip through your entire library with prev/next navigation
+• Persistent library — your collection survives app restarts
+• Works with any streamable URL (iframe-compatible)
+• Dark theme optimized for media consumption
+• No accounts, no tracking, no ads — fully offline-capable library management
+
+StreamVault is designed for users who want a simple, private way to organize and access their personal media streams without relying on third-party apps or services.
+
+This app requires an active internet connection to stream media content. All library data is stored locally on your device.

@@ -1,0 +1,113 @@
+name: F-Droid Repo
+
+on:
+  release:
+    types: [ published ]
+  workflow_dispatch:
+
+jobs:
+  fdroid-repo:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        run: |
+          gradle wrapper --gradle-version 8.4 || true
+          chmod +x gradlew
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease
+
+      - name: Install fdroidserver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fdroidserver
+
+      - name: Setup F-Droid repo structure
+        run: |
+          mkdir -p fdroid/repo
+          cp app/build/outputs/apk/release/*.apk fdroid/repo/
+
+      - name: Create F-Droid config
+        run: |
+          cd fdroid
+          cat > config.yml << 'EOF'
+          repo_url: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/fdroid/repo
+          repo_name: StreamVault F-Droid Repo
+          repo_description: >-
+            Personal F-Droid repository for StreamVault —
+            a media streaming organizer with integrated player.
+          repo_icon: icon.png
+          archive_older: 3
+          EOF
+
+      - name: Generate F-Droid repo index
+        run: |
+          cd fdroid
+          fdroid update --create-metadata --allow-disabled-algorithms || true
+
+      - name: Prepare GitHub Pages
+        run: |
+          mkdir -p _site/fdroid
+          cp -r fdroid/repo _site/fdroid/
+          # Create a landing page
+          cat > _site/index.html << 'LANDING'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <title>StreamVault F-Droid Repo</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+              body { font-family: system-ui; background: #1a1a2e; color: #e0e0e0; display: flex; justify-content: center; padding: 40px 20px; }
+              .card { max-width: 600px; background: #16213e; border-radius: 16px; padding: 40px; }
+              h1 { color: #6c5ce7; margin-bottom: 8px; }
+              code { background: #0f3460; padding: 2px 8px; border-radius: 4px; font-size: 13px; word-break: break-all; }
+              .steps { margin: 20px 0; }
+              .steps li { margin: 12px 0; line-height: 1.6; }
+              a { color: #6c5ce7; }
+              .repo-url { background: #0f3460; padding: 14px; border-radius: 8px; margin: 16px 0; word-break: break-all; font-family: monospace; font-size: 13px; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <h1>StreamVault</h1>
+              <p>Personal F-Droid Repository</p>
+              <div class="repo-url" id="repo-url"></div>
+              <h3>How to add this repo to F-Droid:</h3>
+              <ol class="steps">
+                <li>Open the <strong>F-Droid</strong> app</li>
+                <li>Go to <strong>Settings → Repositories</strong></li>
+                <li>Tap <strong>"+"</strong> to add a new repository</li>
+                <li>Paste the repo URL shown above</li>
+                <li>Tap <strong>Add</strong> — StreamVault will appear in your F-Droid app list</li>
+              </ol>
+            </div>
+            <script>
+              document.getElementById('repo-url').textContent = window.location.href + 'fdroid/repo';
+            </script>
+          </body>
+          </html>
+          LANDING
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4

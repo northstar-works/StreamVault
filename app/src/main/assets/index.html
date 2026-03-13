@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>StreamVault</title>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg-deep: #0a0a0f;
+  --bg-card: #12121a;
+  --bg-card-hover: #1a1a26;
+  --bg-surface: #16161f;
+  --accent: #6c5ce7;
+  --accent-glow: rgba(108, 92, 231, 0.35);
+  --accent-soft: rgba(108, 92, 231, 0.12);
+  --text-primary: #e8e6f0;
+  --text-secondary: #8a879a;
+  --text-muted: #55526a;
+  --danger: #ff4757;
+  --danger-soft: rgba(255, 71, 87, 0.12);
+  --success: #2ed573;
+  --border: rgba(255, 255, 255, 0.06);
+  --overlay: rgba(6, 6, 12, 0.92);
+  --radius: 14px;
+  --radius-sm: 8px;
+  --shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+html, body {
+  height: 100%; width: 100%;
+  font-family: 'Be Vietnam Pro', sans-serif;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+/* ── Screens ── */
+.screen { display: none; position: absolute; inset: 0; flex-direction: column; }
+.screen.active { display: flex; }
+
+/* ── LIBRARY SCREEN ── */
+#library-screen {
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(108,92,231,0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(108,92,231,0.05) 0%, transparent 50%),
+    var(--bg-deep);
+}
+
+.lib-header {
+  padding: 52px 22px 18px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.lib-header h1 {
+  font-size: 26px; font-weight: 700; letter-spacing: -0.5px;
+  background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent) 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.lib-header .count {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px; color: var(--text-muted);
+  background: var(--bg-card); padding: 4px 10px;
+  border-radius: 20px; border: 1px solid var(--border);
+}
+
+.search-bar {
+  margin: 0 22px 14px; position: relative;
+}
+.search-bar input {
+  width: 100%; padding: 13px 16px 13px 44px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--text-primary);
+  font-family: inherit; font-size: 14px; outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.search-bar input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.search-bar input::placeholder { color: var(--text-muted); }
+.search-bar svg {
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  width: 18px; height: 18px; color: var(--text-muted);
+}
+
+.media-list {
+  flex: 1; overflow-y: auto; padding: 0 22px 100px;
+  -webkit-overflow-scrolling: touch;
+}
+.media-list::-webkit-scrollbar { display: none; }
+
+.empty-state {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 80px 30px; text-align: center;
+}
+.empty-state .icon-wrap {
+  width: 80px; height: 80px; border-radius: 50%;
+  background: var(--accent-soft); display: flex;
+  align-items: center; justify-content: center; margin-bottom: 20px;
+}
+.empty-state .icon-wrap svg { width: 36px; height: 36px; color: var(--accent); }
+.empty-state h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+.empty-state p { font-size: 13px; color: var(--text-secondary); line-height: 1.5; max-width: 260px; }
+
+.media-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px; margin-bottom: 8px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative; overflow: hidden;
+  animation: slideIn 0.3s ease forwards;
+  opacity: 0; transform: translateY(10px);
+}
+@keyframes slideIn {
+  to { opacity: 1; transform: translateY(0); }
+}
+.media-item:active { transform: scale(0.98); }
+.media-item:hover { background: var(--bg-card-hover); border-color: rgba(108,92,231,0.2); }
+
+.media-item .thumb {
+  width: 52px; height: 52px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent-soft), rgba(108,92,231,0.25));
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.media-item .thumb svg { width: 22px; height: 22px; color: var(--accent); }
+
+.media-item .info { flex: 1; min-width: 0; }
+.media-item .info .title {
+  font-size: 14px; font-weight: 500; margin-bottom: 3px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.media-item .info .url-preview {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.media-item .actions {
+  display: flex; gap: 4px; flex-shrink: 0;
+}
+.media-item .actions button {
+  width: 34px; height: 34px; border-radius: 8px;
+  border: none; cursor: pointer; display: flex;
+  align-items: center; justify-content: center;
+  background: transparent; color: var(--text-muted);
+  transition: all 0.2s;
+}
+.media-item .actions .edit-btn:hover { background: var(--accent-soft); color: var(--accent); }
+.media-item .actions .del-btn:hover { background: var(--danger-soft); color: var(--danger); }
+.media-item .actions button svg { width: 16px; height: 16px; }
+
+.fab {
+  position: fixed; bottom: 28px; right: 22px;
+  width: 58px; height: 58px; border-radius: 50%;
+  background: var(--accent); border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 20px var(--accent-glow), 0 2px 8px rgba(0,0,0,0.3);
+  transition: all 0.2s; z-index: 50;
+}
+.fab:active { transform: scale(0.92); }
+.fab svg { width: 26px; height: 26px; color: #fff; }
+
+/* ── MODAL ── */
+.modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: var(--overlay); z-index: 200;
+  align-items: flex-end; justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+.modal-overlay.active { display: flex; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.modal {
+  width: 100%; max-width: 480px;
+  background: var(--bg-surface); border-radius: 20px 20px 0 0;
+  padding: 28px 22px 34px; animation: slideUp 0.3s ease;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+.modal h2 { font-size: 20px; font-weight: 600; margin-bottom: 22px; }
+.modal label {
+  display: block; font-size: 12px; font-weight: 500;
+  color: var(--text-secondary); margin-bottom: 7px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.modal input, .modal textarea {
+  width: 100%; padding: 13px 14px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text-primary);
+  font-family: inherit; font-size: 14px; outline: none;
+  margin-bottom: 18px; transition: border-color 0.2s, box-shadow 0.2s;
+}
+.modal textarea {
+  font-family: 'Space Mono', monospace; font-size: 12px;
+  min-height: 72px; resize: vertical;
+}
+.modal input:focus, .modal textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.modal input::placeholder, .modal textarea::placeholder { color: var(--text-muted); }
+
+.modal-actions { display: flex; gap: 10px; margin-top: 6px; }
+.modal-actions button {
+  flex: 1; padding: 14px; border-radius: var(--radius-sm);
+  font-family: inherit; font-size: 14px; font-weight: 600;
+  border: none; cursor: pointer; transition: all 0.2s;
+}
+.btn-cancel {
+  background: var(--bg-card); color: var(--text-secondary);
+  border: 1px solid var(--border) !important;
+}
+.btn-cancel:active { background: var(--bg-card-hover); }
+.btn-save { background: var(--accent); color: #fff; }
+.btn-save:active { opacity: 0.85; }
+
+/* ── PLAYER SCREEN ── */
+#player-screen { background: #000; }
+
+.player-container {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.player-container iframe, .player-container video {
+  width: 100%; height: 100%; border: none;
+}
+
+/* Overlay Controls */
+.player-overlay {
+  position: absolute; inset: 0; z-index: 10;
+  display: flex; flex-direction: column;
+  justify-content: space-between;
+  opacity: 0; transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+.player-overlay.visible {
+  opacity: 1; pointer-events: auto;
+}
+
+.player-top {
+  display: flex; align-items: center; gap: 14px;
+  padding: 48px 20px 20px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.85) 0%, transparent 100%);
+}
+.player-top .back-btn {
+  width: 42px; height: 42px; border-radius: 50%;
+  background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; backdrop-filter: blur(10px);
+  transition: all 0.2s;
+}
+.player-top .back-btn:active { transform: scale(0.9); background: rgba(255,255,255,0.2); }
+.player-top .back-btn svg { width: 20px; height: 20px; color: #fff; }
+.player-top .now-playing {
+  flex: 1; min-width: 0;
+}
+.player-top .now-playing .label {
+  font-size: 10px; color: rgba(255,255,255,0.5);
+  text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;
+}
+.player-top .now-playing .title {
+  font-size: 16px; font-weight: 600; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.player-center {
+  display: flex; align-items: center; justify-content: center; gap: 40px;
+}
+.player-center button {
+  width: 62px; height: 62px; border-radius: 50%;
+  border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.player-center .skip-btn {
+  background: rgba(255,255,255,0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.player-center .skip-btn svg { width: 22px; height: 22px; color: #fff; }
+.player-center .skip-btn:active { transform: scale(0.9); }
+
+.player-center .play-pause-btn {
+  width: 76px; height: 76px;
+  background: var(--accent);
+  box-shadow: 0 4px 24px var(--accent-glow);
+}
+.player-center .play-pause-btn svg { width: 30px; height: 30px; color: #fff; }
+.player-center .play-pause-btn:active { transform: scale(0.9); }
+
+.player-bottom {
+  padding: 20px 20px 40px;
+  background: linear-gradient(0deg, rgba(0,0,0,0.85) 0%, transparent 100%);
+}
+.player-bottom .url-info {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; color: rgba(255,255,255,0.35);
+  text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Loading spinner */
+.loading-indicator {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%); z-index: 5;
+}
+.spinner {
+  width: 44px; height: 44px;
+  border: 3px solid rgba(255,255,255,0.1);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: var(--bg-surface); color: var(--text-primary);
+  padding: 12px 22px; border-radius: 30px; font-size: 13px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow); opacity: 0;
+  transition: all 0.3s ease; z-index: 300; pointer-events: none;
+  white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* Confirm dialog */
+.confirm-overlay {
+  display: none; position: fixed; inset: 0;
+  background: var(--overlay); z-index: 250;
+  align-items: center; justify-content: center;
+}
+.confirm-overlay.active { display: flex; }
+.confirm-box {
+  background: var(--bg-surface); border-radius: var(--radius);
+  padding: 26px; width: 300px; text-align: center;
+  box-shadow: var(--shadow); animation: fadeIn 0.2s;
+}
+.confirm-box h3 { font-size: 16px; margin-bottom: 8px; }
+.confirm-box p { font-size: 13px; color: var(--text-secondary); margin-bottom: 22px; }
+.confirm-box .btns { display: flex; gap: 10px; }
+.confirm-box .btns button {
+  flex: 1; padding: 12px; border-radius: var(--radius-sm);
+  font-family: inherit; font-size: 13px; font-weight: 600;
+  border: none; cursor: pointer;
+}
+.confirm-box .btn-no { background: var(--bg-card); color: var(--text-secondary); }
+.confirm-box .btn-yes { background: var(--danger); color: #fff; }
+
+/* Reorder handle */
+.drag-handle {
+  cursor: grab; padding: 4px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); flex-shrink: 0;
+}
+.drag-handle svg { width: 16px; height: 16px; }
+
+/* Category pills */
+.category-bar {
+  display: flex; gap: 8px; padding: 0 22px 14px;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+}
+.category-bar::-webkit-scrollbar { display: none; }
+.cat-pill {
+  padding: 7px 16px; border-radius: 20px;
+  font-size: 12px; font-weight: 500;
+  white-space: nowrap; cursor: pointer;
+  background: var(--bg-card); border: 1px solid var(--border);
+  color: var(--text-secondary); transition: all 0.2s;
+}
+.cat-pill.active {
+  background: var(--accent); color: #fff;
+  border-color: var(--accent);
+}
+</style>
+</head>
+<body>
+
+<!-- ════════ LIBRARY SCREEN ════════ -->
+<div id="library-screen" class="screen active">
+  <div class="lib-header">
+    <h1>StreamVault</h1>
+    <span class="count" id="item-count">0 items</span>
+  </div>
+
+  <div class="search-bar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" id="search-input" placeholder="Search your library…">
+  </div>
+
+  <div class="category-bar" id="category-bar"></div>
+
+  <div class="media-list" id="media-list"></div>
+
+  <button class="fab" id="fab-add" aria-label="Add media">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+</div>
+
+<!-- ════════ PLAYER SCREEN ════════ -->
+<div id="player-screen" class="screen">
+  <div class="player-container" id="player-container"></div>
+  <div class="loading-indicator" id="loading-indicator"><div class="spinner"></div></div>
+  <div class="player-overlay" id="player-overlay">
+    <div class="player-top">
+      <button class="back-btn" id="back-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="now-playing">
+        <div class="label">Now Playing</div>
+        <div class="title" id="player-title">—</div>
+      </div>
+    </div>
+    <div class="player-center">
+      <button class="skip-btn" id="prev-btn">
+        <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4"/><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2"/></svg>
+      </button>
+      <button class="play-pause-btn" id="play-pause-btn">
+        <svg id="icon-pause" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+        <svg id="icon-play" viewBox="0 0 24 24" fill="currentColor" style="display:none"><polygon points="5 3 19 12 5 21"/></svg>
+      </button>
+      <button class="skip-btn" id="next-btn">
+        <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2"/></svg>
+      </button>
+    </div>
+    <div class="player-bottom">
+      <div class="url-info" id="player-url">—</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ ADD/EDIT MODAL ════════ -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <h2 id="modal-title">Add Media</h2>
+    <label for="input-name">Title</label>
+    <input type="text" id="input-name" placeholder="My Awesome Stream">
+    <label for="input-url">Stream URL</label>
+    <textarea id="input-url" placeholder="http://webplayer.online/?url=https://..."></textarea>
+    <label for="input-cat">Category <span style="color:var(--text-muted);text-transform:none;letter-spacing:0">(optional)</span></label>
+    <input type="text" id="input-cat" placeholder="Movies, Shows, Music…">
+    <div class="modal-actions">
+      <button class="btn-cancel" id="btn-cancel">Cancel</button>
+      <button class="btn-save" id="btn-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ CONFIRM DELETE ════════ -->
+<div class="confirm-overlay" id="confirm-overlay">
+  <div class="confirm-box">
+    <h3>Delete Item?</h3>
+    <p>This cannot be undone.</p>
+    <div class="btns">
+      <button class="btn-no" id="confirm-no">Cancel</button>
+      <button class="btn-yes" id="confirm-yes">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ TOAST ════════ -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── State ───
+let mediaItems = [];
+let editingId = null;
+let deleteId = null;
+let currentIndex = -1;
+let overlayTimer = null;
+let isPaused = false;
+let activeCategory = 'All';
+
+const STORAGE_KEY = 'streamvault_media';
+
+// ─── Persistence ───
+function saveData() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(mediaItems)); } catch(e) {}
+}
+function loadData() {
+  try {
+    const d = localStorage.getItem(STORAGE_KEY);
+    if (d) mediaItems = JSON.parse(d);
+  } catch(e) {}
+}
+
+// ─── DOM refs ───
+const $libraryScreen = document.getElementById('library-screen');
+const $playerScreen = document.getElementById('player-screen');
+const $mediaList = document.getElementById('media-list');
+const $itemCount = document.getElementById('item-count');
+const $searchInput = document.getElementById('search-input');
+const $categoryBar = document.getElementById('category-bar');
+const $fab = document.getElementById('fab-add');
+const $modal = document.getElementById('modal-overlay');
+const $modalTitle = document.getElementById('modal-title');
+const $inputName = document.getElementById('input-name');
+const $inputUrl = document.getElementById('input-url');
+const $inputCat = document.getElementById('input-cat');
+const $btnCancel = document.getElementById('btn-cancel');
+const $btnSave = document.getElementById('btn-save');
+const $confirm = document.getElementById('confirm-overlay');
+const $confirmNo = document.getElementById('confirm-no');
+const $confirmYes = document.getElementById('confirm-yes');
+const $playerContainer = document.getElementById('player-container');
+const $playerOverlay = document.getElementById('player-overlay');
+const $playerTitle = document.getElementById('player-title');
+const $playerUrl = document.getElementById('player-url');
+const $backBtn = document.getElementById('back-btn');
+const $playPauseBtn = document.getElementById('play-pause-btn');
+const $prevBtn = document.getElementById('prev-btn');
+const $nextBtn = document.getElementById('next-btn');
+const $iconPlay = document.getElementById('icon-play');
+const $iconPause = document.getElementById('icon-pause');
+const $loading = document.getElementById('loading-indicator');
+const $toast = document.getElementById('toast');
+
+// ─── Helpers ───
+function genId() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 6); }
+
+function toast(msg) {
+  $toast.textContent = msg;
+  $toast.classList.add('show');
+  setTimeout(() => $toast.classList.remove('show'), 2200);
+}
+
+function getCategories() {
+  const cats = new Set();
+  mediaItems.forEach(m => { if (m.category) cats.add(m.category); });
+  return ['All', ...Array.from(cats).sort()];
+}
+
+function getFilteredItems() {
+  const q = $searchInput.value.toLowerCase().trim();
+  return mediaItems.filter(m => {
+    const matchCat = activeCategory === 'All' || m.category === activeCategory;
+    const matchSearch = !q || m.title.toLowerCase().includes(q) || m.url.toLowerCase().includes(q);
+    return matchCat && matchSearch;
+  });
+}
+
+// ─── Render ───
+function renderCategories() {
+  const cats = getCategories();
+  if (cats.length <= 1) { $categoryBar.innerHTML = ''; return; }
+  $categoryBar.innerHTML = cats.map(c =>
+    `<div class="cat-pill ${c === activeCategory ? 'active' : ''}" data-cat="${c}">${c}</div>`
+  ).join('');
+  $categoryBar.querySelectorAll('.cat-pill').forEach(el => {
+    el.addEventListener('click', () => {
+      activeCategory = el.dataset.cat;
+      renderCategories();
+      renderList();
+    });
+  });
+}
+
+function renderList() {
+  const items = getFilteredItems();
+  $itemCount.textContent = `${mediaItems.length} item${mediaItems.length !== 1 ? 's' : ''}`;
+
+  if (items.length === 0) {
+    const isSearch = $searchInput.value.trim() || activeCategory !== 'All';
+    $mediaList.innerHTML = `
+      <div class="empty-state">
+        <div class="icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            ${isSearch
+              ? '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'
+              : '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>'}
+          </svg>
+        </div>
+        <h3>${isSearch ? 'No results' : 'Your library is empty'}</h3>
+        <p>${isSearch ? 'Try a different search term' : 'Tap the + button to add your first stream'}</p>
+      </div>`;
+    return;
+  }
+
+  $mediaList.innerHTML = items.map((m, i) => `
+    <div class="media-item" data-id="${m.id}" style="animation-delay:${i * 0.04}s" onclick="playItem('${m.id}')">
+      <div class="thumb">
+        <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>
+      </div>
+      <div class="info">
+        <div class="title">${escHtml(m.title)}</div>
+        <div class="url-preview">${m.category ? escHtml(m.category) + ' · ' : ''}${escHtml(truncUrl(m.url))}</div>
+      </div>
+      <div class="actions">
+        <button class="edit-btn" onclick="event.stopPropagation();openEdit('${m.id}')" aria-label="Edit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="del-btn" onclick="event.stopPropagation();confirmDelete('${m.id}')" aria-label="Delete">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function escHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+function truncUrl(url) {
+  try {
+    const u = new URL(url);
+    return u.hostname + u.pathname.substring(0, 30) + (u.pathname.length > 30 ? '…' : '');
+  } catch { return url.substring(0, 50); }
+}
+
+// ─── Add / Edit ───
+$fab.addEventListener('click', () => {
+  editingId = null;
+  $modalTitle.textContent = 'Add Media';
+  $inputName.value = '';
+  $inputUrl.value = '';
+  $inputCat.value = '';
+  $modal.classList.add('active');
+  setTimeout(() => $inputName.focus(), 300);
+});
+
+function openEdit(id) {
+  const item = mediaItems.find(m => m.id === id);
+  if (!item) return;
+  editingId = id;
+  $modalTitle.textContent = 'Edit Media';
+  $inputName.value = item.title;
+  $inputUrl.value = item.url;
+  $inputCat.value = item.category || '';
+  $modal.classList.add('active');
+  setTimeout(() => $inputName.focus(), 300);
+}
+
+$btnCancel.addEventListener('click', () => $modal.classList.remove('active'));
+$modal.addEventListener('click', (e) => { if (e.target === $modal) $modal.classList.remove('active'); });
+
+$btnSave.addEventListener('click', () => {
+  const title = $inputName.value.trim();
+  const url = $inputUrl.value.trim();
+  const cat = $inputCat.value.trim();
+  if (!title) { $inputName.focus(); toast('Title is required'); return; }
+  if (!url) { $inputUrl.focus(); toast('URL is required'); return; }
+
+  if (editingId) {
+    const item = mediaItems.find(m => m.id === editingId);
+    if (item) { item.title = title; item.url = url; item.category = cat; }
+    toast('Updated!');
+  } else {
+    mediaItems.push({ id: genId(), title, url, category: cat, added: Date.now() });
+    toast('Added to library!');
+  }
+  saveData();
+  $modal.classList.remove('active');
+  renderCategories();
+  renderList();
+});
+
+// ─── Delete ───
+function confirmDelete(id) {
+  deleteId = id;
+  $confirm.classList.add('active');
+}
+$confirmNo.addEventListener('click', () => { $confirm.classList.remove('active'); deleteId = null; });
+$confirmYes.addEventListener('click', () => {
+  mediaItems = mediaItems.filter(m => m.id !== deleteId);
+  saveData();
+  $confirm.classList.remove('active');
+  renderCategories();
+  renderList();
+  toast('Deleted');
+});
+
+// ─── Search ───
+$searchInput.addEventListener('input', renderList);
+
+// ─── Player ───
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function playItem(id) {
+  const idx = mediaItems.findIndex(m => m.id === id);
+  if (idx === -1) return;
+  currentIndex = idx;
+  const item = mediaItems[idx];
+
+  showScreen('player-screen');
+  $playerTitle.textContent = item.title;
+  $playerUrl.textContent = item.url;
+  isPaused = false;
+  updatePlayPauseIcon();
+
+  $loading.style.display = 'flex';
+  $playerContainer.innerHTML = `<iframe
+    id="player-iframe"
+    src="${escAttr(item.url)}"
+    allow="autoplay; fullscreen; encrypted-media"
+    allowfullscreen
+    onload="document.getElementById('loading-indicator').style.display='none'"
+  ></iframe>`;
+
+  showOverlay();
+}
+
+function escAttr(s) { return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+function updatePlayPauseIcon() {
+  $iconPlay.style.display = isPaused ? 'block' : 'none';
+  $iconPause.style.display = isPaused ? 'none' : 'block';
+}
+
+// Overlay show/hide on tap
+$playerOverlay.parentElement.addEventListener('click', (e) => {
+  if (e.target.closest('button')) return;
+  toggleOverlay();
+});
+
+function showOverlay() {
+  $playerOverlay.classList.add('visible');
+  clearTimeout(overlayTimer);
+  overlayTimer = setTimeout(() => $playerOverlay.classList.remove('visible'), 4000);
+}
+
+function toggleOverlay() {
+  if ($playerOverlay.classList.contains('visible')) {
+    $playerOverlay.classList.remove('visible');
+    clearTimeout(overlayTimer);
+  } else {
+    showOverlay();
+  }
+}
+
+$backBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  $playerContainer.innerHTML = '';
+  showScreen('library-screen');
+});
+
+$playPauseBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  isPaused = !isPaused;
+  updatePlayPauseIcon();
+  const iframe = document.getElementById('player-iframe');
+  if (iframe) {
+    if (isPaused) {
+      iframe.dataset.src = iframe.src;
+      iframe.src = 'about:blank';
+    } else {
+      iframe.src = iframe.dataset.src || mediaItems[currentIndex]?.url || '';
+    }
+  }
+  showOverlay();
+});
+
+$prevBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (mediaItems.length === 0) return;
+  currentIndex = (currentIndex - 1 + mediaItems.length) % mediaItems.length;
+  playItem(mediaItems[currentIndex].id);
+});
+
+$nextBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (mediaItems.length === 0) return;
+  currentIndex = (currentIndex + 1) % mediaItems.length;
+  playItem(mediaItems[currentIndex].id);
+});
+
+// Handle back gesture / button
+window.addEventListener('popstate', () => {
+  if ($playerScreen.classList.contains('active')) {
+    $playerContainer.innerHTML = '';
+    showScreen('library-screen');
+  }
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if ($playerScreen.classList.contains('active')) {
+    if (e.key === 'Escape') { $backBtn.click(); }
+    if (e.key === ' ') { e.preventDefault(); $playPauseBtn.click(); }
+  }
+});
+
+// ─── Init ───
+loadData();
+
+// Load demo items if first run
+if (mediaItems.length === 0) {
+  mediaItems = [
+    {
+      id: genId(),
+      title: 'Sample Stream',
+      url: 'http://webplayer.online/?url=https://sidneyshelton.com/mystuff/1421465/1g6AutR52U/@top',
+      category: 'Movies',
+      added: Date.now()
+    }
+  ];
+  saveData();
+}
+
+renderCategories();
+renderList();
+</script>
+</body>
+</html>

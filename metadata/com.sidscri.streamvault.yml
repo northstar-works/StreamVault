@@ -1,0 +1,26 @@
+Categories:
+  - Multimedia
+  - Internet
+License: GPL-3.0-only
+AuthorName: Sidscri
+AuthorWebSite: https://github.com/sidscri
+SourceCode: https://github.com/sidscri/StreamVault
+IssueTracker: https://github.com/sidscri/StreamVault/issues
+
+AutoName: StreamVault
+
+RepoType: git
+Repo: https://github.com/sidscri/StreamVault.git
+
+Builds:
+  - versionName: 1.0.0
+    versionCode: 1
+    commit: v1.0.0
+    subdir: app
+    gradle:
+      - yes
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 1.0.0
+CurrentVersionCode: 1
