@@ -1,0 +1,26 @@
+StreamVault v3.3.0 (Build 8) — EPG System
+
+• EPG Sources — add XMLTV EPG URLs (.xml or .xml.gz)
+  - Parses XMLTV format: channels, programmes, start/stop times
+  - Supports gzipped EPG files (DecompressionStream)
+  - Background auto-refresh every 4 hours
+  - Manual refresh button
+  - EPG source manager: add, remove, refresh individual sources
+• TV Guide page
+  - Timeline grid: channels on left, programmes across 7-hour window
+  - Red "now" line showing current time
+  - Now-playing programmes highlighted in purple
+  - Past programmes dimmed
+  - Auto-scrolls to current time on open
+  - Tap channel to play stream directly
+• EPG ID dropdown in stream editor
+  - Populated from all fetched EPG data
+  - Shows channel name + ID for easy matching
+  - Auto-matched from tvg-id on M3U import
+• Now Playing in library
+  - Streams with EPG show current programme title (▶ Show Name)
+• Now/Next in player overlay
+  - Shows "Now: Show | Next: Show" in top overlay
+  - Passed to native ExoPlayer as well
+• Guide tab added to bottom navigation
+• All build 7 features preserved: failover, lock, repos, compact filters
