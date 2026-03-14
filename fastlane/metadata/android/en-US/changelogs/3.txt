@@ -1,0 +1,11 @@
+StreamVault v2.1.0 (Build 3)
+
+• M3U/M3U8 playlist file import with full metadata parsing
+  - tvg-name, tvg-logo, tvg-id, group-title, tvg-url
+  - Auto-maps to title, icon, EPG title, category, EPG link
+• M3U export — backup library as a standard M3U playlist
+• Fixed playback for gohyperspeed.com and similar streaming URLs
+  - Native video first (bypasses CORS), then HLS.js, then iframe
+• Fixed apksigner path in CI workflow
+• Duplicate detection on import (skips already-added URLs)
+• Shows icon/EPG counts in import preview

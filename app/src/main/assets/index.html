@@ -402,7 +402,7 @@ html, body {
   <div class="lib-header">
     <h1>StreamVault</h1>
     <div class="header-right">
-      <span class="build-tag" id="build-tag">b2</span>
+      <span class="build-tag" id="build-tag">b3</span>
       <button class="icon-btn" id="btn-import" title="Import JSON">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       </button>
@@ -500,20 +500,25 @@ html, body {
   <div class="modal">
     <h2>Import Streams</h2>
     <div class="import-zone" id="import-zone">
-      <p>Tap to choose a JSON file or drop it here</p>
-      <div class="hint">Accepts .json files</div>
-      <input type="file" id="file-input" accept=".json,application/json">
+      <p>Tap to choose a file or drop it here</p>
+      <div class="hint">Accepts .json, .m3u, .m3u8 files</div>
+      <input type="file" id="file-input" accept=".json,.m3u,.m3u8,application/json,audio/x-mpegurl,application/vnd.apple.mpegurl">
     </div>
-    <label>Or paste JSON directly</label>
-    <textarea id="import-text" placeholder='[{"name":"My Stream","url":"...","category":"TV"}]' style="min-height:90px"></textarea>
-    <div class="schema-hint">JSON format: [{
-  "name": "Stream Name",        (required)
-  "url": "stream url",          (required)
-  "category": "Movie",          (optional)
-  "icon": "https://icon.url",   (optional)
-  "epgLink": "https://epg.url", (optional)
-  "epgTitle": "EPG Name"        (optional)
-}]</div>
+    <label>Or paste content directly (JSON or M3U)</label>
+    <textarea id="import-text" placeholder='#EXTM3U
+#EXTINF:-1 tvg-name="CNN" tvg-logo="https://..." group-title="News",CNN Live
+http://stream-url.com/live/cnn.m3u8
+
+— or JSON —
+[{"name":"My Stream","url":"...","category":"TV"}]' style="min-height:100px"></textarea>
+    <div class="schema-hint">M3U format (auto-detected):
+#EXTM3U
+#EXTINF:-1 tvg-name="Name" tvg-logo="icon"
+  tvg-id="EPG ID" group-title="Category",Title
+http://stream.url/path
+
+JSON format:
+[{ "name","url","category","icon","epgLink","epgTitle" }]</div>
     <div class="json-preview" id="json-preview"></div>
     <div class="import-stats" id="import-stats"></div>
     <div class="modal-actions">
@@ -539,8 +544,8 @@ html, body {
 
 <script>
 // ─── App Info ───
-const APP_VERSION = '2.0.0';
-const BUILD = 2;
+const APP_VERSION = '2.1.0';
+const BUILD = 3;
 const STORAGE_KEY = 'streamvault_media_v2';
 
 // ─── State ───
@@ -602,7 +607,7 @@ function toast(msg) {
 }
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
-/** Extract the real stream URL from a webplayer.online wrapper or return as-is */
+/** Extract the real stream URL from wrapper URLs or return as-is */
 function extractStreamUrl(rawUrl) {
   try {
     const u = new URL(rawUrl);
@@ -611,12 +616,20 @@ function extractStreamUrl(rawUrl) {
       const inner = u.searchParams.get('url');
       if (inner) return inner.replace(/@top$/, '');
     }
+    // Any wrapper that passes url= as a query param
+    const urlParam = u.searchParams.get('url') || u.searchParams.get('stream') || u.searchParams.get('src');
+    if (urlParam) return urlParam.replace(/@top$/, '');
   } catch(e) {}
   return rawUrl;
 }
 
-function isHlsUrl(url) {
-  return /\.m3u8/i.test(url) || /\/live\b/i.test(url) || /\/hls\b/i.test(url);
+/** Known streaming domains where we should always try direct video playback */
+function isStreamingDomain(url) {
+  try {
+    const h = new URL(url).hostname;
+    return /gohyperspeed|hyperspeed|stormwall|streamhub|livepush|cdn77|akamai|cloudfront|fastly|m3u8/i.test(h) ||
+           /\.m3u8/i.test(url) || /\/live/i.test(url) || /\/hls/i.test(url) || /\/playlist/i.test(url);
+  } catch { return false; }
 }
 
 // ─── Categories ───
@@ -768,21 +781,136 @@ function readImportFile(file) {
 
 $importText.oninput = () => validateImport($importText.value);
 
+/** Parse M3U/M3U8 playlist text into stream objects */
+function parseM3U(text) {
+  const lines = text.split(/\r?\n/);
+  const streams = [];
+  let current = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line || line === '#EXTM3U') continue;
+
+    if (line.startsWith('#EXTINF:')) {
+      // Parse #EXTINF line
+      // Format: #EXTINF:-1 tvg-id="..." tvg-name="..." tvg-logo="..." group-title="...",Display Name
+      current = { name: '', url: '', category: '', icon: '', epgTitle: '', epgLink: '' };
+
+      // Extract attributes from the tag
+      const tvgName = extractAttr(line, 'tvg-name');
+      const tvgLogo = extractAttr(line, 'tvg-logo');
+      const tvgId = extractAttr(line, 'tvg-id');
+      const groupTitle = extractAttr(line, 'group-title');
+      const tvgUrl = extractAttr(line, 'tvg-url');
+
+      // Display name is everything after the last comma
+      const commaIdx = line.lastIndexOf(',');
+      const displayName = commaIdx > -1 ? line.substring(commaIdx + 1).trim() : '';
+
+      current.name = tvgName || displayName || 'Untitled';
+      current.icon = tvgLogo || '';
+      current.category = groupTitle || '';
+      current.epgTitle = tvgId || tvgName || '';
+      current.epgLink = tvgUrl || '';
+
+    } else if (line.startsWith('#EXTVLCOPT:') || line.startsWith('#EXTGRP:')) {
+      // #EXTGRP can override group/category
+      if (line.startsWith('#EXTGRP:') && current) {
+        current.category = current.category || line.substring(8).trim();
+      }
+      // #EXTVLCOPT: lines (referrer, user-agent etc) — skip for now
+      continue;
+
+    } else if (line.startsWith('#')) {
+      // Other comment/directive lines — skip
+      continue;
+
+    } else if (line.match(/^https?:\/\//) || line.match(/^rtmp:\/\//) || line.match(/^\//)) {
+      // This is a URL line
+      if (current) {
+        current.url = line;
+        streams.push(current);
+        current = null;
+      } else {
+        // URL without preceding #EXTINF — use URL as name
+        streams.push({
+          name: line.split('/').pop() || line,
+          url: line,
+          category: '', icon: '', epgTitle: '', epgLink: ''
+        });
+      }
+    }
+  }
+  return streams;
+}
+
+/** Extract a quoted attribute from an #EXTINF line: tvg-name="value" */
+function extractAttr(line, attr) {
+  // Match both double and single quotes
+  const regex = new RegExp(attr + '=["\']([^"\']*)["\']', 'i');
+  const match = line.match(regex);
+  return match ? match[1].trim() : '';
+}
+
+/** Detect if text is M3U format */
+function isM3U(text) {
+  const trimmed = text.trim();
+  return trimmed.startsWith('#EXTM3U') ||
+    (trimmed.startsWith('#EXTINF:') && trimmed.includes('http')) ||
+    /^#EXTINF:.*\n+https?:\/\//m.test(trimmed);
+}
+
 function validateImport(text) {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    pendingImport = null;
+    $jsonPreview.style.display = 'none';
+    $importStats.style.display = 'none';
+    return;
+  }
+
   try {
-    let data = JSON.parse(text.trim());
-    if (!Array.isArray(data)) data = [data];
-    const valid = data.filter(d => d.name && d.url);
-    if (valid.length === 0) throw new Error('No valid items');
+    let valid;
+    let format;
+
+    if (isM3U(trimmed)) {
+      // Parse as M3U
+      format = 'M3U';
+      valid = parseM3U(trimmed).filter(d => d.name && d.url);
+    } else {
+      // Try JSON
+      format = 'JSON';
+      let data = JSON.parse(trimmed);
+      if (!Array.isArray(data)) data = [data];
+      valid = data.filter(d => (d.name || d.title) && d.url);
+      // Normalize JSON field names
+      valid = valid.map(d => ({
+        name: d.name || d.title,
+        url: d.url,
+        category: d.category || d.group || '',
+        icon: d.icon || d.logo || d.tvg_logo || '',
+        epgLink: d.epgLink || d.epg_link || d.tvg_url || '',
+        epgTitle: d.epgTitle || d.epg_title || d.tvg_id || d.tvg_name || ''
+      }));
+    }
+
+    if (valid.length === 0) throw new Error('No valid streams found');
+
     pendingImport = valid;
     $jsonPreview.style.display = 'block';
-    $jsonPreview.textContent = `✓ Parsed ${valid.length} stream(s):\n` +
-      valid.slice(0, 5).map(d => `  • ${d.name} [${d.category || 'uncategorized'}]`).join('\n') +
-      (valid.length > 5 ? `\n  … and ${valid.length - 5} more` : '');
+    $jsonPreview.style.color = 'var(--success)';
+    $jsonPreview.textContent = `✓ Parsed ${valid.length} stream(s) from ${format}:\n` +
+      valid.slice(0, 8).map(d => `  • ${d.name}${d.category ? ' [' + d.category + ']' : ''}${d.icon ? ' 🖼' : ''}`).join('\n') +
+      (valid.length > 8 ? `\n  … and ${valid.length - 8} more` : '');
     $importStats.style.display = 'block';
-    $importStats.textContent = `${valid.length} streams ready to import`;
     const cats = new Set(valid.map(d => d.category).filter(Boolean));
-    if (cats.size) $importStats.textContent += ` · Categories: ${[...cats].join(', ')}`;
+    $importStats.textContent = `${valid.length} streams ready to import`;
+    if (cats.size) $importStats.textContent += ` · ${cats.size} categories: ${[...cats].slice(0,5).join(', ')}${cats.size > 5 ? '…' : ''}`;
+    const withIcons = valid.filter(d => d.icon).length;
+    const withEpg = valid.filter(d => d.epgTitle).length;
+    if (withIcons || withEpg) {
+      $importStats.textContent += ` · ${withIcons} icons · ${withEpg} EPG`;
+    }
   } catch(e) {
     pendingImport = null;
     $jsonPreview.style.display = 'block';
@@ -795,14 +923,13 @@ function validateImport(text) {
 
 $('import-save').onclick = () => {
   if (!pendingImport || pendingImport.length === 0) {
-    // try parsing the text field one more time
     validateImport($importText.value);
-    if (!pendingImport) { toast('No valid JSON data'); return; }
+    if (!pendingImport) { toast('No valid data — paste JSON or M3U'); return; }
   }
-  let added = 0;
+  let added = 0, skipped = 0;
   pendingImport.forEach(d => {
     // Skip duplicates by URL
-    if (mediaItems.some(m => m.url === d.url)) return;
+    if (mediaItems.some(m => m.url === d.url)) { skipped++; return; }
     mediaItems.push({
       id: genId(),
       title: d.name || d.title || 'Untitled',
@@ -818,12 +945,24 @@ $('import-save').onclick = () => {
   saveData();
   $importOverlay.classList.remove('active');
   renderCategories(); renderList();
-  toast(`Imported ${added} stream(s)`);
+  let msg = `Imported ${added} stream(s)`;
+  if (skipped) msg += ` · ${skipped} duplicates skipped`;
+  toast(msg);
 };
 
-// ─── JSON Export ───
+// ─── Export ───
 $('btn-export').onclick = () => {
   if (mediaItems.length === 0) { toast('Nothing to export'); return; }
+  // Show export format choice
+  const choice = confirm('OK = Export as JSON\nCancel = Export as M3U');
+  if (choice) {
+    exportJSON();
+  } else {
+    exportM3U();
+  }
+};
+
+function exportJSON() {
   const data = mediaItems.map(m => ({
     name: m.title, url: m.url, category: m.category || undefined,
     icon: m.icon || undefined, epgLink: m.epgLink || undefined,
@@ -835,8 +974,28 @@ $('btn-export').onclick = () => {
   a.href = URL.createObjectURL(blob);
   a.download = `streamvault-export-${new Date().toISOString().slice(0,10)}.json`;
   a.click();
-  toast('Exported ' + mediaItems.length + ' streams');
-};
+  toast('Exported ' + mediaItems.length + ' streams as JSON');
+}
+
+function exportM3U() {
+  let m3u = '#EXTM3U\n\n';
+  mediaItems.forEach(m => {
+    let extinf = '#EXTINF:-1';
+    if (m.epgTitle) extinf += ` tvg-id="${m.epgTitle}" tvg-name="${m.epgTitle}"`;
+    else if (m.title) extinf += ` tvg-name="${m.title}"`;
+    if (m.icon) extinf += ` tvg-logo="${m.icon}"`;
+    if (m.epgLink) extinf += ` tvg-url="${m.epgLink}"`;
+    if (m.category) extinf += ` group-title="${m.category}"`;
+    extinf += `,${m.title}`;
+    m3u += extinf + '\n' + m.url + '\n\n';
+  });
+  const blob = new Blob([m3u], { type: 'audio/x-mpegurl' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `streamvault-export-${new Date().toISOString().slice(0,10)}.m3u`;
+  a.click();
+  toast('Exported ' + mediaItems.length + ' streams as M3U');
+}
 
 // ─── Player ───
 function showScreen(id) {
@@ -871,95 +1030,134 @@ window.playItem = function(id) {
 function startStream(rawUrl) {
   destroyPlayer();
   const streamUrl = extractStreamUrl(rawUrl);
+  console.log('[StreamVault] Raw URL:', rawUrl);
+  console.log('[StreamVault] Stream URL:', streamUrl);
 
-  // Try 1: HLS.js for m3u8 and similar
-  if (Hls.isSupported()) {
-    const video = document.createElement('video');
-    video.setAttribute('playsinline', '');
-    video.setAttribute('autoplay', '');
-    video.style.cssText = 'width:100%;height:100%;background:#000';
-    $container.appendChild(video);
-
-    hlsInstance = new Hls({
-      maxBufferLength: 30,
-      maxMaxBufferLength: 60,
-      enableWorker: true,
-      lowLatencyMode: false,
-      xhrSetup: function(xhr) {
-        xhr.withCredentials = false;
-      }
-    });
-
-    let hasError = false;
-    let hasPlayed = false;
-
-    hlsInstance.on(Hls.Events.MEDIA_ATTACHED, () => {
-      hlsInstance.loadSource(streamUrl);
-    });
-
-    hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-      $loading.style.display = 'none';
-      video.play().catch(() => {});
-      hasPlayed = true;
-    });
-
-    hlsInstance.on(Hls.Events.ERROR, (event, data) => {
-      if (hasError) return;
-      if (data.fatal) {
-        hasError = true;
-        if (!hasPlayed) {
-          // HLS failed, try direct video
-          tryDirectVideo(streamUrl, rawUrl);
-        }
-      }
-    });
-
-    video.onplaying = () => { $loading.style.display = 'none'; };
-    video.ontimeupdate = () => {
-      if (video.duration && isFinite(video.duration)) {
-        $progressFill.style.width = (video.currentTime / video.duration * 100) + '%';
-      }
-    };
-
-    hlsInstance.attachMedia(video);
-    return;
-  }
-
-  // Fallback: native HLS (Safari/iOS)
-  tryDirectVideo(streamUrl, rawUrl);
+  // STRATEGY: Try native <video> first (bypasses CORS — works for gohyperspeed etc)
+  // Then HLS.js (for streams that need manifest parsing)
+  // Then iframe (last resort for webplayer wrappers)
+  tryNativeVideo(streamUrl, rawUrl);
 }
 
-function tryDirectVideo(streamUrl, rawUrl) {
+function tryNativeVideo(streamUrl, rawUrl) {
+  console.log('[StreamVault] Trying native video:', streamUrl);
   destroyPlayer();
   const video = document.createElement('video');
   video.setAttribute('playsinline', '');
   video.setAttribute('autoplay', '');
-  video.setAttribute('controls', '');
   video.style.cssText = 'width:100%;height:100%;background:#000';
+  video.preload = 'auto';
   video.src = streamUrl;
   $container.appendChild(video);
 
-  let errorFired = false;
+  let settled = false;
+  let errorTimeout = null;
+
+  function onSuccess() {
+    if (settled) return;
+    settled = true;
+    clearTimeout(errorTimeout);
+    $loading.style.display = 'none';
+    showPauseIcon();
+    console.log('[StreamVault] Native video playing');
+  }
+
+  function onFail() {
+    if (settled) return;
+    settled = true;
+    clearTimeout(errorTimeout);
+    console.log('[StreamVault] Native video failed, trying HLS.js');
+    tryHlsJs(streamUrl, rawUrl);
+  }
+
+  video.onplaying = onSuccess;
+  video.oncanplay = () => {
+    $loading.style.display = 'none';
+    video.play().catch(() => {});
+  };
+  video.ontimeupdate = () => {
+    onSuccess();
+    if (video.duration && isFinite(video.duration)) {
+      $progressFill.style.width = (video.currentTime / video.duration * 100) + '%';
+    }
+  };
+  video.onerror = onFail;
+
+  // If nothing happens after 10s, try next method
+  errorTimeout = setTimeout(() => {
+    if (!settled && video.readyState < 2) {
+      console.log('[StreamVault] Native video timeout');
+      onFail();
+    }
+  }, 10000);
+
+  video.play().catch(() => {});
+}
+
+function tryHlsJs(streamUrl, rawUrl) {
+  console.log('[StreamVault] Trying HLS.js:', streamUrl);
+  destroyPlayer();
+
+  if (!Hls.isSupported()) {
+    console.log('[StreamVault] HLS.js not supported, going to iframe');
+    tryIframe(rawUrl);
+    return;
+  }
+
+  const video = document.createElement('video');
+  video.setAttribute('playsinline', '');
+  video.setAttribute('autoplay', '');
+  video.style.cssText = 'width:100%;height:100%;background:#000';
+  $container.appendChild(video);
+
+  hlsInstance = new Hls({
+    maxBufferLength: 30,
+    maxMaxBufferLength: 60,
+    enableWorker: true,
+    lowLatencyMode: false,
+    xhrSetup: function(xhr) { xhr.withCredentials = false; }
+  });
+
+  let settled = false;
+
+  hlsInstance.on(Hls.Events.MEDIA_ATTACHED, () => {
+    hlsInstance.loadSource(streamUrl);
+  });
+
+  hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+    $loading.style.display = 'none';
+    video.play().catch(() => {});
+    settled = true;
+    showPauseIcon();
+    console.log('[StreamVault] HLS.js playing');
+  });
+
+  hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+    if (settled) return;
+    if (data.fatal) {
+      settled = true;
+      console.log('[StreamVault] HLS.js fatal error:', data.type, data.details);
+      tryIframe(rawUrl);
+    }
+  });
+
   video.onplaying = () => { $loading.style.display = 'none'; };
-  video.oncanplay = () => { $loading.style.display = 'none'; };
   video.ontimeupdate = () => {
     if (video.duration && isFinite(video.duration)) {
       $progressFill.style.width = (video.currentTime / video.duration * 100) + '%';
     }
   };
-  video.onerror = () => {
-    if (errorFired) return;
-    errorFired = true;
-    // Last resort: iframe
-    tryIframe(rawUrl);
-  };
 
+  hlsInstance.attachMedia(video);
+
+  // Timeout fallback
   setTimeout(() => {
-    if ($loading.style.display !== 'none' && !errorFired) {
-      // Still loading after 8s, might be stuck
-      $loading.style.display = 'none';
+    if (!settled) {
+      settled = true;
+      console.log('[StreamVault] HLS.js timeout, trying iframe');
+      tryIframe(rawUrl);
     }
-  }, 8000);
+  }, 12000);
 }
 
 function tryIframe(rawUrl) {
