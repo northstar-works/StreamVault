@@ -115,7 +115,7 @@ public class PlayerActivity extends Activity {
                     variants.add(new StreamVariant(o.getString("url"), o.optString("title",""), o.optString("region",""), o.optString("tag","")));
             }} catch (Exception e) {}
         }
-        if (variants.isEmpty()) { String u = getIntent().getStringExtra(EXTRA_URL); if (u != null) variants.add(new StreamVariant(u, getIntent().getStringExtra(EXTRA_TITLE), "", "")); }
+        if (variants.isEmpty()) { String u = getIntent().getStringExtra(EXTRA_URL); if (u != null) { String t = getIntent().getStringExtra(EXTRA_TITLE); variants.add(new StreamVariant(u, t != null ? t : "Stream", "", "")); } }
         if (variants.isEmpty()) finish();
     }
 
@@ -257,7 +257,7 @@ public class PlayerActivity extends Activity {
         }
         currentVariantIdx = idx; StreamVariant sv = variants.get(idx); releasePlayer();
         loadingView.setVisibility(View.VISIBLE); errorContainer.setVisibility(View.GONE);
-        String disp = sv.title.isEmpty() ? "Source " + (idx + 1) : sv.title; if (!sv.tag.isEmpty()) disp += " (" + sv.tag + ")";
+        String disp = (sv.title == null || sv.title.isEmpty()) ? "Source " + (idx + 1) : sv.title; if (sv.tag != null && !sv.tag.isEmpty()) disp += " (" + sv.tag + ")";
         titleText.setText(disp); statusText.setText("Source " + (idx + 1) + "/" + variants.size() + (locked ? " · 🔒" : "")); strengthText.setText("");
         if (idx > 0) msg("Trying: " + disp);
 

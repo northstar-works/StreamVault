@@ -151,7 +151,6 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
 <div class="co" id="co"><div class="cb"><h3 id="co-t">Delete?</h3><p id="co-m">Cannot be undone.</p><div class="bs2"><button class="bc" id="co-no">Cancel</button><button style="background:var(--red);color:#fff" id="co-yes">Delete</button></div></div></div>
 <div class="toast" id="toast"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js" onerror=""></script>
 <script>
 // This is getting very large. Core logic carried from build 8 + new settings/locality/strength.
 // Due to size constraints, I'm keeping the JS in a separate loadable block.
@@ -326,17 +325,17 @@ window.rmLoc=i=>{settings.localities.splice(i,1);saveSettings();renderLocalities
 
 // Player
 function destroyP(){if(hlsI){hlsI.destroy();hlsI=null}$('pc').innerHTML='';$('ld').style.display='flex'}
-window.playIt=id=>{
+window.playIt=id=>{try{
   const idx=items.findIndex(m=>m.id===id);if(idx===-1)return;curIdx=idx;const m=items[idx];
   const fl=buildFL(m),cat=[m.category,m.epgTitle].filter(Boolean).join(' · ');
   let nn='';if(m.epgTitle){const e=getNowNext(m.epgTitle);if(e.now)nn='Now: '+e.now.title;if(e.next)nn+=(nn?' | ':'')+'Next: '+e.next.title}
-  // Pass settings to native player
   const foTimeout=settings.foTimeout||15;
   const foAuto=settings.foAuto!==false;
   if(window.NativePlayer&&window.NativePlayer.isAvailable()){
-    window.NativePlayer.playWithFailover(JSON.stringify(fl),m.title||'Stream',cat,nn,foTimeout,foAuto);return}
+    window.NativePlayer.playStream(JSON.stringify(fl),m.title||'Stream',cat,nn||'',String(foTimeout),String(foAuto));return}
   showTab('player-screen');$('p-title').textContent=m.title;$('p-url').textContent=m.url;$('p-epg').textContent=nn;destroyP();
-  const url=extractUrl(m.url);if(typeof Hls!=='undefined'&&Hls.isSupported()){const v=document.createElement('video');v.setAttribute('playsinline','');v.setAttribute('autoplay','');v.style.cssText='width:100%;height:100%;background:#000';$('pc').appendChild(v);hlsI=new Hls({enableWorker:true});hlsI.attachMedia(v);hlsI.on(Hls.Events.MEDIA_ATTACHED,()=>hlsI.loadSource(url));hlsI.on(Hls.Events.MANIFEST_PARSED,()=>{$('ld').style.display='none';v.play().catch(()=>{})});hlsI.on(Hls.Events.ERROR,(_,d)=>{if(d.fatal){$('pc').innerHTML=`<iframe src="${esc(m.url)}" style="width:100%;height:100%;border:none" allowfullscreen></iframe>`;$('ld').style.display='none'}})}else{$('pc').innerHTML=`<iframe src="${esc(m.url)}" style="width:100%;height:100%;border:none" allowfullscreen></iframe>`;setTimeout(()=>$('ld').style.display='none',3e3)}showOvr()};
+  const url=extractUrl(m.url);if(typeof Hls!=='undefined'&&Hls.isSupported()){const v=document.createElement('video');v.setAttribute('playsinline','');v.setAttribute('autoplay','');v.style.cssText='width:100%;height:100%;background:#000';$('pc').appendChild(v);hlsI=new Hls({enableWorker:true});hlsI.attachMedia(v);hlsI.on(Hls.Events.MEDIA_ATTACHED,()=>hlsI.loadSource(url));hlsI.on(Hls.Events.MANIFEST_PARSED,()=>{$('ld').style.display='none';v.play().catch(()=>{})});hlsI.on(Hls.Events.ERROR,(_,d)=>{if(d.fatal){$('pc').innerHTML=`<iframe src="${esc(m.url)}" style="width:100%;height:100%;border:none" allowfullscreen></iframe>`;$('ld').style.display='none'}})}else{$('pc').innerHTML=`<iframe src="${esc(m.url)}" style="width:100%;height:100%;border:none" allowfullscreen></iframe>`;setTimeout(()=>$('ld').style.display='none',3e3)}showOvr()
+}catch(err){console.error('[StreamVault] playIt error:',err);toast('Playback error: '+err.message)}};
 function showOvr(){$('po').classList.add('vis');clearTimeout(overlayT);overlayT=setTimeout(()=>$('po').classList.remove('vis'),4500)}
 $('player-screen').onclick=e=>{if(!e.target.closest('button')){$('po').classList.contains('vis')?($('po').classList.remove('vis'),clearTimeout(overlayT)):showOvr()}};
 $('back-btn').onclick=e=>{e.stopPropagation();destroyP();showTab('lib-screen')};

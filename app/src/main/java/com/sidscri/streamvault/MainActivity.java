@@ -123,20 +123,17 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void playWithFailover(String json, String title, String cat, String nn) {
-            playWithFailover(json, title, cat, nn, 15, true);
-        }
-
-        @JavascriptInterface
-        public void playWithFailover(String json, String title, String cat, String nn, int foTimeout, boolean foAuto) {
-            runOnUiThread(() -> { Intent i = new Intent(MainActivity.this, PlayerActivity.class);
+        public void playStream(String json, String title, String cat, String nn, String foTimeoutStr, String foAutoStr) {
+            runOnUiThread(() -> {
+                Intent i = new Intent(MainActivity.this, PlayerActivity.class);
                 i.putExtra(PlayerActivity.EXTRA_FAILOVER_JSON, json);
                 i.putExtra(PlayerActivity.EXTRA_TITLE, title);
                 i.putExtra(PlayerActivity.EXTRA_CATEGORY, cat);
-                i.putExtra(PlayerActivity.EXTRA_NOW_NEXT, nn);
-                i.putExtra(PlayerActivity.EXTRA_FO_TIMEOUT, foTimeout);
-                i.putExtra(PlayerActivity.EXTRA_FO_AUTO, foAuto);
-                startActivity(i); });
+                i.putExtra(PlayerActivity.EXTRA_NOW_NEXT, nn != null ? nn : "");
+                try { i.putExtra(PlayerActivity.EXTRA_FO_TIMEOUT, Integer.parseInt(foTimeoutStr)); } catch (Exception e) { i.putExtra(PlayerActivity.EXTRA_FO_TIMEOUT, 15); }
+                i.putExtra(PlayerActivity.EXTRA_FO_AUTO, !"false".equals(foAutoStr));
+                startActivity(i);
+            });
         }
     }
 
