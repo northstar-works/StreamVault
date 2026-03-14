@@ -402,7 +402,7 @@ html, body {
   <div class="lib-header">
     <h1>StreamVault</h1>
     <div class="header-right">
-      <span class="build-tag" id="build-tag">b4</span>
+      <span class="build-tag" id="build-tag">b5</span>
       <button class="icon-btn" id="btn-import" title="Import JSON">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       </button>
@@ -544,8 +544,8 @@ JSON format:
 
 <script>
 // ─── App Info ───
-const APP_VERSION = '2.2.0';
-const BUILD = 4;
+const APP_VERSION = '3.0.0';
+const BUILD = 5;
 const STORAGE_KEY = 'streamvault_media_v2';
 
 // ─── State ───
@@ -1018,10 +1018,20 @@ window.playItem = function(id) {
   if (idx === -1) return;
   currentIndex = idx;
   const item = mediaItems[idx];
+  const streamUrl = extractStreamUrl(item.url);
+  const cat = [item.category, item.epgTitle].filter(Boolean).join(' · ');
 
+  // If native ExoPlayer is available (Android app), use it for all streams
+  if (window.NativePlayer && window.NativePlayer.isAvailable()) {
+    console.log('[StreamVault] Launching native ExoPlayer:', streamUrl);
+    window.NativePlayer.play(streamUrl, item.title || 'Stream', cat);
+    return;
+  }
+
+  // Web fallback (browser usage)
   showScreen('player-screen');
   $pTitle.textContent = item.title;
-  $pCat.textContent = [item.category, item.epgTitle].filter(Boolean).join(' · ');
+  $pCat.textContent = cat;
   $pUrl.textContent = item.url;
   $errorOv.style.display = 'none';
 
@@ -1032,24 +1042,13 @@ window.playItem = function(id) {
 function startStream(rawUrl) {
   destroyPlayer();
   const streamUrl = extractStreamUrl(rawUrl);
-  console.log('[StreamVault] Raw:', rawUrl);
-  console.log('[StreamVault] Extracted:', streamUrl);
+  console.log('[StreamVault] Web fallback — Raw:', rawUrl, 'Stream:', streamUrl);
 
-  // ROUTING STRATEGY:
-  // 1. Page-based domains (gohyperspeed, etc) → iframe immediately
-  // 2. Direct video files (.m3u8, .mp4) → native video, then HLS.js
-  // 3. Unknown URLs → try native video briefly, then iframe
-
-  if (isPageBasedStream(streamUrl)) {
-    console.log('[StreamVault] Page-based stream → iframe');
-    tryIframe(streamUrl);
-  } else if (isDirectVideoUrl(streamUrl)) {
-    console.log('[StreamVault] Direct video URL → native/HLS.js');
-    tryNativeVideo(streamUrl, rawUrl);
+  // Web fallback strategy: HLS.js for .m3u8, iframe for everything else
+  if (isDirectVideoUrl(streamUrl) && Hls.isSupported()) {
+    tryHlsJs(streamUrl, rawUrl);
   } else {
-    // Unknown — try native video with a short timeout, fall back to iframe
-    console.log('[StreamVault] Unknown URL type → quick native try, then iframe');
-    tryNativeVideo(streamUrl, rawUrl, 5000);
+    tryIframe(rawUrl);
   }
 }
 
