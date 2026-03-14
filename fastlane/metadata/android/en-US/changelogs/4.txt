@@ -1,0 +1,10 @@
+StreamVault v2.2.0 (Build 4)
+
+• Fixed playback for gohyperspeed.com and similar page-based streams
+  - Smart routing: page-based domains → iframe, .m3u8 → HLS.js, unknown → quick probe then iframe
+  - No more spinning/black screen on gohyperspeed URLs
+• Fixed file picker on Android — browse button now opens file chooser
+  - Added onShowFileChooser to WebChromeClient for .json, .m3u, .m3u8 file selection
+• M3U/M3U8 playlist import with full metadata parsing
+• M3U export support
+• All three import methods work: file picker, drag-and-drop, paste

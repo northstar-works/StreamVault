@@ -402,7 +402,7 @@ html, body {
   <div class="lib-header">
     <h1>StreamVault</h1>
     <div class="header-right">
-      <span class="build-tag" id="build-tag">b3</span>
+      <span class="build-tag" id="build-tag">b4</span>
       <button class="icon-btn" id="btn-import" title="Import JSON">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       </button>
@@ -544,8 +544,8 @@ JSON format:
 
 <script>
 // ─── App Info ───
-const APP_VERSION = '2.1.0';
-const BUILD = 3;
+const APP_VERSION = '2.2.0';
+const BUILD = 4;
 const STORAGE_KEY = 'streamvault_media_v2';
 
 // ─── State ───
@@ -611,25 +611,27 @@ function esc(s) { const d = document.createElement('div'); d.textContent = s; re
 function extractStreamUrl(rawUrl) {
   try {
     const u = new URL(rawUrl);
-    // webplayer.online/?url=ACTUAL_URL
+    // webplayer.online/?url=ACTUAL_URL — unwrap
     if (u.hostname.includes('webplayer.online') || u.hostname.includes('webplayer')) {
       const inner = u.searchParams.get('url');
       if (inner) return inner.replace(/@top$/, '');
     }
-    // Any wrapper that passes url= as a query param
-    const urlParam = u.searchParams.get('url') || u.searchParams.get('stream') || u.searchParams.get('src');
-    if (urlParam) return urlParam.replace(/@top$/, '');
   } catch(e) {}
   return rawUrl;
 }
 
-/** Known streaming domains where we should always try direct video playback */
-function isStreamingDomain(url) {
+/** URLs that serve an HTML page with an embedded player (NOT raw video) — must use iframe */
+function isPageBasedStream(url) {
   try {
     const h = new URL(url).hostname;
-    return /gohyperspeed|hyperspeed|stormwall|streamhub|livepush|cdn77|akamai|cloudfront|fastly|m3u8/i.test(h) ||
-           /\.m3u8/i.test(url) || /\/live/i.test(url) || /\/hls/i.test(url) || /\/playlist/i.test(url);
+    return /gohyperspeed|hyperspeed|stormwall|vipstreams|embedme|ustvgo|123tv|ustreamix|dlhd|webplayer/i.test(h);
   } catch { return false; }
+}
+
+/** URLs that are actual direct video streams */
+function isDirectVideoUrl(url) {
+  return /\.m3u8/i.test(url) || /\.mp4/i.test(url) || /\.ts\b/i.test(url) ||
+         /\.mkv/i.test(url) || /\.webm/i.test(url) || /\.flv/i.test(url);
 }
 
 // ─── Categories ───
@@ -1030,18 +1032,30 @@ window.playItem = function(id) {
 function startStream(rawUrl) {
   destroyPlayer();
   const streamUrl = extractStreamUrl(rawUrl);
-  console.log('[StreamVault] Raw URL:', rawUrl);
-  console.log('[StreamVault] Stream URL:', streamUrl);
+  console.log('[StreamVault] Raw:', rawUrl);
+  console.log('[StreamVault] Extracted:', streamUrl);
 
-  // STRATEGY: Try native <video> first (bypasses CORS — works for gohyperspeed etc)
-  // Then HLS.js (for streams that need manifest parsing)
-  // Then iframe (last resort for webplayer wrappers)
-  tryNativeVideo(streamUrl, rawUrl);
+  // ROUTING STRATEGY:
+  // 1. Page-based domains (gohyperspeed, etc) → iframe immediately
+  // 2. Direct video files (.m3u8, .mp4) → native video, then HLS.js
+  // 3. Unknown URLs → try native video briefly, then iframe
+
+  if (isPageBasedStream(streamUrl)) {
+    console.log('[StreamVault] Page-based stream → iframe');
+    tryIframe(streamUrl);
+  } else if (isDirectVideoUrl(streamUrl)) {
+    console.log('[StreamVault] Direct video URL → native/HLS.js');
+    tryNativeVideo(streamUrl, rawUrl);
+  } else {
+    // Unknown — try native video with a short timeout, fall back to iframe
+    console.log('[StreamVault] Unknown URL type → quick native try, then iframe');
+    tryNativeVideo(streamUrl, rawUrl, 5000);
+  }
 }
 
-function tryNativeVideo(streamUrl, rawUrl) {
-  console.log('[StreamVault] Trying native video:', streamUrl);
+function tryNativeVideo(streamUrl, rawUrl, timeoutMs) {
   destroyPlayer();
+  const timeout = timeoutMs || 10000;
   const video = document.createElement('video');
   video.setAttribute('playsinline', '');
   video.setAttribute('autoplay', '');
@@ -1051,12 +1065,12 @@ function tryNativeVideo(streamUrl, rawUrl) {
   $container.appendChild(video);
 
   let settled = false;
-  let errorTimeout = null;
+  let errorTimer = null;
 
   function onSuccess() {
     if (settled) return;
     settled = true;
-    clearTimeout(errorTimeout);
+    clearTimeout(errorTimer);
     $loading.style.display = 'none';
     showPauseIcon();
     console.log('[StreamVault] Native video playing');
@@ -1065,16 +1079,19 @@ function tryNativeVideo(streamUrl, rawUrl) {
   function onFail() {
     if (settled) return;
     settled = true;
-    clearTimeout(errorTimeout);
-    console.log('[StreamVault] Native video failed, trying HLS.js');
-    tryHlsJs(streamUrl, rawUrl);
+    clearTimeout(errorTimer);
+    // For direct video URLs, try HLS.js next; otherwise go to iframe
+    if (isDirectVideoUrl(streamUrl)) {
+      console.log('[StreamVault] Native failed → HLS.js');
+      tryHlsJs(streamUrl, rawUrl);
+    } else {
+      console.log('[StreamVault] Native failed → iframe');
+      tryIframe(rawUrl);
+    }
   }
 
   video.onplaying = onSuccess;
-  video.oncanplay = () => {
-    $loading.style.display = 'none';
-    video.play().catch(() => {});
-  };
+  video.oncanplay = () => { $loading.style.display = 'none'; video.play().catch(() => {}); };
   video.ontimeupdate = () => {
     onSuccess();
     if (video.duration && isFinite(video.duration)) {
@@ -1083,23 +1100,17 @@ function tryNativeVideo(streamUrl, rawUrl) {
   };
   video.onerror = onFail;
 
-  // If nothing happens after 10s, try next method
-  errorTimeout = setTimeout(() => {
-    if (!settled && video.readyState < 2) {
-      console.log('[StreamVault] Native video timeout');
-      onFail();
-    }
-  }, 10000);
+  errorTimer = setTimeout(() => {
+    if (!settled && video.readyState < 2) onFail();
+  }, timeout);
 
   video.play().catch(() => {});
 }
 
 function tryHlsJs(streamUrl, rawUrl) {
-  console.log('[StreamVault] Trying HLS.js:', streamUrl);
   destroyPlayer();
 
   if (!Hls.isSupported()) {
-    console.log('[StreamVault] HLS.js not supported, going to iframe');
     tryIframe(rawUrl);
     return;
   }
@@ -1120,10 +1131,7 @@ function tryHlsJs(streamUrl, rawUrl) {
 
   let settled = false;
 
-  hlsInstance.on(Hls.Events.MEDIA_ATTACHED, () => {
-    hlsInstance.loadSource(streamUrl);
-  });
-
+  hlsInstance.on(Hls.Events.MEDIA_ATTACHED, () => { hlsInstance.loadSource(streamUrl); });
   hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
     $loading.style.display = 'none';
     video.play().catch(() => {});
@@ -1131,12 +1139,11 @@ function tryHlsJs(streamUrl, rawUrl) {
     showPauseIcon();
     console.log('[StreamVault] HLS.js playing');
   });
-
   hlsInstance.on(Hls.Events.ERROR, (event, data) => {
     if (settled) return;
     if (data.fatal) {
       settled = true;
-      console.log('[StreamVault] HLS.js fatal error:', data.type, data.details);
+      console.log('[StreamVault] HLS.js failed → iframe');
       tryIframe(rawUrl);
     }
   });
@@ -1150,22 +1157,18 @@ function tryHlsJs(streamUrl, rawUrl) {
 
   hlsInstance.attachMedia(video);
 
-  // Timeout fallback
   setTimeout(() => {
-    if (!settled) {
-      settled = true;
-      console.log('[StreamVault] HLS.js timeout, trying iframe');
-      tryIframe(rawUrl);
-    }
+    if (!settled) { settled = true; tryIframe(rawUrl); }
   }, 12000);
 }
 
-function tryIframe(rawUrl) {
+function tryIframe(url) {
   destroyPlayer();
   const iframe = document.createElement('iframe');
-  iframe.src = rawUrl;
+  iframe.src = url;
   iframe.setAttribute('allowfullscreen', '');
   iframe.setAttribute('allow', 'autoplay; fullscreen; encrypted-media');
+  iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-presentation');
   iframe.style.cssText = 'width:100%;height:100%;border:none';
   iframe.onload = () => { $loading.style.display = 'none'; };
   $container.appendChild(iframe);

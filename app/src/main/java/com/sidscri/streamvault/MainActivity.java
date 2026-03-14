@@ -2,15 +2,18 @@ package com.sidscri.streamvault;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
@@ -20,17 +23,19 @@ import android.widget.FrameLayout;
 
 public class MainActivity extends Activity {
 
+    private static final int FILE_CHOOSER_REQUEST = 1001;
+
     private WebView webView;
     private FrameLayout fullscreenContainer;
     private View customView;
     private WebChromeClient.CustomViewCallback customViewCallback;
+    private ValueCallback<Uri[]> fileUploadCallback;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Fullscreen immersive
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(
             WindowManager.LayoutParams.FLAG_FULLSCREEN,
@@ -42,7 +47,6 @@ public class MainActivity extends Activity {
             getWindow().setNavigationBarColor(Color.parseColor("#0a0a0f"));
         }
 
-        // Layout
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.parseColor("#0a0a0f"));
 
@@ -80,20 +84,17 @@ public class MainActivity extends Activity {
         settings.setJavaScriptCanOpenWindowsAutomatically(true);
         settings.setSupportMultipleWindows(false);
         settings.setUserAgentString(settings.getUserAgentString()
-            + " StreamVault/1.0");
+            + " StreamVault/2.1");
 
-        // Enable cookies for streaming sites
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             cookieManager.setAcceptThirdPartyCookies(webView, true);
         }
 
-        // Handle navigation within the WebView
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                // Keep all navigation inside the WebView
                 view.loadUrl(request.getUrl().toString());
                 return true;
             }
@@ -109,8 +110,45 @@ public class MainActivity extends Activity {
             }
         });
 
-        // Handle fullscreen video
         webView.setWebChromeClient(new WebChromeClient() {
+
+            // ── File chooser (required for <input type="file"> to work) ──
+            @Override
+            public boolean onShowFileChooser(WebView webView,
+                    ValueCallback<Uri[]> filePathCallback,
+                    FileChooserParams fileChooserParams) {
+
+                // Cancel any existing callback
+                if (fileUploadCallback != null) {
+                    fileUploadCallback.onReceiveValue(null);
+                }
+                fileUploadCallback = filePathCallback;
+
+                Intent intent = fileChooserParams.createIntent();
+                try {
+                    startActivityForResult(intent, FILE_CHOOSER_REQUEST);
+                } catch (Exception e) {
+                    // If createIntent fails, try a generic file picker
+                    Intent fallback = new Intent(Intent.ACTION_GET_CONTENT);
+                    fallback.setType("*/*");
+                    fallback.addCategory(Intent.CATEGORY_OPENABLE);
+                    String[] mimeTypes = {"application/json", "audio/x-mpegurl",
+                        "application/vnd.apple.mpegurl", "audio/mpegurl",
+                        "application/octet-stream"};
+                    fallback.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+                    try {
+                        startActivityForResult(
+                            Intent.createChooser(fallback, "Choose file"),
+                            FILE_CHOOSER_REQUEST);
+                    } catch (Exception ex) {
+                        fileUploadCallback = null;
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            // ── Fullscreen video ──
             @Override
             public void onShowCustomView(View view, CustomViewCallback callback) {
                 if (customView != null) {
@@ -140,8 +178,27 @@ public class MainActivity extends Activity {
             }
         });
 
-        // Hardware acceleration
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+    }
+
+    // ── Handle file picker result ──
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == FILE_CHOOSER_REQUEST) {
+            if (fileUploadCallback != null) {
+                Uri[] results = null;
+                if (resultCode == Activity.RESULT_OK && data != null) {
+                    String dataString = data.getDataString();
+                    if (dataString != null) {
+                        results = new Uri[]{Uri.parse(dataString)};
+                    }
+                }
+                fileUploadCallback.onReceiveValue(results);
+                fileUploadCallback = null;
+            }
+        }
     }
 
     private void hideSystemUI() {
@@ -163,9 +220,7 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        // If fullscreen video, exit fullscreen first
         if (customView != null) {
-            webView.getWebChromeClient();
             if (customViewCallback != null) {
                 customViewCallback.onCustomViewHidden();
                 fullscreenContainer.removeView(customView);
@@ -177,7 +232,6 @@ public class MainActivity extends Activity {
             return;
         }
 
-        // Let the web app handle back navigation
         webView.evaluateJavascript(
             "(function() {" +
             "  var player = document.getElementById('player-screen');" +
