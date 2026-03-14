@@ -8,428 +8,1502 @@
 <title>StreamVault</title>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
 <style>
+/* Reset & Vars */
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-:root{
---bg:#0a0a0f;--bg2:#12121a;--bg3:#1a1a26;--bg4:#16161f;
---acc:#6c5ce7;--acc-g:rgba(108,92,231,.35);--acc-s:rgba(108,92,231,.12);
---t1:#e8e6f0;--t2:#8a879a;--t3:#55526a;
---red:#ff4757;--red-s:rgba(255,71,87,.12);--grn:#2ed573;--org:#ffa502;
---brd:rgba(255,255,255,.06);--ov:rgba(6,6,12,.92);
---r:14px;--rs:8px;--sh:0 8px 32px rgba(0,0,0,.4);
-}
+:root{--bg:#0a0a0f;--c1:#12121a;--c2:#1a1a26;--c3:#16161f;--ac:#6c5ce7;--acg:rgba(108,92,231,.35);--acs:rgba(108,92,231,.12);--t1:#e8e6f0;--t2:#8a879a;--t3:#55526a;--rd:#ff4757;--gn:#2ed573;--or:#ffa502;--bd:rgba(255,255,255,.06);--ov:rgba(6,6,12,.92);--r:12px;--rs:7px}
 html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;background:var(--bg);color:var(--t1);overflow:hidden;-webkit-tap-highlight-color:transparent;user-select:none}
+
+/* Layout */
 .app{display:flex;flex-direction:column;height:100%}
-.app-content{flex:1;position:relative;overflow:hidden}
-.screen{display:none;position:absolute;inset:0;flex-direction:column}
-.screen.active{display:flex}
-.bottom-nav{display:flex;background:var(--bg2);border-top:1px solid var(--brd);padding:6px 0 env(safe-area-inset-bottom,8px);z-index:100}
-.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;cursor:pointer;color:var(--t3);transition:color .2s}
-.nav-item.active{color:var(--acc)}.nav-item svg{width:20px;height:20px}.nav-item span{font-size:10px;font-weight:600}
-.hdr{padding:44px 20px 8px;display:flex;align-items:center;justify-content:space-between}
-.hdr h1{font-size:20px;font-weight:700;background:linear-gradient(135deg,var(--t1),var(--acc));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.hdr-r{display:flex;align-items:center;gap:6px}
-.tag{font-size:10px;color:var(--t3);background:var(--bg2);padding:2px 7px;border-radius:10px;border:1px solid var(--brd);font-family:monospace}
-.ib{width:32px;height:32px;border-radius:8px;background:var(--bg2);border:1px solid var(--brd);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--t2);transition:all .2s}
-.ib:active{transform:scale(.92)}.ib:hover{border-color:var(--acc);color:var(--acc)}.ib svg{width:15px;height:15px}
-.sbar{margin:6px 20px 6px;position:relative}
-.sbar input{width:100%;padding:10px 12px 10px 36px;background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r);color:var(--t1);font-size:13px;outline:none;transition:border-color .2s}
-.sbar input:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-s)}
-.sbar input::placeholder{color:var(--t3)}
-.sbar svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--t3)}
-.pills{display:flex;gap:5px;padding:3px 20px 6px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap}
-.pills::-webkit-scrollbar{display:none}
-.pill{padding:4px 10px;border-radius:14px;font-size:10px;font-weight:500;white-space:nowrap;cursor:pointer;background:var(--bg2);border:1px solid var(--brd);color:var(--t2);transition:all .2s;flex-shrink:0}
-.pill.on{background:var(--acc);color:#fff;border-color:var(--acc)}
-.list{flex:1;overflow-y:auto;padding:0 20px 90px;-webkit-overflow-scrolling:touch}
-.list::-webkit-scrollbar{display:none}
-.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:50px 30px;text-align:center}
-.empty .ew{width:56px;height:56px;border-radius:50%;background:var(--acc-s);display:flex;align-items:center;justify-content:center;margin-bottom:12px}
-.empty .ew svg{width:24px;height:24px;color:var(--acc)}.empty h3{font-size:15px;font-weight:600;margin-bottom:4px}.empty p{font-size:11px;color:var(--t2);line-height:1.4;max-width:240px}
-.item{display:flex;align-items:center;gap:9px;padding:10px;margin-bottom:4px;background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r);cursor:pointer;transition:all .15s;animation:si .2s ease forwards;opacity:0;transform:translateY(5px)}
-@keyframes si{to{opacity:1;transform:translateY(0)}}
-.item:active{transform:scale(.98)}
-.item .th{width:38px;height:38px;border-radius:8px;background:linear-gradient(135deg,var(--acc-s),rgba(108,92,231,.25));display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
-.item .th img{width:100%;height:100%;object-fit:cover}.item .th svg{width:16px;height:16px;color:var(--acc)}
-.item .nfo{flex:1;min-width:0}.item .nfo .nm{font-size:12px;font-weight:500;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.item .nfo .mt{font-size:9px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.item .nfo .mt .cb{background:var(--acc-s);color:var(--acc);padding:1px 4px;border-radius:3px;font-size:8px;font-weight:600;margin-right:3px;text-transform:uppercase}
-.item .nfo .mt .rb{background:rgba(46,213,115,.12);color:var(--grn);padding:1px 4px;border-radius:3px;font-size:8px;font-weight:600;margin-right:3px}
-.item .nfo .mt .vb{background:rgba(255,165,2,.12);color:var(--org);padding:1px 4px;border-radius:3px;font-size:8px;font-weight:600;margin-right:3px}
-.item .acts{display:flex;gap:1px;flex-shrink:0}
-.item .acts button{width:28px;height:28px;border-radius:6px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;background:transparent;color:var(--t3);transition:all .2s}
-.item .acts button svg{width:13px;height:13px}
-.item .acts .eb:hover{background:var(--acc-s);color:var(--acc)}.item .acts .db:hover{background:var(--red-s);color:var(--red)}
-.fab-g{position:fixed;bottom:66px;right:16px;z-index:50}
-.fab{width:48px;height:48px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;background:var(--acc);box-shadow:0 4px 16px var(--acc-g)}
-.fab:active{transform:scale(.92)}.fab svg{width:22px;height:22px;color:#fff}
+.app-body{flex:1;position:relative;overflow:hidden}
+.scr{display:none;position:absolute;inset:0;flex-direction:column}.scr.on{display:flex}
 
-/* ── Compact Filter Bar for Repo Browser ── */
-.filter-bar{display:flex;gap:6px;padding:4px 20px 6px;align-items:center;overflow-x:auto;-webkit-overflow-scrolling:touch}
-.filter-bar::-webkit-scrollbar{display:none}
-.fsel{padding:5px 10px;border-radius:14px;font-size:10px;font-weight:500;background:var(--bg2);border:1px solid var(--brd);color:var(--t2);cursor:pointer;appearance:none;outline:none;min-width:0;max-width:120px}
-.fsel:focus{border-color:var(--acc)}.fsel option{background:var(--bg2);color:var(--t1)}
-.fsel.active{border-color:var(--acc);color:var(--acc);background:var(--acc-s)}
-.filter-bar .flbl{font-size:9px;color:var(--t3);font-weight:600;text-transform:uppercase;flex-shrink:0;letter-spacing:.3px}
+/* Bottom Nav */
+.bnav{display:flex;background:var(--c1);border-top:1px solid var(--bd);padding:4px 0 env(safe-area-inset-bottom,4px);z-index:99}
+.bnav .ni{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 0;cursor:pointer;color:var(--t3);font-size:8px;font-weight:600}
+.bnav .ni.on{color:var(--ac)}
+.bnav .ni svg{width:18px;height:18px}
 
-/* ── Selection bar ── */
-.sel-bar{display:none;padding:8px 16px;background:var(--acc);align-items:center;justify-content:space-between;flex-shrink:0}
-.sel-bar.on{display:flex}.sel-bar .sl{font-size:12px;font-weight:600;color:#fff}
-.sel-bar .sr{display:flex;gap:6px}
-.sel-bar button{padding:5px 12px;border-radius:14px;border:none;font-size:10px;font-weight:600;cursor:pointer}
-.sel-bar .sb-add{background:#fff;color:var(--acc)}.sel-bar .sb-clr{background:rgba(255,255,255,.2);color:#fff}
+/* Header */
+.hd{padding:40px 16px 6px;display:flex;align-items:center;justify-content:space-between}
+.hd h1{font-size:18px;font-weight:700;color:var(--t1)}
+.hd-r{display:flex;gap:4px;align-items:center}
+.tg{font-size:8px;color:var(--t3);background:var(--c1);padding:2px 6px;border-radius:8px;border:1px solid var(--bd);font-family:monospace}
+.ib{width:28px;height:28px;border-radius:var(--rs);background:var(--c1);border:1px solid var(--bd);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--t2)}
+.ib:active{transform:scale(.92)}.ib svg{width:13px;height:13px}
 
-/* ── Repo browser items ── */
-.rb-item{display:flex;align-items:center;gap:8px;padding:8px;margin-bottom:3px;background:var(--bg2);border:1px solid var(--brd);border-radius:var(--rs);cursor:pointer;transition:all .12s}
-.rb-item:active{transform:scale(.98)}.rb-item.selected{border-color:var(--acc);background:rgba(108,92,231,.08)}
-.rb-item .chk{width:20px;height:20px;border-radius:5px;border:2px solid var(--brd);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .12s}
-.rb-item.selected .chk{background:var(--acc);border-color:var(--acc)}.rb-item.selected .chk svg{display:block}
-.rb-item .chk svg{width:12px;height:12px;color:#fff;display:none}
-.rb-item .rb-th{width:32px;height:32px;border-radius:7px;background:var(--acc-s);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
-.rb-item .rb-th img{width:100%;height:100%;object-fit:cover}.rb-item .rb-th svg{width:14px;height:14px;color:var(--acc)}
-.rb-item .rb-info{flex:1;min-width:0}.rb-item .rb-info .rb-nm{font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rb-item .rb-info .rb-mt{font-size:9px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Search */
+.sb{margin:4px 16px;position:relative}
+.sb input{width:100%;padding:8px 10px 8px 30px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--r);color:var(--t1);font-size:11px;outline:none}
+.sb input:focus{border-color:var(--ac)}
+.sb input::placeholder{color:var(--t3)}
+.sb svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:12px;height:12px;color:var(--t3)}
 
-/* Repo cards */
-.repo-card{display:flex;align-items:center;gap:10px;padding:12px;margin-bottom:5px;background:var(--bg2);border:1px solid var(--brd);border-radius:var(--r);cursor:pointer;transition:all .15s}
-.repo-card:active{transform:scale(.98)}
-.repo-card .rc-icon{width:42px;height:42px;border-radius:10px;background:var(--acc-s);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.repo-card .rc-icon svg{width:20px;height:20px;color:var(--acc)}
-.repo-card .rc-info{flex:1;min-width:0}.repo-card .rc-info .rc-name{font-size:13px;font-weight:600;margin-bottom:1px}.repo-card .rc-info .rc-meta{font-size:10px;color:var(--t3)}
-.repo-card .rc-del{width:28px;height:28px;border-radius:7px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;background:transparent;color:var(--t3)}
-.repo-card .rc-del:hover{background:var(--red-s);color:var(--red)}.repo-card .rc-del svg{width:13px;height:13px}
+/* Pills */
+.pls{display:flex;gap:3px;padding:3px 16px 5px;overflow-x:auto;-webkit-overflow-scrolling:touch}.pls::-webkit-scrollbar{display:none}
+.pl{padding:3px 8px;border-radius:10px;font-size:8px;font-weight:500;white-space:nowrap;cursor:pointer;background:var(--c1);border:1px solid var(--bd);color:var(--t2);flex-shrink:0}
+.pl.on{background:var(--ac);color:#fff;border-color:var(--ac)}
 
-/* ── Modals ── */
+/* Lists & Items */
+.lst{flex:1;overflow-y:auto;padding:0 16px 80px;-webkit-overflow-scrolling:touch}.lst::-webkit-scrollbar{display:none}
+.emp{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;text-align:center}
+.emp h3{font-size:13px;font-weight:600;margin-bottom:3px}.emp p{font-size:9px;color:var(--t2);line-height:1.4}
+.itm{display:flex;align-items:center;gap:7px;padding:8px;margin-bottom:3px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--r);cursor:pointer}
+.itm:active{transform:scale(.98)}
+.itm .th{width:32px;height:32px;border-radius:6px;background:var(--acs);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
+.itm .th img{width:100%;height:100%;object-fit:cover}.itm .th svg{width:14px;height:14px;color:var(--ac)}
+.itm .nf{flex:1;min-width:0}
+.itm .nf .nm{font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.itm .nf .mt{font-size:7px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.itm .nf .mt .tg2{display:inline;padding:0 3px;border-radius:2px;font-size:7px;font-weight:600;margin-right:2px}
+.itm .nf .en{font-size:7px;color:var(--gn);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.itm .ab{display:flex;gap:1px;flex-shrink:0}
+.itm .ab button{width:24px;height:24px;border-radius:4px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;background:transparent;color:var(--t3)}
+.itm .ab button svg{width:11px;height:11px}
+
+/* FAB */
+.fab{position:fixed;bottom:56px;right:14px;width:44px;height:44px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;background:var(--ac);box-shadow:0 3px 12px var(--acg);z-index:50}
+.fab:active{transform:scale(.92)}.fab svg{width:18px;height:18px;color:#fff}
+
+/* Repo Browser */
+.fbar{display:flex;gap:4px;padding:2px 16px 4px;align-items:center;overflow-x:auto;-webkit-overflow-scrolling:touch}.fbar::-webkit-scrollbar{display:none}
+.fsel{padding:3px 7px;border-radius:10px;font-size:8px;background:var(--c1);border:1px solid var(--bd);color:var(--t2);appearance:none;outline:none;max-width:100px}
+.fsel option{background:var(--c1);color:var(--t1)}
+.flbl{font-size:7px;color:var(--t3);font-weight:600;text-transform:uppercase;flex-shrink:0}
+.slb{display:none;padding:6px 12px;background:var(--ac);align-items:center;justify-content:space-between;flex-shrink:0}
+.slb.on{display:flex}.slb span{font-size:10px;font-weight:600;color:#fff}
+.slb button{padding:3px 9px;border-radius:10px;border:none;font-size:8px;font-weight:600;cursor:pointer;margin-left:4px}
+.slb .sba{background:#fff;color:var(--ac)}.slb .sbc{background:rgba(255,255,255,.2);color:#fff}
+.ri{display:flex;align-items:center;gap:6px;padding:6px;margin-bottom:2px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);cursor:pointer}
+.ri.sel{border-color:var(--ac);background:rgba(108,92,231,.08)}
+.ri .ck{width:16px;height:16px;border-radius:4px;border:2px solid var(--bd);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ri.sel .ck{background:var(--ac);border-color:var(--ac)}.ri.sel .ck svg{display:block}
+.ri .ck svg{width:10px;height:10px;color:#fff;display:none}
+.ri .rf{flex:1;min-width:0}.ri .rf .rn{font-size:9px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ri .rf .rm{font-size:7px;color:var(--t3)}
+
+/* Repo Cards */
+.rc{display:flex;align-items:center;gap:8px;padding:10px;margin-bottom:3px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--r);cursor:pointer}
+.rc:active{transform:scale(.98)}
+.rc .ri2{width:36px;height:36px;border-radius:8px;background:var(--acs);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.rc .ri2 svg{width:16px;height:16px;color:var(--ac)}
+.rc .rf2{flex:1;min-width:0}.rc .rf2 .rn2{font-size:11px;font-weight:600}.rc .rf2 .rm2{font-size:8px;color:var(--t3)}
+.rc .rd{width:24px;height:24px;border-radius:5px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;background:transparent;color:var(--t3)}.rc .rd svg{width:11px;height:11px}
+
+/* Modals */
 .mo{display:none;position:fixed;inset:0;background:var(--ov);z-index:200;align-items:flex-end;justify-content:center}
 .mo.on{display:flex}
-.mo .mc{width:100%;max-width:480px;max-height:92vh;overflow-y:auto;background:var(--bg4);border-radius:16px 16px 0 0;padding:20px 18px 26px;animation:su .25s ease}
-@keyframes su{from{transform:translateY(100%)}to{transform:translateY(0)}}
-.mo h2{font-size:16px;font-weight:600;margin-bottom:14px}
-.mo label{display:block;font-size:9px;font-weight:600;color:var(--t2);margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px}
-.mo input,.mo textarea{width:100%;padding:9px 10px;background:var(--bg2);border:1px solid var(--brd);border-radius:var(--rs);color:var(--t1);font-size:12px;outline:none;margin-bottom:10px}
-.mo textarea{font-family:monospace;font-size:10px;min-height:50px;resize:vertical}
-.mo input:focus,.mo textarea:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-s)}
-.mo .row{display:flex;gap:6px}.mo .row>div{flex:1}
-.mo .ma{display:flex;gap:6px;margin-top:4px}
-.mo .ma button{flex:1;padding:11px;border-radius:var(--rs);font-size:12px;font-weight:600;border:none;cursor:pointer}
-.bc{background:var(--bg2);color:var(--t2);border:1px solid var(--brd)!important}
-.bs{background:var(--acc);color:#fff}
-.iz{border:2px dashed var(--brd);border-radius:var(--r);padding:16px;text-align:center;margin-bottom:10px;cursor:pointer;transition:border-color .2s}
-.iz:hover{border-color:var(--acc)}.iz p{font-size:11px;color:var(--t2);margin-bottom:3px}.iz .h{font-size:9px;color:var(--t3)}.iz input[type=file]{display:none}
-.jp{background:var(--bg2);border:1px solid var(--brd);border-radius:var(--rs);padding:8px;margin-bottom:10px;max-height:100px;overflow-y:auto;font-family:monospace;font-size:9px;color:var(--grn);display:none}
-.is{background:var(--acc-s);border-radius:var(--rs);padding:7px 10px;margin-bottom:10px;font-size:11px;color:var(--acc);display:none}
-.co{display:none;position:fixed;inset:0;background:var(--ov);z-index:250;align-items:center;justify-content:center}
-.co.on{display:flex}
-.cb{background:var(--bg4);border-radius:var(--r);padding:20px;width:260px;text-align:center}
-.cb h3{font-size:14px;margin-bottom:5px}.cb p{font-size:11px;color:var(--t2);margin-bottom:14px}
-.cb .bs2{display:flex;gap:6px}.cb .bs2 button{flex:1;padding:10px;border-radius:var(--rs);font-size:11px;font-weight:600;border:none;cursor:pointer}
-.toast{position:fixed;bottom:74px;left:50%;transform:translateX(-50%) translateY(16px);background:var(--bg4);color:var(--t1);padding:8px 16px;border-radius:20px;font-size:11px;border:1px solid var(--brd);box-shadow:var(--sh);opacity:0;transition:all .3s;z-index:300;pointer-events:none;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis}
+.mc{width:100%;max-width:480px;max-height:90vh;overflow-y:auto;background:var(--c3);border-radius:14px 14px 0 0;padding:18px 16px 24px;animation:msu .2s ease}
+@keyframes msu{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.mc h2{font-size:15px;font-weight:600;margin-bottom:12px}
+.mc label{display:block;font-size:8px;font-weight:600;color:var(--t2);margin-bottom:3px;text-transform:uppercase;letter-spacing:.3px}
+.mc input,.mc textarea,.mc select{width:100%;padding:8px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:11px;outline:none;margin-bottom:10px}
+.mc textarea{font-family:monospace;font-size:10px;min-height:60px;resize:vertical}
+.mc input:focus,.mc textarea:focus,.mc select:focus{border-color:var(--ac)}
+.mc input::placeholder,.mc textarea::placeholder{color:var(--t3)}
+.mc .rw{display:flex;gap:6px}.mc .rw>div{flex:1}
+.mc .mab{display:flex;gap:6px;margin-top:4px}
+.mc .mab button{flex:1;padding:10px;border-radius:var(--rs);font-size:11px;font-weight:600;border:none;cursor:pointer}
+.bc{background:var(--c1);color:var(--t2);border:1px solid var(--bd)!important}
+.bs{background:var(--ac);color:#fff}
+
+/* Import Zone */
+.iz{border:2px dashed var(--bd);border-radius:var(--r);padding:16px;text-align:center;margin-bottom:10px;cursor:pointer}
+.iz:hover{border-color:var(--ac)}.iz p{font-size:10px;color:var(--t2);margin-bottom:3px}.iz .hn{font-size:8px;color:var(--t3)}
+.iz input[type=file]{display:none}
+.ipv{background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);padding:8px;margin-bottom:10px;max-height:80px;overflow-y:auto;font-family:monospace;font-size:9px;color:var(--gn);display:none}
+.ist{background:var(--acs);border-radius:var(--rs);padding:6px 10px;margin-bottom:10px;font-size:10px;color:var(--ac);display:none}
+
+/* Confirm Dialog */
+.cod{display:none;position:fixed;inset:0;background:var(--ov);z-index:250;align-items:center;justify-content:center}
+.cod.on{display:flex}
+.cob{background:var(--c3);border-radius:var(--r);padding:18px;width:250px;text-align:center}
+.cob h3{font-size:13px;margin-bottom:4px}.cob p{font-size:10px;color:var(--t2);margin-bottom:12px}
+.cob .cbs{display:flex;gap:5px}.cob .cbs button{flex:1;padding:9px;border-radius:var(--rs);font-size:10px;font-weight:600;border:none;cursor:pointer}
+
+/* Toast */
+.toast{position:fixed;bottom:64px;left:50%;transform:translateX(-50%) translateY(14px);background:var(--c3);color:var(--t1);padding:7px 14px;border-radius:18px;font-size:10px;border:1px solid var(--bd);opacity:0;transition:all .3s;z-index:300;pointer-events:none;white-space:nowrap;max-width:88vw;text-overflow:ellipsis;overflow:hidden}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-.cnt{font-size:9px;color:var(--t3);background:var(--bg2);padding:2px 7px;border-radius:10px;border:1px solid var(--brd);font-family:monospace}
+.cnt{font-size:8px;color:var(--t3);background:var(--c1);padding:2px 6px;border-radius:8px;border:1px solid var(--bd);font-family:monospace}
+
+/* Guide */
+.gw{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}.gw::-webkit-scrollbar{display:none}
+.grow{display:flex;min-height:38px;border-bottom:1px solid var(--bd)}
+.gch{width:100px;min-width:100px;padding:4px 6px;display:flex;align-items:center;gap:4px;background:var(--c1);position:sticky;left:0;z-index:3;border-right:1px solid var(--bd);cursor:pointer;font-size:8px;font-weight:500}
+.gch:active{background:var(--c2)}
+.gch img{width:20px;height:20px;border-radius:3px;flex-shrink:0;object-fit:cover}
+.gpr{position:absolute;top:0;bottom:0;padding:3px 5px;border-right:1px solid var(--bd);overflow:hidden;display:flex;flex-direction:column;justify-content:center;font-size:8px}
+.gpr .gt{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gpr .gti{font-size:6px;color:var(--t3)}
+.gpr.now{background:rgba(108,92,231,.1);border-left:2px solid var(--ac)}
+.gpr.past{opacity:.4}
+.gnl{position:absolute;top:0;bottom:0;width:2px;background:var(--rd);z-index:4;pointer-events:none}
+
+/* EPG Cards */
+.ec{display:flex;align-items:center;gap:6px;padding:8px;margin-bottom:3px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs)}
+.ec .ei{flex:1;min-width:0}.ec .ei .en2{font-size:10px;font-weight:500}.ec .ei .em{font-size:7px;color:var(--t3)}
+.ec button{width:24px;height:24px;border-radius:5px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;background:transparent;color:var(--t3)}
+.ec button svg{width:11px;height:11px}
+
+/* Settings */
+.ss{padding:12px 16px;border-bottom:1px solid var(--bd)}
+.ss h3{font-size:11px;font-weight:600;margin-bottom:8px;color:var(--ac)}
+.sr{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+.sr .sl{font-size:10px}.sr .sd{font-size:8px;color:var(--t3);margin-top:1px}
+.sr select,.sr input[type=number]{padding:5px 8px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:10px;outline:none;max-width:130px}
+.tgl{width:38px;height:20px;border-radius:10px;background:var(--c2);border:1px solid var(--bd);cursor:pointer;position:relative;flex-shrink:0}
+.tgl.on{background:var(--ac);border-color:var(--ac)}
+.tgl::after{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:2px;left:2px;transition:transform .2s}
+.tgl.on::after{transform:translateX(18px)}
+.ll{display:flex;flex-direction:column;gap:3px;margin-top:6px}
+.li{display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs)}
+.li .ln{font-size:9px;color:var(--ac);font-weight:700;width:16px;text-align:center}
+.li .lv{font-size:10px;flex:1}
+.li .lb2{display:flex;gap:2px}
+.li .lb2 button{width:22px;height:22px;border-radius:4px;border:none;background:transparent;color:var(--t3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px}
+.la{display:flex;gap:4px;margin-top:6px}
+.la input{flex:1;padding:6px 8px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:10px;outline:none}
+.la button{padding:6px 12px;background:var(--ac);color:#fff;border:none;border-radius:var(--rs);font-size:10px;font-weight:600;cursor:pointer}
 
 /* Player (web fallback) */
-#player-screen{background:#000}
+#player-scr{background:#000}
 .pc{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#000}
 .pc video,.pc iframe{width:100%;height:100%;border:none}
 .po{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;justify-content:space-between;opacity:0;transition:opacity .3s;pointer-events:none}
 .po.vis{opacity:1;pointer-events:auto}
-.po-top{display:flex;align-items:center;gap:10px;padding:40px 16px 14px;background:linear-gradient(180deg,rgba(0,0,0,.88) 0%,transparent 100%)}
-.po-top .bbk{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;cursor:pointer}
-.po-top .bbk:active{transform:scale(.9)}.po-top .bbk svg{width:16px;height:16px;color:#fff}
-.po-top .np{flex:1;min-width:0}.po-top .np .lb{font-size:8px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.8px}
-.po-top .np .tt{font-size:13px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.po-ctr{display:flex;align-items:center;justify-content:center;gap:28px}
-.po-ctr button{border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
-.po-ctr .sk{width:48px;height:48px;background:rgba(255,255,255,.1);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.12)}
-.po-ctr .sk svg{width:16px;height:16px;color:#fff}.po-ctr .sk:active{transform:scale(.9)}
-.po-ctr .pp{width:64px;height:64px;background:var(--acc);box-shadow:0 4px 18px var(--acc-g)}
-.po-ctr .pp svg{width:24px;height:24px;color:#fff}.po-ctr .pp:active{transform:scale(.9)}
-.po-bot{padding:12px 16px 28px;background:linear-gradient(0deg,rgba(0,0,0,.88) 0%,transparent 100%)}
-.po-bot .ui{font-family:monospace;font-size:8px;color:rgba(255,255,255,.2);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ld{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:5}
-.sp{width:36px;height:36px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--acc);border-radius:50%;animation:spn .8s linear infinite}
-@keyframes spn{to{transform:rotate(360deg)}}
+.pot{display:flex;align-items:center;gap:8px;padding:38px 14px 12px;background:linear-gradient(180deg,rgba(0,0,0,.85),transparent)}
+.pot .bk{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.pot .bk:active{transform:scale(.9)}.pot .bk svg{width:15px;height:15px;color:#fff}
+.pot .np{flex:1;min-width:0}
+.pot .np .nl{font-size:7px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px}
+.pot .np .nt{font-size:12px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pot .np .ne{font-size:8px;color:rgba(255,255,255,.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.poc{display:flex;align-items:center;justify-content:center;gap:22px}
+.poc button{border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.poc .sk{width:42px;height:42px;background:rgba(255,255,255,.1);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.12)}
+.poc .sk svg{width:15px;height:15px;color:#fff}.poc .sk:active{transform:scale(.9)}
+.poc .pp{width:58px;height:58px;background:var(--ac);box-shadow:0 3px 14px var(--acg)}
+.poc .pp svg{width:22px;height:22px;color:#fff}.poc .pp:active{transform:scale(.9)}
+.pob{padding:8px 14px 26px;background:linear-gradient(0deg,rgba(0,0,0,.85),transparent)}
+.pob .pu{font-family:monospace;font-size:7px;color:rgba(255,255,255,.2);text-align:center}
+.ld2{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:5}
+.spn{width:32px;height:32px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--ac);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
+
 <div class="app">
-<div class="app-content">
+<div class="app-body">
 
 <!-- ═══ LIBRARY ═══ -->
-<div id="lib-screen" class="screen active">
-  <div class="hdr"><h1>StreamVault</h1><div class="hdr-r"><span class="tag">b7</span>
+<div id="lib-scr" class="scr on">
+  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b11</span>
     <button class="ib" id="btn-imp" title="Import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
     <button class="ib" id="btn-exp" title="Export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
   </div></div>
-  <div class="sbar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="lib-search" placeholder="Search playlist…"></div>
-  <div class="pills" id="lib-pills"></div>
-  <div class="list" id="lib-list"></div>
-  <div class="fab-g"><button class="fab" id="fab-add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button></div>
+  <div class="sb" id="lib-sb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="lib-q" placeholder="Search playlist…"></div>
+  <div class="pls" id="lib-pls"></div>
+  <div class="lst" id="lib-lst"></div>
+  <button class="fab" id="fab-add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+</div>
+
+<!-- ═══ GUIDE ═══ -->
+<div id="guide-scr" class="scr">
+  <div class="hd"><h1>Guide</h1><div class="hd-r">
+    <button class="ib" id="btn-emgr" title="EPG sources"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83-2.83l-.06.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06c.38-.47.5-1.1.33-1.82a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9c.17-.73.05-1.35-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06c.47.38 1.1.5 1.82.33a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51c.73.17 1.35.05 1.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06c-.38.47-.5 1.1-.33 1.82a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button>
+    <button class="ib" id="btn-eref" title="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg></button>
+  </div></div>
+  <div class="gw" id="gw"></div>
 </div>
 
 <!-- ═══ REPOS ═══ -->
-<div id="repo-screen" class="screen">
-  <div class="hdr"><h1>Repositories</h1><div class="hdr-r"><span class="cnt" id="repo-cnt">0</span></div></div>
-  <div class="list" id="repo-list" style="padding-top:6px"></div>
-  <div class="fab-g"><button class="fab" id="fab-repo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button></div>
+<div id="repo-scr" class="scr">
+  <div class="hd"><h1>Repos</h1><div class="hd-r"><span class="cnt" id="rcnt">0</span></div></div>
+  <div class="lst" id="repo-lst" style="padding-top:4px"></div>
+  <button class="fab" id="fab-repo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
 </div>
 
-<!-- ═══ REPO BROWSER ═══ -->
-<div id="browse-screen" class="screen">
-  <div class="hdr"><button class="ib" id="browse-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button><h1 id="browse-title" style="flex:1;margin-left:8px;font-size:16px">Repo</h1><span class="cnt" id="browse-cnt">0</span></div>
-  <div class="sbar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="browse-search" placeholder="Search…"></div>
-  <div class="filter-bar" id="fbar">
-    <span class="flbl">Region:</span><select class="fsel" id="f-reg"><option>All</option></select>
-    <span class="flbl">Genre:</span><select class="fsel" id="f-gen"><option>All</option></select>
+<!-- ═══ SETTINGS ═══ -->
+<div id="set-scr" class="scr" style="overflow-y:auto;padding-bottom:70px">
+  <div class="hd"><h1>Settings</h1></div>
+  <div class="ss"><h3>Startup</h3>
+    <div class="sr"><div><div class="sl">Default channel</div><div class="sd">Play on app launch</div></div><select id="s-startup"><option value="">None</option></select></div>
   </div>
-  <div class="sel-bar" id="sel-bar"><span class="sl" id="sel-cnt">0</span><div class="sr"><button class="sb-clr" id="sel-all">All</button><button class="sb-clr" id="sel-none">Clear</button><button class="sb-add" id="sel-add">Add to Playlist</button></div></div>
-  <div class="list" id="browse-list"></div>
+  <div class="ss"><h3>Locality Priorities</h3>
+    <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Local areas prioritized in search, filters & failover. Top = highest priority.</p>
+    <div class="ll" id="loc-lst"></div>
+    <div class="la"><input id="loc-in" placeholder="Add: DFW, Dallas…"><button id="loc-add">Add</button></div>
+  </div>
+  <div class="ss"><h3>Failover</h3>
+    <div class="sr"><div><div class="sl">Buffer timeout (sec)</div><div class="sd">Switch source after buffering this long</div></div><input type="number" id="s-fo-t" value="15" min="5" max="60" style="width:60px"></div>
+    <div class="sr"><div><div class="sl">Auto-failover</div><div class="sd">Try alternative streams on failure</div></div><div class="tgl on" id="s-fo-auto"></div></div>
+  </div>
+  <div class="ss"><h3>Recording</h3>
+    <p style="font-size:9px;color:var(--t2)">Tap ⏺ in player to record. Saves to Downloads.</p>
+  </div>
+  <div class="ss"><h3>About</h3>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.1.0 (Build 11)<br>IPTV player with repos, failover, EPG, recording & locality priorities.</p>
+  </div>
+</div>
+
+<!-- ═══ BROWSE REPO ═══ -->
+<div id="br-scr" class="scr">
+  <div class="hd"><button class="ib" id="br-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button><h1 id="br-title" style="flex:1;margin-left:6px;font-size:14px">Repo</h1><span class="cnt" id="br-cnt">0</span></div>
+  <div class="sb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="br-q" placeholder="Search…"></div>
+  <div class="fbar"><span class="flbl">Region:</span><select class="fsel" id="f-reg"><option>All</option></select><span class="flbl">Genre:</span><select class="fsel" id="f-gen"><option>All</option></select></div>
+  <div class="slb" id="slb"><span id="slcnt">0 selected</span><div><button class="sbc" id="sl-all">All</button><button class="sbc" id="sl-clr">Clear</button><button class="sba" id="sl-add">Add to Playlist</button></div></div>
+  <div class="lst" id="br-lst"></div>
 </div>
 
 <!-- ═══ PLAYER (web fallback) ═══ -->
-<div id="player-screen" class="screen">
-  <div class="pc" id="pc"></div><div class="ld" id="ld"><div class="sp"></div></div>
+<div id="player-scr" class="scr">
+  <div class="pc" id="pc"></div>
+  <div class="ld2" id="ld2"><div class="spn"></div></div>
   <div class="po" id="po">
-    <div class="po-top"><button class="bbk" id="back-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button><div class="np"><div class="lb">Now Playing</div><div class="tt" id="p-title">—</div></div></div>
-    <div class="po-ctr"><button class="sk" id="prev-btn"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4"/><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2"/></svg></button><button class="pp" id="pp-btn"><svg id="ic-pa" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg><svg id="ic-pl" viewBox="0 0 24 24" fill="currentColor" style="display:none"><polygon points="5 3 19 12 5 21"/></svg></button><button class="sk" id="next-btn"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2"/></svg></button></div>
-    <div class="po-bot"><div class="ui" id="p-url">—</div></div>
+    <div class="pot">
+      <button class="bk" id="p-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <div class="np"><div class="nl">Now Playing</div><div class="nt" id="p-tt">—</div><div class="ne" id="p-epg"></div></div>
+    </div>
+    <div class="poc">
+      <button class="sk" id="p-prev"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4"/><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2"/></svg></button>
+      <button class="pp" id="p-pp"><svg id="ic-pa" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg><svg id="ic-pl" viewBox="0 0 24 24" fill="currentColor" style="display:none"><polygon points="5 3 19 12 5 21"/></svg></button>
+      <button class="sk" id="p-next"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2"/></svg></button>
+    </div>
+    <div class="pob"><div class="pu" id="p-url">—</div></div>
   </div>
 </div>
 
+</div><!-- app-body -->
+
+<!-- Bottom Nav -->
+<div class="bnav" id="bnav">
+  <div class="ni on" data-t="lib-scr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><span>Library</span></div>
+  <div class="ni" data-t="guide-scr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>Guide</span></div>
+  <div class="ni" data-t="repo-scr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg><span>Repos</span></div>
+  <div class="ni" data-t="set-scr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4"/></svg><span>Settings</span></div>
 </div>
-<div class="bottom-nav" id="bnav">
-  <div class="nav-item active" data-tab="lib-screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><span>Library</span></div>
-  <div class="nav-item" data-tab="repo-screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg><span>Repos</span></div>
+</div><!-- app -->
+
+<!-- ═══ MODALS ═══ -->
+
+<!-- Add/Edit Stream -->
+<div class="mo" id="mo-ed">
+<div class="mc">
+  <h2 id="mo-ed-t">Add Stream</h2>
+  <label>Title *</label>
+  <input id="in-name" placeholder="Stream name">
+  <label>Stream URL *</label>
+  <textarea id="in-url" placeholder="https://stream-url.com/live/ch.m3u8"></textarea>
+  <div class="rw">
+    <div><label>Category</label><input id="in-cat" placeholder="Movie, TV, News…"></div>
+    <div><label>EPG ID</label><select id="in-epg"><option value="">None</option></select></div>
+  </div>
+  <label>Icon URL</label>
+  <input id="in-icon" placeholder="https://logo.png">
+  <label>EPG Source URL</label>
+  <input id="in-epgl" placeholder="https://epg.xml">
+  <div class="mab"><button class="bc" id="ed-no">Cancel</button><button class="bs" id="ed-ok">Save</button></div>
 </div>
 </div>
 
-<!-- Modals (same as build 6 but compact) -->
-<div class="mo" id="mo-edit"><div class="mc"><h2 id="mo-edit-t">Add Stream</h2><label>Title *</label><input id="in-name" placeholder="Stream name"><label>Stream URL *</label><textarea id="in-url" placeholder="https://..."></textarea><div class="row"><div><label>Category</label><input id="in-cat" placeholder="TV, News…"></div><div><label>EPG Title</label><input id="in-epg" placeholder="EPG name"></div></div><label>Icon URL</label><input id="in-icon" placeholder="https://logo.png"><label>EPG Link</label><input id="in-epgl" placeholder="https://epg.xml"><div class="ma"><button class="bc" id="ed-cancel">Cancel</button><button class="bs" id="ed-save">Save</button></div></div></div>
-<div class="mo" id="mo-imp"><div class="mc"><h2>Import Streams</h2><div class="iz" id="imp-zone"><p>Choose .json / .m3u / .m3u8</p><div class="h">or paste below</div><input type="file" id="imp-file" accept=".json,.m3u,.m3u8"></div><textarea id="imp-text" placeholder="#EXTM3U or JSON…" style="min-height:70px"></textarea><div class="jp" id="imp-prev"></div><div class="is" id="imp-stats"></div><div class="ma"><button class="bc" id="imp-cancel">Cancel</button><button class="bs" id="imp-save">Import</button></div></div></div>
-<div class="mo" id="mo-repo"><div class="mc"><h2>Add Repository</h2><label>Name *</label><input id="repo-name" placeholder="My IPTV Provider"><div class="iz" id="repo-zone"><p>Choose large .m3u file</p><div class="h">.m3u or .m3u8</div><input type="file" id="repo-file" accept=".m3u,.m3u8"></div><label>Or paste M3U</label><textarea id="repo-text" placeholder="#EXTM3U…" style="min-height:70px"></textarea><div class="jp" id="repo-prev"></div><div class="is" id="repo-stats"></div><div class="ma"><button class="bc" id="repo-cancel">Cancel</button><button class="bs" id="repo-save">Add Repository</button></div></div></div>
-<div class="co" id="co"><div class="cb"><h3 id="co-t">Delete?</h3><p id="co-m">Cannot be undone.</p><div class="bs2"><button class="bc" id="co-no">Cancel</button><button style="background:var(--red);color:#fff" id="co-yes">Delete</button></div></div></div>
+<!-- Import -->
+<div class="mo" id="mo-imp">
+<div class="mc">
+  <h2>Import Streams</h2>
+  <div class="iz" id="iz">
+    <p>Tap to choose file</p>
+    <div class="hn">.json, .m3u, or .m3u8</div>
+    <input type="file" id="imp-f" accept=".json,.m3u,.m3u8,application/json,audio/x-mpegurl,application/vnd.apple.mpegurl,application/octet-stream,text/plain">
+  </div>
+  <label>Or paste M3U / JSON content here</label>
+  <textarea id="imp-txt" placeholder="#EXTM3U
+#EXTINF:-1 tvg-name=&quot;CNN&quot; group-title=&quot;News&quot;,CNN
+http://stream.example.com/cnn
+
+— or —
+
+[{&quot;name&quot;:&quot;CNN&quot;,&quot;url&quot;:&quot;http://...&quot;}]"></textarea>
+  <div class="ipv" id="imp-pv"></div>
+  <div class="ist" id="imp-st"></div>
+  <div class="mab"><button class="bc" id="imp-no">Cancel</button><button class="bs" id="imp-ok">Import</button></div>
+</div>
+</div>
+
+<!-- Add Repo -->
+<div class="mo" id="mo-repo">
+<div class="mc">
+  <h2>Add Repository</h2>
+  <label>Name *</label>
+  <input id="rp-name" placeholder="My IPTV Provider">
+  <div class="iz" id="rp-iz">
+    <p>Choose large .m3u file</p>
+    <div class="hn">.m3u or .m3u8</div>
+    <input type="file" id="rp-f" accept=".m3u,.m3u8,audio/x-mpegurl,application/octet-stream,text/plain">
+  </div>
+  <label>Or paste M3U content</label>
+  <textarea id="rp-txt" placeholder="#EXTM3U…"></textarea>
+  <div class="ipv" id="rp-pv"></div>
+  <div class="ist" id="rp-st"></div>
+  <div class="mab"><button class="bc" id="rp-no">Cancel</button><button class="bs" id="rp-ok">Add Repository</button></div>
+</div>
+</div>
+
+<!-- EPG Sources -->
+<div class="mo" id="mo-epg">
+<div class="mc">
+  <h2>EPG Sources</h2>
+  <div id="epg-lst"></div>
+  <label style="margin-top:10px">Add EPG URL (.xml or .xml.gz)</label>
+  <input id="epg-url" placeholder="https://provider.com/epg.xml">
+  <label>Name</label>
+  <input id="epg-nm" placeholder="My EPG">
+  <div class="mab"><button class="bc" id="epg-cls">Close</button><button class="bs" id="epg-add">Add & Fetch</button></div>
+</div>
+</div>
+
+<!-- Confirm -->
+<div class="cod" id="cod">
+<div class="cob">
+  <h3 id="co-t">Delete?</h3>
+  <p id="co-m">This cannot be undone.</p>
+  <div class="cbs"><button class="bc" id="co-no">Cancel</button><button style="background:var(--rd);color:#fff" id="co-yes">Delete</button></div>
+</div>
+</div>
+
 <div class="toast" id="toast"></div>
 
+<!-- ═════════════════════════════════════════════ -->
+<!--  JAVASCRIPT — Clean rebuild, all features   -->
+<!-- ═════════════════════════════════════════════ -->
 <script>
-const V='3.2.0',B=7,SK='sv_media_v2',RK='sv_repos';
-let items=[],repos=[],editId=null,delId=null,delType=null,curIdx=-1,hlsI=null;
-let activeCat='All',overlayT=null,pendingImp=null;
-let browseRepo=null,browseSelected=new Set(),browseRegion='All',browseGenre='All';
+"use strict";
 
-// Failover priority: no tag > (F) > (H) > (A) > (S)
-const TAG_PRIORITY=['','F','H','A','S'];
+// ─── Constants & State ───
+const VERSION = '4.1.0', BUILD = 11;
+const KEYS = { items: 'sv_items_v3', repos: 'sv_repos_v2', epgSrc: 'sv_epg_src', epgData: 'sv_epg_data', settings: 'sv_settings_v2' };
+const TAG_PRI = ['', 'F', 'H', 'A', 'S'];
 
-function save(){try{localStorage.setItem(SK,JSON.stringify(items))}catch(e){}}
-function load(){try{let d=localStorage.getItem(SK);if(!d)d=localStorage.getItem('streamvault_media_v2')||localStorage.getItem('streamvault_media');if(d){items=JSON.parse(d);items.forEach(m=>{m.icon=m.icon||'';m.epgLink=m.epgLink||'';m.epgTitle=m.epgTitle||'';m.region=m.region||'';m.tags=m.tags||[];m.baseName=m.baseName||extractBaseName(m.title)})}}catch(e){}}
-function saveRepos(){try{localStorage.setItem(RK,JSON.stringify(repos))}catch(e){}}
-function loadRepos(){try{let d=localStorage.getItem(RK);if(d)repos=JSON.parse(d)}catch(e){}}
+let items = [];
+let repos = [];
+let epgSrc = [];
+let epgData = { channels: {}, programs: {} };
+let settings = { localities: [], startupChannel: '', foTimeout: 15, foAuto: true };
 
-const $=id=>document.getElementById(id);
-function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800)}
-function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
-function gid(){return Date.now().toString(36)+Math.random().toString(36).substr(2,6)}
+let editId = null;
+let delId = null;
+let delType = null;
+let curIdx = -1;
+let hlsInst = null;
+let activeCat = 'All';
+let overlayTimer = null;
+let pendingImport = null;
+
+// Browse state
+let brRepo = null;
+let brSel = new Set();
+let brReg = 'All';
+let brGen = 'All';
+
+// ─── Utilities ───
+const $ = id => document.getElementById(id);
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function gid() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 6); }
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ─── Persistence ───
+function saveItems() { try { localStorage.setItem(KEYS.items, JSON.stringify(items)); } catch(e) {} }
+function loadItems() {
+  try {
+    let d = localStorage.getItem(KEYS.items);
+    // Migrate from old keys
+    if (!d) d = localStorage.getItem('sv_media_v2') || localStorage.getItem('streamvault_media_v2') || localStorage.getItem('streamvault_media');
+    if (d) {
+      items = JSON.parse(d);
+      items.forEach(m => {
+        m.icon = m.icon || '';
+        m.epgLink = m.epgLink || '';
+        m.epgTitle = m.epgTitle || '';
+        m.region = m.region || '';
+        m.tags = m.tags || [];
+        m.baseName = m.baseName || extractBase(m.title);
+      });
+    }
+  } catch(e) { console.error('loadItems:', e); }
+}
+function saveRepos() { try { localStorage.setItem(KEYS.repos, JSON.stringify(repos)); } catch(e) {} }
+function loadRepos() { try { const d = localStorage.getItem(KEYS.repos); if (d) repos = JSON.parse(d); } catch(e) {} }
+function saveEpg() { try { localStorage.setItem(KEYS.epgSrc, JSON.stringify(epgSrc)); localStorage.setItem(KEYS.epgData, JSON.stringify(epgData)); } catch(e) {} }
+function loadEpg() { try { const s = localStorage.getItem(KEYS.epgSrc); if (s) epgSrc = JSON.parse(s); const d = localStorage.getItem(KEYS.epgData); if (d) epgData = JSON.parse(d); if (!epgData.channels) epgData.channels = {}; if (!epgData.programs) epgData.programs = {}; } catch(e) {} }
+function saveSettings() { try { localStorage.setItem(KEYS.settings, JSON.stringify(settings)); } catch(e) {} }
+function loadSettings() { try { const d = localStorage.getItem(KEYS.settings); if (d) settings = { ...settings, ...JSON.parse(d) }; } catch(e) {} }
 
 // ─── M3U Parser ───
-function parseM3U(text){
-  const lines=text.split(/\r?\n/),out=[];let cur=null;
-  for(const raw of lines){const l=raw.trim();
-    if(!l||l==='#EXTM3U')continue;
-    if(l.startsWith('#EXTINF:')){
-      cur={name:'',url:'',category:'',icon:'',epgTitle:'',epgLink:'',region:'',tags:[],baseName:''};
-      cur.icon=xA(l,'tvg-logo');cur.epgTitle=xA(l,'tvg-id')||xA(l,'tvg-name');
-      cur.category=xA(l,'group-title');cur.epgLink=xA(l,'tvg-url');
-      const ci=l.lastIndexOf(','),dn=ci>-1?l.substring(ci+1).trim():'',tvgN=xA(l,'tvg-name');
-      cur.name=tvgN||dn||'Untitled';
-      const rm=cur.name.match(/^([A-Z]{2})\s*[:|-]\s*(.+)/);
-      if(rm){cur.region=rm[1];cur.name=rm[2].trim()}
-      const tm=cur.name.match(/\(([A-Z])\)\s*$/);
-      if(tm){cur.tags=[tm[1]];cur.name=cur.name.replace(/\s*\([A-Z]\)\s*$/,'').trim()}
-      cur.baseName=extractBaseName(cur.name);
-    }else if(l.startsWith('#'))continue;
-    else if(l.match(/^https?:\/\//)||l.match(/^rtmp/)){
-      if(cur){cur.url=l;out.push(cur);cur=null}
-      else out.push({name:l.split('/').pop()||l,url:l,category:'',icon:'',epgTitle:'',epgLink:'',region:'',tags:[],baseName:''});
+function parseM3U(text) {
+  const lines = text.split(/\r?\n/);
+  const streams = [];
+  let cur = null;
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line || line === '#EXTM3U') continue;
+
+    if (line.startsWith('#EXTINF:')) {
+      cur = { name: '', url: '', category: '', icon: '', epgTitle: '', epgLink: '', region: '', tags: [], baseName: '' };
+      cur.icon = xAttr(line, 'tvg-logo');
+      cur.epgTitle = xAttr(line, 'tvg-id') || xAttr(line, 'tvg-name');
+      cur.category = xAttr(line, 'group-title');
+      cur.epgLink = xAttr(line, 'tvg-url');
+
+      // Display name after last comma
+      const ci = line.lastIndexOf(',');
+      const displayName = ci > -1 ? line.substring(ci + 1).trim() : '';
+      const tvgName = xAttr(line, 'tvg-name');
+      cur.name = tvgName || displayName || 'Untitled';
+
+      // Region prefix: "US: CNN" -> region="US", name="CNN"
+      const regionMatch = cur.name.match(/^([A-Z]{2})\s*[:|-]\s*(.+)/);
+      if (regionMatch) {
+        cur.region = regionMatch[1];
+        cur.name = regionMatch[2].trim();
+      }
+
+      // Variant tag: "CNN (S)" -> tags=["S"]
+      const tagMatch = cur.name.match(/\(([A-Z])\)\s*$/);
+      if (tagMatch) {
+        cur.tags = [tagMatch[1]];
+        cur.name = cur.name.replace(/\s*\([A-Z]\)\s*$/, '').trim();
+      }
+
+      cur.baseName = extractBase(cur.name);
+    } else if (line.startsWith('#')) {
+      // Skip other directives
+      continue;
+    } else if (line.match(/^https?:\/\//) || line.match(/^rtmp:\/\//)) {
+      // URL line
+      if (cur) {
+        cur.url = line;
+        streams.push(cur);
+        cur = null;
+      } else {
+        streams.push({
+          name: line.split('/').pop() || 'Stream',
+          url: line, category: '', icon: '', epgTitle: '', epgLink: '',
+          region: '', tags: [], baseName: ''
+        });
+      }
     }
   }
-  return out;
-}
-function xA(l,a){const m=l.match(new RegExp(a+'=["\']([^"\']*)["\']','i'));return m?m[1].trim():''}
-function isM3U(t){const s=t.trim();return s.startsWith('#EXTM3U')||s.startsWith('#EXTINF:')}
-
-/** Extract a normalized base name for variant matching: "CNN HD (S)" → "cnn hd" */
-function extractBaseName(name){
-  return name.replace(/\s*\([A-Z]\)\s*$/,'').replace(/\s*(HD|SD|FHD|4K|UHD)\s*/gi,'').trim().toLowerCase();
+  return streams;
 }
 
-function extractUrl(raw){try{const u=new URL(raw);if(u.hostname.includes('webplayer.online')){const p=u.searchParams.get('url');if(p)return p.replace(/@top$/,'')}}catch(e){}return raw}
+function xAttr(line, attr) {
+  const m = line.match(new RegExp(attr + '=["\']([^"\']*)["\']', 'i'));
+  return m ? m[1].trim() : '';
+}
 
-/** Build ordered list of alternative URLs for a stream (for failover) */
-function buildFailoverList(item){
-  // Find all streams with same baseName and region from repos + playlist
-  const base=item.baseName||extractBaseName(item.title);
-  const region=item.region||'';
-  let candidates=[];
+function isM3U(text) {
+  const s = text.trim();
+  return s.startsWith('#EXTM3U') || s.startsWith('#EXTINF:') || (s.includes('#EXTINF:') && s.includes('http'));
+}
+
+function extractBase(name) {
+  return (name || '').replace(/\s*\([A-Z]\)\s*$/, '').replace(/\s*(HD|SD|FHD|4K|UHD)\s*/gi, '').trim().toLowerCase();
+}
+
+function extractUrl(raw) {
+  try {
+    const u = new URL(raw);
+    if (u.hostname.includes('webplayer.online')) {
+      const inner = u.searchParams.get('url');
+      if (inner) return inner.replace(/@top$/, '');
+    }
+  } catch(e) {}
+  return raw;
+}
+
+// ─── Locality Scoring ───
+function localityScore(item) {
+  if (!settings.localities || !settings.localities.length) return 0;
+  const text = ((item.title || item.name || '') + ' ' + (item.category || '') + ' ' + (item.region || '')).toLowerCase();
+  for (let i = 0; i < settings.localities.length; i++) {
+    if (text.includes(settings.localities[i].toLowerCase())) return settings.localities.length - i;
+  }
+  return 0;
+}
+
+function localitySort(arr) {
+  if (!settings.localities || !settings.localities.length) return arr;
+  return [...arr].sort((a, b) => localityScore(b) - localityScore(a));
+}
+
+// ─── Failover List ───
+function buildFailoverList(item) {
+  const base = item.baseName || extractBase(item.title);
+  const region = item.region || '';
+  let cands = [];
 
   // Search playlist
-  items.forEach(m=>{
-    const mb=m.baseName||extractBaseName(m.title);
-    if(mb===base&&m.url!==item.url)candidates.push(m);
+  items.forEach(m => {
+    const mb = m.baseName || extractBase(m.title);
+    if (mb === base && m.url !== item.url) cands.push(m);
   });
 
-  // Search all repos
-  repos.forEach(r=>{
-    r.streams.forEach(s=>{
-      const sb=s.baseName||extractBaseName(s.name);
-      if(sb===base&&s.url!==item.url&&!candidates.some(c=>c.url===s.url)){
-        candidates.push({title:s.name,url:s.url,region:s.region||'',tags:s.tags||[],category:s.category});
+  // Search repos
+  repos.forEach(r => {
+    (r.streams || []).forEach(s => {
+      const sb = s.baseName || extractBase(s.name);
+      if (sb === base && s.url !== item.url && !cands.some(c => c.url === s.url)) {
+        cands.push({ title: s.name, url: s.url, region: s.region || '', tags: s.tags || [] });
       }
     });
   });
 
-  // Sort by priority: same region first, then tag priority
-  candidates.sort((a,b)=>{
-    const ar=a.region||'',br=b.region||'';
-    // Same region as original gets priority
-    const aRegMatch=(ar===region)?0:1;
-    const bRegMatch=(br===region)?0:1;
-    if(aRegMatch!==bRegMatch)return aRegMatch-bRegMatch;
-    // Then by tag priority
-    const aTag=(a.tags&&a.tags[0])||'';
-    const bTag=(b.tags&&b.tags[0])||'';
-    return TAG_PRIORITY.indexOf(aTag)-TAG_PRIORITY.indexOf(bTag);
+  // Sort: locality > region match > tag priority
+  cands.sort((a, b) => {
+    const la = localityScore(a), lb = localityScore(b);
+    if (la !== lb) return lb - la;
+    const ar = a.region || '', br_r = b.region || '';
+    const aReg = ar === region ? 0 : 1, bReg = br_r === region ? 0 : 1;
+    if (aReg !== bReg) return aReg - bReg;
+    const aTag = (a.tags && a.tags[0]) || '';
+    const bTag = (b.tags && b.tags[0]) || '';
+    return TAG_PRI.indexOf(aTag) - TAG_PRI.indexOf(bTag);
   });
 
-  // Build final list: original first, then alternatives
-  const result=[{url:extractUrl(item.url),title:item.title,region:region,tag:''}];
-  candidates.forEach(c=>{
-    result.push({url:extractUrl(c.url),title:c.title||c.name||'',region:c.region||'',tag:(c.tags&&c.tags[0])||''});
+  const result = [{ url: extractUrl(item.url), title: item.title || '', region: region, tag: '' }];
+  cands.forEach(c => {
+    result.push({
+      url: extractUrl(c.url),
+      title: c.title || c.name || '',
+      region: c.region || '',
+      tag: (c.tags && c.tags[0]) || ''
+    });
   });
   return result;
 }
 
+// ─── EPG ───
+function parseXMLTV(xml) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xml, 'text/xml');
+  const channels = {}, programs = {};
+  const now = Date.now(), cutoff = now + 48 * 3600000;
+
+  doc.querySelectorAll('channel').forEach(ch => {
+    const id = ch.getAttribute('id');
+    const dn = ch.querySelector('display-name');
+    const ic = ch.querySelector('icon');
+    channels[id] = { name: dn ? dn.textContent : id, icon: ic ? (ic.getAttribute('src') || '') : '' };
+  });
+
+  doc.querySelectorAll('programme').forEach(p => {
+    const chId = p.getAttribute('channel');
+    const start = parseXMLDate(p.getAttribute('start'));
+    const stop = parseXMLDate(p.getAttribute('stop'));
+    if (stop < now - 3600000 || start > cutoff) return;
+    const title = p.querySelector('title');
+    if (!programs[chId]) programs[chId] = [];
+    programs[chId].push({ start, stop, title: title ? title.textContent : '' });
+  });
+
+  Object.keys(programs).forEach(k => programs[k].sort((a, b) => a.start - b.start));
+  return { channels, programs };
+}
+
+function parseXMLDate(s) {
+  if (!s) return 0;
+  const m = s.match(/(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s*([+-]\d{4})?/);
+  if (!m) return 0;
+  const d = new Date(Date.UTC(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +m[6]));
+  if (m[7]) {
+    const oh = parseInt(m[7].slice(0, 3));
+    const om = parseInt(m[7][0] + m[7].slice(3));
+    d.setMinutes(d.getMinutes() - oh * 60 - om);
+  }
+  return d.getTime();
+}
+
+async function fetchEpgSource(src) {
+  toast('Fetching EPG: ' + (src.name || 'EPG') + '…');
+  try {
+    const resp = await fetch(src.url);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    let text;
+    if (src.url.endsWith('.gz')) {
+      const buf = await resp.arrayBuffer();
+      const ds = new DecompressionStream('gzip');
+      text = await new Response(new Blob([buf]).stream().pipeThrough(ds)).text();
+    } else {
+      text = await resp.text();
+    }
+    const parsed = parseXMLTV(text);
+    Object.assign(epgData.channels, parsed.channels);
+    Object.keys(parsed.programs).forEach(k => { epgData.programs[k] = parsed.programs[k]; });
+    src.lastFetch = Date.now();
+    src.chCount = Object.keys(parsed.channels).length;
+    saveEpg();
+    toast('EPG updated: ' + src.chCount + ' channels');
+    renderLib();
+    renderGuide();
+  } catch(e) {
+    toast('EPG error: ' + e.message);
+  }
+}
+
+async function fetchAllEpg() {
+  for (const s of epgSrc) await fetchEpgSource(s);
+}
+
+function getNowNext(epgId) {
+  if (!epgData.programs || !epgData.programs[epgId]) return { now: null, next: null };
+  const now = Date.now();
+  const progs = epgData.programs[epgId];
+  let n = null, nx = null;
+  for (const p of progs) {
+    if (p.start <= now && p.stop > now) n = p;
+    else if (p.start > now && !nx) nx = p;
+    if (n && nx) break;
+  }
+  return { now: n, next: nx };
+}
+
+function getAllEpgIds() {
+  return Object.keys(epgData.channels || {}).sort();
+}
+
+function timeAgo(ts) {
+  const d = Date.now() - ts;
+  if (d < 60000) return 'just now';
+  if (d < 3600000) return Math.floor(d / 60000) + 'm ago';
+  if (d < 86400000) return Math.floor(d / 3600000) + 'h ago';
+  return Math.floor(d / 86400000) + 'd ago';
+}
+
+function fmtTime(ts) {
+  const d = new Date(ts);
+  const h = d.getHours(), m = d.getMinutes();
+  return (h % 12 || 12) + ':' + m.toString().padStart(2, '0') + (h >= 12 ? 'p' : 'a');
+}
+
 // ─── Navigation ───
-function showTab(id){
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  $(id).classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.tab===id));
-  $('bnav').style.display=(id==='player-screen'||id==='browse-screen')?'none':'flex';
+function showTab(id) {
+  document.querySelectorAll('.scr').forEach(s => s.classList.remove('on'));
+  $(id).classList.add('on');
+  document.querySelectorAll('.ni').forEach(n => n.classList.toggle('on', n.dataset.t === id));
+  $('bnav').style.display = (id === 'player-scr' || id === 'br-scr') ? 'none' : 'flex';
+  if (id === 'guide-scr') renderGuide();
+  if (id === 'set-scr') renderSettings();
 }
-document.querySelectorAll('.nav-item').forEach(n=>{n.onclick=()=>showTab(n.dataset.tab)});
 
-// ─── Library ───
-function getCats(){const c=new Set();items.forEach(m=>{if(m.category)c.add(m.category)});return['All',...[...c].sort()]}
-function getFiltered(){const q=$('lib-search').value.toLowerCase().trim();return items.filter(m=>{const mc=activeCat==='All'||m.category===activeCat;const ms=!q||m.title.toLowerCase().includes(q)||(m.epgTitle&&m.epgTitle.toLowerCase().includes(q));return mc&&ms})}
-function renderCats(){const c=getCats();$('lib-pills').innerHTML=c.length<=1?'':c.map(x=>`<div class="pill${x===activeCat?' on':''}" data-c="${esc(x)}">${esc(x)}</div>`).join('');$('lib-pills').querySelectorAll('.pill').forEach(p=>p.onclick=()=>{activeCat=p.dataset.c;renderCats();renderLib()})}
-function renderLib(){
-  const f=getFiltered();
-  if(!f.length){$('lib-list').innerHTML=`<div class="empty"><div class="ew"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></div><h3>No streams</h3><p>Add streams or browse Repositories</p></div>`;return}
-  $('lib-list').innerHTML=f.map((m,i)=>{
-    const th=m.icon?`<img src="${esc(m.icon)}" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><svg style="display:none" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>`:`<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>`;
-    const cb=m.category?`<span class="cb">${esc(m.category)}</span>`:'';
-    const rb=m.region?`<span class="rb">${esc(m.region)}</span>`:'';
-    const alts=buildFailoverList(m).length-1;
-    const vb=alts>0?`<span class="vb">${alts} alt${alts>1?'s':''}</span>`:'';
-    return`<div class="item" style="animation-delay:${i*.015}s" onclick="playIt('${m.id}')"><div class="th">${th}</div><div class="nfo"><div class="nm">${esc(m.title)}</div><div class="mt">${rb}${cb}${vb}</div></div><div class="acts"><button class="eb" onclick="event.stopPropagation();openEd('${m.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="db" onclick="event.stopPropagation();confirmDel('${m.id}','item')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></div></div>`}).join('');
+document.querySelectorAll('.ni').forEach(n => {
+  n.onclick = () => showTab(n.dataset.t);
+});
+
+// ─── Library Rendering ───
+function getCats() {
+  const cats = new Set();
+  items.forEach(m => { if (m.category) cats.add(m.category); });
+  return ['All', ...Array.from(cats).sort()];
 }
-$('lib-search').oninput=renderLib;
 
-// ─── Add/Edit/Delete ───
-$('fab-add').onclick=()=>{editId=null;$('mo-edit-t').textContent='Add Stream';['in-name','in-url','in-cat','in-epg','in-icon','in-epgl'].forEach(x=>$(x).value='');$('mo-edit').classList.add('on')};
-window.openEd=id=>{const m=items.find(x=>x.id===id);if(!m)return;editId=id;$('mo-edit-t').textContent='Edit';$('in-name').value=m.title;$('in-url').value=m.url;$('in-cat').value=m.category||'';$('in-epg').value=m.epgTitle||'';$('in-icon').value=m.icon||'';$('in-epgl').value=m.epgLink||'';$('mo-edit').classList.add('on')};
-$('ed-cancel').onclick=()=>$('mo-edit').classList.remove('on');
-$('mo-edit').onclick=e=>{if(e.target===$('mo-edit'))$('mo-edit').classList.remove('on')};
-$('ed-save').onclick=()=>{const t=$('in-name').value.trim(),u=$('in-url').value.trim();if(!t||!u){toast('Title & URL required');return}const d={title:t,url:u,category:$('in-cat').value.trim(),icon:$('in-icon').value.trim(),epgLink:$('in-epgl').value.trim(),epgTitle:$('in-epg').value.trim(),baseName:extractBaseName(t)};if(editId){const m=items.find(x=>x.id===editId);if(m)Object.assign(m,d);toast('Updated')}else{items.push({id:gid(),...d,region:'',tags:[],added:Date.now()});toast('Added')}save();$('mo-edit').classList.remove('on');renderCats();renderLib()};
-window.confirmDel=(id,type)=>{delId=id;delType=type;$('co').classList.add('on')};
-$('co-no').onclick=()=>$('co').classList.remove('on');
-$('co-yes').onclick=()=>{if(delType==='item'){items=items.filter(m=>m.id!==delId);save();renderCats();renderLib()}else if(delType==='repo'){repos=repos.filter(r=>r.id!==delId);saveRepos();renderRepos()}$('co').classList.remove('on');toast('Deleted')};
-
-// ─── Import ───
-$('btn-imp').onclick=()=>{pendingImp=null;$('imp-text').value='';$('imp-prev').style.display='none';$('imp-stats').style.display='none';$('mo-imp').classList.add('on')};
-$('imp-cancel').onclick=()=>$('mo-imp').classList.remove('on');
-$('imp-zone').onclick=()=>$('imp-file').click();
-$('imp-file').onchange=e=>{if(e.target.files[0]){const r=new FileReader();r.onload=ev=>{$('imp-text').value=ev.target.result;valImp(ev.target.result)};r.readAsText(e.target.files[0])}};
-$('imp-text').oninput=()=>valImp($('imp-text').value);
-function valImp(t){t=t.trim();if(!t){pendingImp=null;return}try{let v,f;if(isM3U(t)){f='M3U';v=parseM3U(t).filter(d=>d.name&&d.url)}else{f='JSON';let d=JSON.parse(t);if(!Array.isArray(d))d=[d];v=d.filter(x=>(x.name||x.title)&&x.url).map(x=>({name:x.name||x.title,url:x.url,category:x.category||'',icon:x.icon||'',epgLink:x.epgLink||'',epgTitle:x.epgTitle||'',region:'',tags:[],baseName:extractBaseName(x.name||x.title)}))}if(!v.length)throw new Error('No streams');pendingImp=v;$('imp-prev').style.display='block';$('imp-prev').style.color='var(--grn)';$('imp-prev').textContent=`✓ ${v.length} from ${f}`;$('imp-stats').style.display='block';$('imp-stats').textContent=v.length+' ready'}catch(e){pendingImp=null;$('imp-prev').style.display='block';$('imp-prev').style.color='var(--red)';$('imp-prev').textContent='✗ '+e.message;$('imp-stats').style.display='none'}}
-$('imp-save').onclick=()=>{if(!pendingImp){valImp($('imp-text').value);if(!pendingImp){toast('No data');return}}let a=0,s=0;pendingImp.forEach(d=>{if(items.some(m=>m.url===d.url)){s++;return}items.push({id:gid(),title:d.name,url:d.url,category:d.category,icon:d.icon,epgLink:d.epgLink,epgTitle:d.epgTitle,region:d.region||'',tags:d.tags||[],baseName:d.baseName||extractBaseName(d.name),added:Date.now()});a++});save();$('mo-imp').classList.remove('on');renderCats();renderLib();toast(`Imported ${a}${s?' · '+s+' dupes':''}`)};
-
-// ─── Export ───
-$('btn-exp').onclick=()=>{if(!items.length){toast('Empty');return}const c=confirm('OK=JSON / Cancel=M3U');if(c){dl(JSON.stringify(items.map(m=>({name:m.title,url:m.url,category:m.category||undefined,icon:m.icon||undefined,epgTitle:m.epgTitle||undefined})),null,2),'application/json','sv-'+ds()+'.json')}else{let o='#EXTM3U\n';items.forEach(m=>{let e='#EXTINF:-1';if(m.epgTitle)e+=` tvg-id="${m.epgTitle}"`;if(m.icon)e+=` tvg-logo="${m.icon}"`;if(m.category)e+=` group-title="${m.category}"`;e+=`,${m.title}`;o+=e+'\n'+m.url+'\n'});dl(o,'audio/x-mpegurl','sv-'+ds()+'.m3u')}toast('Exported')};
-function dl(c,t,n){const b=new Blob([c],{type:t}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=n;a.click()}
-function ds(){return new Date().toISOString().slice(0,10)}
-
-// ═══ REPOSITORIES ═══
-$('fab-repo').onclick=()=>{$('repo-name').value='';$('repo-text').value='';$('repo-prev').style.display='none';$('repo-stats').style.display='none';$('mo-repo').classList.add('on')};
-$('repo-cancel').onclick=()=>$('mo-repo').classList.remove('on');
-$('repo-zone').onclick=()=>$('repo-file').click();
-$('repo-file').onchange=e=>{if(e.target.files[0]){const f=e.target.files[0];if(!$('repo-name').value.trim())$('repo-name').value=f.name.replace(/\.(m3u8?|json)$/i,'');const r=new FileReader();r.onload=ev=>{$('repo-text').value=ev.target.result;valRepo(ev.target.result)};r.readAsText(f)}};
-$('repo-text').oninput=()=>valRepo($('repo-text').value);
-function valRepo(t){t=t.trim();if(!t)return;try{const s=parseM3U(t).filter(d=>d.name&&d.url);if(!s.length)throw new Error('No streams');const regs=new Set(s.map(x=>x.region).filter(Boolean));$('repo-prev').style.display='block';$('repo-prev').style.color='var(--grn)';$('repo-prev').textContent=`✓ ${s.length} streams · ${regs.size} regions`;$('repo-stats').style.display='block';$('repo-stats').textContent=s.length+' ready'}catch(e){$('repo-prev').style.display='block';$('repo-prev').style.color='var(--red)';$('repo-prev').textContent='✗ '+e.message}}
-$('repo-save').onclick=()=>{const n=$('repo-name').value.trim(),t=$('repo-text').value.trim();if(!n){toast('Name needed');return}if(!t){toast('Upload M3U');return}const s=parseM3U(t).filter(d=>d.name&&d.url);if(!s.length){toast('No streams');return}repos.push({id:gid(),name:n,streams:s,addedAt:Date.now()});saveRepos();$('mo-repo').classList.remove('on');renderRepos();toast(`"${n}" · ${s.length} streams`)};
-function renderRepos(){$('repo-cnt').textContent=repos.length;if(!repos.length){$('repo-list').innerHTML=`<div class="empty"><div class="ew"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div><h3>No repos</h3><p>Tap + to add a large M3U as a browsable source</p></div>`;return}
-$('repo-list').innerHTML=repos.map(r=>{const regs=new Set(r.streams.map(s=>s.region).filter(Boolean));return`<div class="repo-card" onclick="openRepo('${r.id}')"><div class="rc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div><div class="rc-info"><div class="rc-name">${esc(r.name)}</div><div class="rc-meta">${r.streams.length} streams · ${regs.size} regions</div></div><button class="rc-del" onclick="event.stopPropagation();confirmDel('${r.id}','repo')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></div>`}).join('')}
-
-// ═══ REPO BROWSER (compact filters) ═══
-window.openRepo=id=>{const r=repos.find(x=>x.id===id);if(!r)return;browseRepo=r;browseSelected=new Set();browseRegion='All';browseGenre='All';$('browse-title').textContent=r.name;$('browse-search').value='';showTab('browse-screen');buildDropdowns();renderBrowse()};
-$('browse-back').onclick=()=>showTab('repo-screen');
-function buildDropdowns(){
-  if(!browseRepo)return;
-  const regs=['All',...new Set(browseRepo.streams.map(s=>s.region).filter(Boolean))].sort();
-  const gens=['All',...new Set(browseRepo.streams.map(s=>s.category).filter(Boolean))].sort();
-  $('f-reg').innerHTML=regs.map(r=>`<option${r===browseRegion?' selected':''}>${r}</option>`).join('');
-  $('f-gen').innerHTML=gens.map(g=>`<option${g===browseGenre?' selected':''}>${g}</option>`).join('');
-  $('f-reg').className='fsel'+(browseRegion!=='All'?' active':'');
-  $('f-gen').className='fsel'+(browseGenre!=='All'?' active':'');
+function getFilteredItems() {
+  const q = $('lib-q').value.toLowerCase().trim();
+  let filtered = items.filter(m => {
+    const matchCat = activeCat === 'All' || m.category === activeCat;
+    const matchQ = !q || m.title.toLowerCase().includes(q) || (m.epgTitle && m.epgTitle.toLowerCase().includes(q));
+    return matchCat && matchQ;
+  });
+  return localitySort(filtered);
 }
-$('f-reg').onchange=e=>{browseRegion=e.target.value;$('f-reg').className='fsel'+(browseRegion!=='All'?' active':'');renderBrowse()};
-$('f-gen').onchange=e=>{browseGenre=e.target.value;$('f-gen').className='fsel'+(browseGenre!=='All'?' active':'');renderBrowse()};
-function getBF(){if(!browseRepo)return[];const q=$('browse-search').value.toLowerCase().trim();return browseRepo.streams.filter(s=>{return(browseRegion==='All'||s.region===browseRegion)&&(browseGenre==='All'||s.category===browseGenre)&&(!q||s.name.toLowerCase().includes(q)||(s.category&&s.category.toLowerCase().includes(q)))})}
-function renderBrowse(){
-  const f=getBF(),eu=new Set(items.map(m=>m.url));
-  $('browse-cnt').textContent=f.length+'/'+(browseRepo?browseRepo.streams.length:0);
-  const sb=$('sel-bar');if(browseSelected.size>0){sb.classList.add('on');$('sel-cnt').textContent=browseSelected.size+' selected'}else sb.classList.remove('on');
-  if(!f.length){$('browse-list').innerHTML=`<div class="empty"><div class="ew"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><h3>No matches</h3><p>Change filters or search</p></div>`;return}
-  $('browse-list').innerHTML=f.map((s,i)=>{
-    const k=s.url,sel=browseSelected.has(k),ex=eu.has(k);
-    const th=s.icon?`<img src="${esc(s.icon)}" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><svg style="display:none" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>`:`<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>`;
-    const rb=s.region?`<span class="rb">${esc(s.region)}</span>`:'';const cb=s.category?`<span class="cb">${esc(s.category)}</span>`:'';
-    return`<div class="rb-item${sel?' selected':''}" data-url="${esc(k)}" onclick="tSel(this)"><div class="chk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div><div class="rb-th">${th}</div><div class="rb-info"><div class="rb-nm">${esc(s.name)}${ex?'<span style="color:var(--grn);font-size:8px;margin-left:3px">✓</span>':''}</div><div class="rb-mt">${rb}${cb}</div></div></div>`}).join('');
+
+function renderCats() {
+  const cats = getCats();
+  $('lib-pls').innerHTML = cats.length <= 1 ? '' : cats.map(c =>
+    `<div class="pl${c === activeCat ? ' on' : ''}" data-c="${esc(c)}">${esc(c)}</div>`
+  ).join('');
+  $('lib-pls').querySelectorAll('.pl').forEach(p => {
+    p.onclick = () => { activeCat = p.dataset.c; renderCats(); renderLib(); };
+  });
 }
-window.tSel=el=>{const u=el.dataset.url;if(browseSelected.has(u)){browseSelected.delete(u);el.classList.remove('selected')}else{browseSelected.add(u);el.classList.add('selected')}const sb=$('sel-bar');if(browseSelected.size>0){sb.classList.add('on');$('sel-cnt').textContent=browseSelected.size+' selected'}else sb.classList.remove('on')};
-$('browse-search').oninput=renderBrowse;
-$('sel-all').onclick=()=>{getBF().forEach(s=>browseSelected.add(s.url));renderBrowse()};
-$('sel-none').onclick=()=>{browseSelected.clear();renderBrowse()};
-$('sel-add').onclick=()=>{if(!browseRepo||!browseSelected.size)return;let a=0,s=0;browseRepo.streams.filter(x=>browseSelected.has(x.url)).forEach(d=>{if(items.some(m=>m.url===d.url)){s++;return}items.push({id:gid(),title:d.name,url:d.url,category:d.category,icon:d.icon,epgLink:d.epgLink,epgTitle:d.epgTitle,region:d.region,tags:d.tags||[],baseName:d.baseName||extractBaseName(d.name),added:Date.now()});a++});save();browseSelected.clear();renderBrowse();renderCats();renderLib();toast(`Added ${a}${s?' · '+s+' dupes':''}`)};
 
-// ═══ PLAYER ═══
-function destroyP(){if(hlsI){hlsI.destroy();hlsI=null}$('pc').innerHTML='';$('ld').style.display='flex'}
-window.playIt=id=>{
-  const idx=items.findIndex(m=>m.id===id);if(idx===-1)return;curIdx=idx;
-  const m=items[idx];
-  const failoverList=buildFailoverList(m);
-  const cat=[m.category,m.epgTitle].filter(Boolean).join(' · ');
-
-  // Native ExoPlayer with failover
-  if(window.NativePlayer&&window.NativePlayer.isAvailable()){
-    const json=JSON.stringify(failoverList);
-    window.NativePlayer.playWithFailover(json,m.title||'Stream',cat);
+function renderLib() {
+  const f = getFilteredItems();
+  if (!f.length) {
+    $('lib-lst').innerHTML = '<div class="emp"><h3>No streams</h3><p>Tap + to add, or import from the ↓ button, or browse Repos tab</p></div>';
     return;
   }
-  // Fallback: basic web player (no failover)
-  showTab('player-screen');$('p-title').textContent=m.title;$('p-url').textContent=m.url;destroyP();
-  const url=extractUrl(m.url);
-  if(Hls.isSupported()){const v=document.createElement('video');v.setAttribute('playsinline','');v.setAttribute('autoplay','');v.style.cssText='width:100%;height:100%;background:#000';$('pc').appendChild(v);hlsI=new Hls({enableWorker:true});hlsI.attachMedia(v);hlsI.on(Hls.Events.MEDIA_ATTACHED,()=>hlsI.loadSource(url));hlsI.on(Hls.Events.MANIFEST_PARSED,()=>{$('ld').style.display='none';v.play().catch(()=>{})});hlsI.on(Hls.Events.ERROR,(_,d)=>{if(d.fatal){$('pc').innerHTML=`<iframe src="${esc(m.url)}" style="width:100%;height:100%;border:none" allowfullscreen></iframe>`;$('ld').style.display='none'}})}
-  else{$('pc').innerHTML=`<iframe src="${esc(m.url)}" style="width:100%;height:100%;border:none" allowfullscreen></iframe>`;setTimeout(()=>$('ld').style.display='none',3000)}
-  showOvr();
+  $('lib-lst').innerHTML = f.map((m, i) => {
+    const thumb = m.icon
+      ? `<img src="${esc(m.icon)}" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><svg style="display:none" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>`
+      : `<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>`;
+
+    const catBadge = m.category ? `<span class="tg2" style="background:var(--acs);color:var(--ac)">${esc(m.category)}</span>` : '';
+    const regBadge = m.region ? `<span class="tg2" style="background:rgba(46,213,115,.12);color:var(--gn)">${esc(m.region)}</span>` : '';
+    const alts = buildFailoverList(m).length - 1;
+    const altBadge = alts > 0 ? `<span class="tg2" style="background:rgba(255,165,2,.12);color:var(--or)">${alts}alt</span>` : '';
+
+    let epgNow = '';
+    if (m.epgTitle) {
+      const nn = getNowNext(m.epgTitle);
+      if (nn.now) epgNow = `<div class="en">▶ ${esc(nn.now.title)}</div>`;
+    }
+
+    return `<div class="itm" style="animation-delay:${i * 0.01}s" onclick="playItem('${m.id}')">
+      <div class="th">${thumb}</div>
+      <div class="nf">
+        <div class="nm">${esc(m.title)}</div>
+        <div class="mt">${regBadge}${catBadge}${altBadge}</div>
+        ${epgNow}
+      </div>
+      <div class="ab">
+        <button onclick="event.stopPropagation();openEdit('${m.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+        <button onclick="event.stopPropagation();confirmDel('${m.id}','item')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+$('lib-q').addEventListener('input', renderLib);
+
+// ─── Add / Edit Stream ───
+$('fab-add').onclick = () => {
+  editId = null;
+  $('mo-ed-t').textContent = 'Add Stream';
+  $('in-name').value = '';
+  $('in-url').value = '';
+  $('in-cat').value = '';
+  $('in-icon').value = '';
+  $('in-epgl').value = '';
+  populateEpgDropdown('');
+  $('mo-ed').classList.add('on');
 };
-function showOvr(){$('po').classList.add('vis');clearTimeout(overlayT);overlayT=setTimeout(()=>$('po').classList.remove('vis'),4500)}
-$('player-screen').onclick=e=>{if(!e.target.closest('button')){$('po').classList.contains('vis')?($('po').classList.remove('vis'),clearTimeout(overlayT)):showOvr()}};
-$('back-btn').onclick=e=>{e.stopPropagation();destroyP();showTab('lib-screen')};
-$('pp-btn').onclick=e=>{e.stopPropagation();const v=$('pc').querySelector('video');if(!v)return;if(v.paused){v.play();$('ic-pl').style.display='none';$('ic-pa').style.display='block'}else{v.pause();$('ic-pl').style.display='block';$('ic-pa').style.display='none'}showOvr()};
-$('prev-btn').onclick=e=>{e.stopPropagation();if(!items.length)return;curIdx=(curIdx-1+items.length)%items.length;playIt(items[curIdx].id)};
-$('next-btn').onclick=e=>{e.stopPropagation();if(!items.length)return;curIdx=(curIdx+1)%items.length;playIt(items[curIdx].id)};
-window.addEventListener('popstate',()=>{if($('player-screen').classList.contains('active')){destroyP();showTab('lib-screen')}else if($('browse-screen').classList.contains('active'))showTab('repo-screen')});
+
+window.openEdit = (id) => {
+  const m = items.find(x => x.id === id);
+  if (!m) return;
+  editId = id;
+  $('mo-ed-t').textContent = 'Edit Stream';
+  $('in-name').value = m.title || '';
+  $('in-url').value = m.url || '';
+  $('in-cat').value = m.category || '';
+  $('in-icon').value = m.icon || '';
+  $('in-epgl').value = m.epgLink || '';
+  populateEpgDropdown(m.epgTitle || '');
+  $('mo-ed').classList.add('on');
+};
+
+function populateEpgDropdown(selected) {
+  const sel = $('in-epg');
+  const ids = getAllEpgIds();
+  sel.innerHTML = '<option value="">None</option>' + ids.map(id => {
+    const ch = epgData.channels[id];
+    const label = ch ? ch.name + ' (' + id + ')' : id;
+    return `<option value="${esc(id)}"${id === selected ? ' selected' : ''}>${esc(label)}</option>`;
+  }).join('');
+}
+
+$('ed-no').onclick = () => $('mo-ed').classList.remove('on');
+$('mo-ed').onclick = (e) => { if (e.target === $('mo-ed')) $('mo-ed').classList.remove('on'); };
+
+$('ed-ok').onclick = () => {
+  const title = $('in-name').value.trim();
+  const url = $('in-url').value.trim();
+  if (!title) { toast('Title is required'); return; }
+  if (!url) { toast('URL is required'); return; }
+
+  const data = {
+    title: title,
+    url: url,
+    category: $('in-cat').value.trim(),
+    icon: $('in-icon').value.trim(),
+    epgLink: $('in-epgl').value.trim(),
+    epgTitle: $('in-epg').value,
+    baseName: extractBase(title)
+  };
+
+  if (editId) {
+    const m = items.find(x => x.id === editId);
+    if (m) Object.assign(m, data);
+    toast('Updated');
+  } else {
+    items.push({ id: gid(), ...data, region: '', tags: [], added: Date.now() });
+    toast('Added');
+  }
+  saveItems();
+  $('mo-ed').classList.remove('on');
+  renderCats();
+  renderLib();
+};
+
+// ─── Delete ───
+window.confirmDel = (id, type) => { delId = id; delType = type; $('cod').classList.add('on'); };
+$('co-no').onclick = () => $('cod').classList.remove('on');
+$('co-yes').onclick = () => {
+  if (delType === 'item') { items = items.filter(m => m.id !== delId); saveItems(); renderCats(); renderLib(); }
+  else if (delType === 'repo') { repos = repos.filter(r => r.id !== delId); saveRepos(); renderRepos(); }
+  $('cod').classList.remove('on');
+  toast('Deleted');
+};
+
+// ─── Import ───
+$('btn-imp').onclick = () => {
+  pendingImport = null;
+  $('imp-txt').value = '';
+  $('imp-pv').style.display = 'none';
+  $('imp-st').style.display = 'none';
+  $('imp-f').value = '';
+  $('mo-imp').classList.add('on');
+};
+$('imp-no').onclick = () => $('mo-imp').classList.remove('on');
+$('mo-imp').onclick = (e) => { if (e.target === $('mo-imp')) $('mo-imp').classList.remove('on'); };
+
+// File picker
+$('iz').onclick = () => $('imp-f').click();
+$('imp-f').onchange = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    $('imp-txt').value = ev.target.result;
+    validateImport(ev.target.result);
+  };
+  reader.readAsText(file);
+};
+
+// Paste
+$('imp-txt').addEventListener('input', () => validateImport($('imp-txt').value));
+
+function validateImport(text) {
+  const trimmed = text.trim();
+  if (!trimmed) { pendingImport = null; $('imp-pv').style.display = 'none'; $('imp-st').style.display = 'none'; return; }
+
+  try {
+    let valid, fmt;
+
+    if (isM3U(trimmed)) {
+      fmt = 'M3U';
+      valid = parseM3U(trimmed).filter(d => d.name && d.url);
+    } else {
+      fmt = 'JSON';
+      let data = JSON.parse(trimmed);
+      if (!Array.isArray(data)) data = [data];
+      valid = data.filter(x => (x.name || x.title) && x.url).map(x => ({
+        name: x.name || x.title, url: x.url, category: x.category || '',
+        icon: x.icon || '', epgLink: x.epgLink || '', epgTitle: x.epgTitle || '',
+        region: '', tags: [], baseName: extractBase(x.name || x.title)
+      }));
+    }
+
+    if (!valid.length) throw new Error('No valid streams found');
+    pendingImport = valid;
+
+    $('imp-pv').style.display = 'block';
+    $('imp-pv').style.color = 'var(--gn)';
+    $('imp-pv').textContent = '✓ ' + valid.length + ' stream(s) from ' + fmt + ':\n' +
+      valid.slice(0, 6).map(d => '  • ' + d.name).join('\n') +
+      (valid.length > 6 ? '\n  … +' + (valid.length - 6) + ' more' : '');
+
+    $('imp-st').style.display = 'block';
+    const cats = new Set(valid.map(d => d.category).filter(Boolean));
+    $('imp-st').textContent = valid.length + ' streams · ' + cats.size + ' categories';
+  } catch(e) {
+    pendingImport = null;
+    $('imp-pv').style.display = 'block';
+    $('imp-pv').style.color = 'var(--rd)';
+    $('imp-pv').textContent = '✗ ' + e.message;
+    $('imp-st').style.display = 'none';
+  }
+}
+
+$('imp-ok').onclick = () => {
+  if (!pendingImport || !pendingImport.length) {
+    validateImport($('imp-txt').value);
+    if (!pendingImport || !pendingImport.length) { toast('No valid data — paste M3U or JSON'); return; }
+  }
+  let added = 0, skipped = 0;
+  pendingImport.forEach(d => {
+    if (items.some(m => m.url === d.url)) { skipped++; return; }
+    items.push({
+      id: gid(), title: d.name, url: d.url, category: d.category,
+      icon: d.icon, epgLink: d.epgLink, epgTitle: d.epgTitle,
+      region: d.region || '', tags: d.tags || [], baseName: d.baseName || extractBase(d.name),
+      added: Date.now()
+    });
+    added++;
+  });
+  saveItems();
+  $('mo-imp').classList.remove('on');
+  renderCats();
+  renderLib();
+  let msg = 'Imported ' + added + ' stream(s)';
+  if (skipped) msg += ' · ' + skipped + ' duplicates skipped';
+  toast(msg);
+};
+
+// ─── Export ───
+$('btn-exp').onclick = () => {
+  if (!items.length) { toast('Nothing to export'); return; }
+  const choice = confirm('OK = Export as JSON\nCancel = Export as M3U');
+  if (choice) {
+    const json = JSON.stringify(items.map(m => ({
+      name: m.title, url: m.url, category: m.category || undefined,
+      icon: m.icon || undefined, epgTitle: m.epgTitle || undefined
+    })), null, 2);
+    downloadFile(json, 'application/json', 'streamvault-' + dateStr() + '.json');
+  } else {
+    let m3u = '#EXTM3U\n\n';
+    items.forEach(m => {
+      let e = '#EXTINF:-1';
+      if (m.epgTitle) e += ' tvg-id="' + m.epgTitle + '" tvg-name="' + m.epgTitle + '"';
+      if (m.icon) e += ' tvg-logo="' + m.icon + '"';
+      if (m.category) e += ' group-title="' + m.category + '"';
+      e += ',' + m.title;
+      m3u += e + '\n' + m.url + '\n\n';
+    });
+    downloadFile(m3u, 'audio/x-mpegurl', 'streamvault-' + dateStr() + '.m3u');
+  }
+  toast('Exported ' + items.length + ' streams');
+};
+
+function downloadFile(content, type, filename) {
+  const blob = new Blob([content], { type: type });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+function dateStr() { return new Date().toISOString().slice(0, 10); }
+
+// ═══ REPOSITORIES ═══
+$('fab-repo').onclick = () => {
+  $('rp-name').value = '';
+  $('rp-txt').value = '';
+  $('rp-pv').style.display = 'none';
+  $('rp-st').style.display = 'none';
+  $('rp-f').value = '';
+  $('mo-repo').classList.add('on');
+};
+$('rp-no').onclick = () => $('mo-repo').classList.remove('on');
+$('mo-repo').onclick = e => { if (e.target === $('mo-repo')) $('mo-repo').classList.remove('on'); };
+$('rp-iz').onclick = () => $('rp-f').click();
+
+$('rp-f').onchange = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!$('rp-name').value.trim()) $('rp-name').value = file.name.replace(/\.(m3u8?|json)$/i, '');
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    $('rp-txt').value = ev.target.result;
+    validateRepo(ev.target.result);
+  };
+  reader.readAsText(file);
+};
+
+$('rp-txt').addEventListener('input', () => validateRepo($('rp-txt').value));
+
+function validateRepo(text) {
+  const t = text.trim();
+  if (!t) return;
+  try {
+    const streams = parseM3U(t).filter(d => d.name && d.url);
+    if (!streams.length) throw new Error('No streams found');
+    const regions = new Set(streams.map(s => s.region).filter(Boolean));
+    const cats = new Set(streams.map(s => s.category).filter(Boolean));
+    $('rp-pv').style.display = 'block';
+    $('rp-pv').style.color = 'var(--gn)';
+    $('rp-pv').textContent = '✓ ' + streams.length + ' streams · ' + regions.size + ' regions · ' + cats.size + ' genres';
+    $('rp-st').style.display = 'block';
+    $('rp-st').textContent = streams.length + ' streams ready';
+  } catch(e) {
+    $('rp-pv').style.display = 'block';
+    $('rp-pv').style.color = 'var(--rd)';
+    $('rp-pv').textContent = '✗ ' + e.message;
+    $('rp-st').style.display = 'none';
+  }
+}
+
+$('rp-ok').onclick = () => {
+  const name = $('rp-name').value.trim();
+  const text = $('rp-txt').value.trim();
+  if (!name) { toast('Name is required'); return; }
+  if (!text) { toast('Upload or paste an M3U file'); return; }
+  const streams = parseM3U(text).filter(d => d.name && d.url);
+  if (!streams.length) { toast('No valid streams found'); return; }
+  repos.push({ id: gid(), name: name, streams: streams, addedAt: Date.now() });
+  saveRepos();
+  $('mo-repo').classList.remove('on');
+  renderRepos();
+  toast('"' + name + '" added · ' + streams.length + ' streams');
+};
+
+function renderRepos() {
+  $('rcnt').textContent = repos.length + ' repo' + (repos.length !== 1 ? 's' : '');
+  if (!repos.length) {
+    $('repo-lst').innerHTML = '<div class="emp"><h3>No repositories</h3><p>Tap + to add a large M3U playlist as a browsable source</p></div>';
+    return;
+  }
+  $('repo-lst').innerHTML = repos.map(r => {
+    const regs = new Set((r.streams || []).map(s => s.region).filter(Boolean));
+    return `<div class="rc" onclick="openRepo('${r.id}')">
+      <div class="ri2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div>
+      <div class="rf2"><div class="rn2">${esc(r.name)}</div><div class="rm2">${(r.streams||[]).length} streams · ${regs.size} regions</div></div>
+      <button class="rd" onclick="event.stopPropagation();confirmDel('${r.id}','repo')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button>
+    </div>`;
+  }).join('');
+}
+
+// ═══ REPO BROWSER ═══
+window.openRepo = (id) => {
+  const r = repos.find(x => x.id === id);
+  if (!r) return;
+  brRepo = r;
+  brSel = new Set();
+  brReg = 'All';
+  brGen = 'All';
+  $('br-title').textContent = r.name;
+  $('br-q').value = '';
+  showTab('br-scr');
+  buildBrowseDropdowns();
+  renderBrowse();
+};
+
+$('br-back').onclick = () => showTab('repo-scr');
+
+function buildBrowseDropdowns() {
+  if (!brRepo) return;
+  const regs = ['All', ...new Set((brRepo.streams || []).map(s => s.region).filter(Boolean))].sort();
+  const gens = ['All', ...new Set((brRepo.streams || []).map(s => s.category).filter(Boolean))].sort();
+  $('f-reg').innerHTML = regs.map(r => `<option${r === brReg ? ' selected' : ''}>${r}</option>`).join('');
+  $('f-gen').innerHTML = gens.map(g => `<option${g === brGen ? ' selected' : ''}>${g}</option>`).join('');
+}
+
+$('f-reg').onchange = (e) => { brReg = e.target.value; renderBrowse(); };
+$('f-gen').onchange = (e) => { brGen = e.target.value; renderBrowse(); };
+
+function getBrowseFiltered() {
+  if (!brRepo) return [];
+  const q = $('br-q').value.toLowerCase().trim();
+  let filtered = (brRepo.streams || []).filter(s => {
+    return (brReg === 'All' || s.region === brReg) &&
+           (brGen === 'All' || s.category === brGen) &&
+           (!q || s.name.toLowerCase().includes(q) || (s.category && s.category.toLowerCase().includes(q)));
+  });
+  return localitySort(filtered);
+}
+
+function renderBrowse() {
+  const f = getBrowseFiltered();
+  const existingUrls = new Set(items.map(m => m.url));
+  $('br-cnt').textContent = f.length + '/' + (brRepo ? (brRepo.streams || []).length : 0);
+
+  // Selection bar
+  if (brSel.size > 0) {
+    $('slb').classList.add('on');
+    $('slcnt').textContent = brSel.size + ' selected';
+  } else {
+    $('slb').classList.remove('on');
+  }
+
+  if (!f.length) {
+    $('br-lst').innerHTML = '<div class="emp"><h3>No matches</h3><p>Try different filters or search</p></div>';
+    return;
+  }
+
+  $('br-lst').innerHTML = f.map(s => {
+    const key = s.url;
+    const sel = brSel.has(key);
+    const exists = existingUrls.has(key);
+    const thumb = s.icon
+      ? `<img src="${esc(s.icon)}" onerror="this.style.display='none'" style="width:28px;height:28px;border-radius:5px;object-fit:cover">`
+      : '';
+    const regB = s.region ? '<span style="background:rgba(46,213,115,.12);color:var(--gn);padding:0 3px;border-radius:2px;font-size:7px;font-weight:600;margin-right:2px">' + esc(s.region) + '</span>' : '';
+    const catB = s.category ? '<span style="background:var(--acs);color:var(--ac);padding:0 3px;border-radius:2px;font-size:7px;font-weight:600">' + esc(s.category) + '</span>' : '';
+    const exMark = exists ? '<span style="color:var(--gn);font-size:7px;margin-left:3px">✓</span>' : '';
+
+    return `<div class="ri${sel ? ' sel' : ''}" data-url="${esc(key)}" onclick="toggleBrSel(this)">
+      <div class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+      ${thumb ? '<div>' + thumb + '</div>' : ''}
+      <div class="rf"><div class="rn">${esc(s.name)}${exMark}</div><div class="rm">${regB}${catB}</div></div>
+    </div>`;
+  }).join('');
+}
+
+window.toggleBrSel = (el) => {
+  const url = el.dataset.url;
+  if (brSel.has(url)) { brSel.delete(url); el.classList.remove('sel'); }
+  else { brSel.add(url); el.classList.add('sel'); }
+  if (brSel.size > 0) { $('slb').classList.add('on'); $('slcnt').textContent = brSel.size + ' selected'; }
+  else { $('slb').classList.remove('on'); }
+};
+
+$('br-q').addEventListener('input', renderBrowse);
+$('sl-all').onclick = () => { getBrowseFiltered().forEach(s => brSel.add(s.url)); renderBrowse(); };
+$('sl-clr').onclick = () => { brSel.clear(); renderBrowse(); };
+$('sl-add').onclick = () => {
+  if (!brRepo || brSel.size === 0) return;
+  let added = 0, skipped = 0;
+  (brRepo.streams || []).filter(x => brSel.has(x.url)).forEach(d => {
+    if (items.some(m => m.url === d.url)) { skipped++; return; }
+    items.push({
+      id: gid(), title: d.name, url: d.url, category: d.category, icon: d.icon,
+      epgLink: d.epgLink, epgTitle: d.epgTitle, region: d.region,
+      tags: d.tags || [], baseName: d.baseName || extractBase(d.name), added: Date.now()
+    });
+    added++;
+  });
+  saveItems();
+  brSel.clear();
+  renderBrowse();
+  renderCats();
+  renderLib();
+  toast('Added ' + added + (skipped ? ' · ' + skipped + ' dupes' : ''));
+};
+
+// ═══ EPG SOURCES MANAGER ═══
+$('btn-emgr').onclick = () => { renderEpgList(); $('mo-epg').classList.add('on'); };
+$('epg-cls').onclick = () => $('mo-epg').classList.remove('on');
+$('mo-epg').onclick = (e) => { if (e.target === $('mo-epg')) $('mo-epg').classList.remove('on'); };
+
+$('epg-add').onclick = async () => {
+  const url = $('epg-url').value.trim();
+  const name = $('epg-nm').value.trim() || 'EPG';
+  if (!url) { toast('EPG URL is required'); return; }
+  const src = { id: gid(), name: name, url: url, lastFetch: 0, chCount: 0 };
+  epgSrc.push(src);
+  saveEpg();
+  renderEpgList();
+  $('epg-url').value = '';
+  $('epg-nm').value = '';
+  await fetchEpgSource(src);
+};
+
+$('btn-eref').onclick = () => fetchAllEpg();
+
+function renderEpgList() {
+  if (!epgSrc.length) {
+    $('epg-lst').innerHTML = '<p style="font-size:9px;color:var(--t3);padding:8px 0">No EPG sources added yet. Add one below.</p>';
+    return;
+  }
+  $('epg-lst').innerHTML = epgSrc.map(s => {
+    return `<div class="ec">
+      <div class="ei">
+        <div class="en2">${esc(s.name)}</div>
+        <div class="em">${s.chCount || 0} channels${s.lastFetch ? ' · ' + timeAgo(s.lastFetch) : ''}</div>
+      </div>
+      <button onclick="fetchEpgSource(epgSrc.find(x=>x.id==='${s.id}'));renderEpgList()" title="Refresh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+      </button>
+      <button onclick="epgSrc=epgSrc.filter(x=>x.id!=='${s.id}');saveEpg();renderEpgList();toast('Removed')" title="Remove" style="color:var(--rd)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+// ═══ GUIDE ═══
+function renderGuide() {
+  const wrap = $('gw');
+  const matched = items.filter(m => m.epgTitle && epgData.programs && epgData.programs[m.epgTitle]).slice(0, 80);
+
+  if (!matched.length) {
+    wrap.innerHTML = `<div class="emp" style="height:100%"><h3>No guide data</h3><p>${!epgSrc.length ? 'Add an EPG source via the ⚙ button' : 'Tap refresh or set EPG IDs on your streams'}</p></div>`;
+    return;
+  }
+
+  const now = Date.now();
+  const slotW = 160, chW = 100;
+  const startTime = new Date(now);
+  startTime.setMinutes(startTime.getMinutes() < 30 ? 0 : 30, 0, 0);
+  startTime.setHours(startTime.getHours() - 1);
+
+  const slots = [];
+  for (let i = 0; i < 14; i++) slots.push(new Date(startTime.getTime() + i * 1800000));
+  const endTime = slots[13].getTime() + 1800000;
+
+  let html = '<div style="display:flex;flex-direction:column;min-width:max-content">';
+
+  // Time header
+  html += '<div style="display:flex;position:sticky;top:0;z-index:5;background:var(--bg)">';
+  html += `<div style="width:${chW}px;min-width:${chW}px;padding:3px 4px;font-size:7px;color:var(--t3);border-bottom:1px solid var(--bd);position:sticky;left:0;z-index:6;background:var(--bg)">Channel</div>`;
+  slots.forEach(s => {
+    const h = s.getHours(), m = s.getMinutes();
+    html += `<div style="min-width:${slotW}px;width:${slotW}px;padding:3px;font-size:7px;font-weight:600;color:var(--t3);text-align:center;border-bottom:1px solid var(--bd);border-left:1px solid var(--bd)">${h % 12 || 12}:${m.toString().padStart(2,'0')}${h >= 12 ? 'p' : 'a'}</div>`;
+  });
+  html += '</div>';
+
+  // Channel rows
+  matched.forEach(m => {
+    const progs = epgData.programs[m.epgTitle] || [];
+    const ch = epgData.channels[m.epgTitle];
+
+    html += '<div class="grow">';
+    html += `<div class="gch" onclick="playItem('${m.id}')">`;
+    if (m.icon || (ch && ch.icon)) html += `<img src="${esc(m.icon || ch.icon)}" onerror="this.style.display='none'">`;
+    html += `<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.title)}</span></div>`;
+    html += '<div style="position:relative;flex:1">';
+
+    progs.filter(p => p.stop > startTime.getTime() && p.start < endTime).forEach(p => {
+      const pStart = Math.max(p.start, startTime.getTime());
+      const pStop = Math.min(p.stop, endTime);
+      const left = (pStart - startTime.getTime()) / 1800000 * slotW;
+      const width = (pStop - pStart) / 1800000 * slotW;
+      const isNow = p.start <= now && p.stop > now;
+      const isPast = p.stop <= now;
+      html += `<div class="gpr${isNow ? ' now' : ''}${isPast ? ' past' : ''}" style="left:${left}px;width:${width}px"><div class="gt">${esc(p.title)}</div><div class="gti">${fmtTime(p.start)}-${fmtTime(p.stop)}</div></div>`;
+    });
+
+    // Now line
+    const nowLeft = (now - startTime.getTime()) / 1800000 * slotW;
+    if (nowLeft >= 0 && nowLeft <= slotW * 14) {
+      html += `<div class="gnl" style="left:${nowLeft}px"></div>`;
+    }
+
+    html += '</div></div>';
+  });
+
+  html += '</div>';
+  wrap.innerHTML = html;
+
+  // Scroll to now
+  setTimeout(() => {
+    const nowOff = (now - startTime.getTime()) / 1800000 * slotW - 80;
+    wrap.scrollLeft = Math.max(0, nowOff);
+  }, 100);
+}
+
+// ═══ SETTINGS ═══
+function renderSettings() {
+  // Startup channel
+  const sel = $('s-startup');
+  sel.innerHTML = '<option value="">None (show library)</option>' +
+    items.map(m => `<option value="${m.id}"${settings.startupChannel === m.id ? ' selected' : ''}>${esc(m.title)}</option>`).join('');
+  sel.onchange = (e) => { settings.startupChannel = e.target.value; saveSettings(); };
+
+  // Failover timeout
+  $('s-fo-t').value = settings.foTimeout || 15;
+  $('s-fo-t').onchange = (e) => { settings.foTimeout = parseInt(e.target.value) || 15; saveSettings(); };
+
+  // Auto-failover toggle
+  const tgl = $('s-fo-auto');
+  tgl.className = 'tgl' + (settings.foAuto !== false ? ' on' : '');
+  tgl.onclick = () => { settings.foAuto = !settings.foAuto; tgl.className = 'tgl' + (settings.foAuto ? ' on' : ''); saveSettings(); };
+
+  // Localities
+  renderLocalities();
+}
+
+function renderLocalities() {
+  const list = $('loc-lst');
+  if (!settings.localities || !settings.localities.length) {
+    list.innerHTML = '<p style="font-size:8px;color:var(--t3)">No localities set. Add areas below.</p>';
+    return;
+  }
+  list.innerHTML = settings.localities.map((loc, i) => `
+    <div class="li">
+      <span class="ln">${i + 1}</span>
+      <span class="lv">${esc(loc)}</span>
+      <div class="lb2">
+        ${i > 0 ? '<button onclick="moveLoc(' + i + ',-1)">↑</button>' : ''}
+        ${i < settings.localities.length - 1 ? '<button onclick="moveLoc(' + i + ',1)">↓</button>' : ''}
+        <button onclick="rmLoc(${i})" style="color:var(--rd)">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+$('loc-add').onclick = () => {
+  const val = $('loc-in').value.trim();
+  if (!val) return;
+  if (!settings.localities) settings.localities = [];
+  settings.localities.push(val);
+  saveSettings();
+  $('loc-in').value = '';
+  renderLocalities();
+};
+
+window.moveLoc = (i, dir) => {
+  const j = i + dir;
+  if (j < 0 || j >= settings.localities.length) return;
+  [settings.localities[i], settings.localities[j]] = [settings.localities[j], settings.localities[i]];
+  saveSettings();
+  renderLocalities();
+};
+
+window.rmLoc = (i) => {
+  settings.localities.splice(i, 1);
+  saveSettings();
+  renderLocalities();
+};
+
+// ═══ PLAYER (web fallback) ═══
+function destroyPlayer() {
+  if (hlsInst) { hlsInst.destroy(); hlsInst = null; }
+  $('pc').innerHTML = '';
+  $('ld2').style.display = 'flex';
+}
+
+window.playItem = (id) => {
+  try {
+    const idx = items.findIndex(m => m.id === id);
+    if (idx === -1) return;
+    curIdx = idx;
+    const m = items[idx];
+
+    // Build failover list
+    const failoverList = buildFailoverList(m);
+    const category = [m.category, m.epgTitle].filter(Boolean).join(' · ');
+
+    // Now/Next EPG
+    let nowNext = '';
+    if (m.epgTitle) {
+      const nn = getNowNext(m.epgTitle);
+      if (nn.now) nowNext = 'Now: ' + nn.now.title;
+      if (nn.next) nowNext += (nowNext ? ' | ' : '') + 'Next: ' + nn.next.title;
+    }
+
+    // Native ExoPlayer (Android app)
+    if (window.NativePlayer && typeof window.NativePlayer.isAvailable === 'function' && window.NativePlayer.isAvailable()) {
+      const json = JSON.stringify(failoverList);
+      const foTimeout = String(settings.foTimeout || 15);
+      const foAuto = String(settings.foAuto !== false);
+      // SINGLE method call — all String params — NO overloading
+      window.NativePlayer.playStream(json, m.title || 'Stream', category, nowNext || '', foTimeout, foAuto);
+      return;
+    }
+
+    // Web fallback: show player screen
+    showTab('player-scr');
+    $('p-tt').textContent = m.title;
+    $('p-url').textContent = m.url;
+    $('p-epg').textContent = nowNext;
+    destroyPlayer();
+
+    const url = extractUrl(m.url);
+
+    if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+      const video = document.createElement('video');
+      video.setAttribute('playsinline', '');
+      video.setAttribute('autoplay', '');
+      video.style.cssText = 'width:100%;height:100%;background:#000';
+      $('pc').appendChild(video);
+
+      hlsInst = new Hls({ enableWorker: true });
+      hlsInst.attachMedia(video);
+      hlsInst.on(Hls.Events.MEDIA_ATTACHED, () => hlsInst.loadSource(url));
+      hlsInst.on(Hls.Events.MANIFEST_PARSED, () => {
+        $('ld2').style.display = 'none';
+        video.play().catch(() => {});
+      });
+      hlsInst.on(Hls.Events.ERROR, (_, data) => {
+        if (data.fatal) {
+          // Fallback to iframe
+          $('pc').innerHTML = '<iframe src="' + esc(m.url) + '" style="width:100%;height:100%;border:none" allowfullscreen></iframe>';
+          $('ld2').style.display = 'none';
+        }
+      });
+    } else {
+      // No HLS.js — use iframe
+      $('pc').innerHTML = '<iframe src="' + esc(m.url) + '" style="width:100%;height:100%;border:none" allowfullscreen></iframe>';
+      setTimeout(() => { $('ld2').style.display = 'none'; }, 3000);
+    }
+
+    showOverlay();
+  } catch(err) {
+    console.error('[StreamVault] playItem error:', err);
+    toast('Playback error: ' + err.message);
+  }
+};
+
+// Player overlay
+function showOverlay() {
+  $('po').classList.add('vis');
+  clearTimeout(overlayTimer);
+  overlayTimer = setTimeout(() => $('po').classList.remove('vis'), 4500);
+}
+
+$('player-scr').onclick = (e) => {
+  if (e.target.closest('button')) return;
+  if ($('po').classList.contains('vis')) {
+    $('po').classList.remove('vis');
+    clearTimeout(overlayTimer);
+  } else {
+    showOverlay();
+  }
+};
+
+$('p-back').onclick = (e) => { e.stopPropagation(); destroyPlayer(); showTab('lib-scr'); };
+
+$('p-pp').onclick = (e) => {
+  e.stopPropagation();
+  const video = $('pc').querySelector('video');
+  if (!video) return;
+  if (video.paused) {
+    video.play();
+    $('ic-pl').style.display = 'none';
+    $('ic-pa').style.display = 'block';
+  } else {
+    video.pause();
+    $('ic-pl').style.display = 'block';
+    $('ic-pa').style.display = 'none';
+  }
+  showOverlay();
+};
+
+$('p-prev').onclick = (e) => {
+  e.stopPropagation();
+  if (!items.length) return;
+  curIdx = (curIdx - 1 + items.length) % items.length;
+  playItem(items[curIdx].id);
+};
+
+$('p-next').onclick = (e) => {
+  e.stopPropagation();
+  if (!items.length) return;
+  curIdx = (curIdx + 1) % items.length;
+  playItem(items[curIdx].id);
+};
+
+// Back button handling
+window.addEventListener('popstate', () => {
+  if ($('player-scr').classList.contains('on')) { destroyPlayer(); showTab('lib-scr'); }
+  else if ($('br-scr').classList.contains('on')) showTab('repo-scr');
+});
+
+// ─── Background EPG Refresh (every 4 hours) ───
+setInterval(() => {
+  if (epgSrc.length) fetchAllEpg();
+}, 4 * 3600000);
 
 // ─── Init ───
-load();loadRepos();renderCats();renderLib();renderRepos();
+loadItems();
+loadRepos();
+loadEpg();
+loadSettings();
+renderCats();
+renderLib();
+renderRepos();
+
+// Auto-fetch EPG if stale (older than 1 hour)
+if (epgSrc.length) {
+  const oldest = Math.min(...epgSrc.map(s => s.lastFetch || 0));
+  if (Date.now() - oldest > 3600000) fetchAllEpg();
+}
+
+// Startup channel
+if (settings.startupChannel) {
+  const startupItem = items.find(m => m.id === settings.startupChannel);
+  if (startupItem) {
+    setTimeout(() => playItem(startupItem.id), 500);
+  }
+}
+
+console.log('[StreamVault] v' + VERSION + ' Build ' + BUILD + ' — ' + items.length + ' streams, ' + repos.length + ' repos, ' + epgSrc.length + ' EPG sources');
 </script>
 </body>
 </html>
