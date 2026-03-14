@@ -450,11 +450,35 @@ function loadItems() {
   } catch(e) { console.error('loadItems:', e); }
 }
 function saveRepos() { try { localStorage.setItem(KEYS.repos, JSON.stringify(repos)); } catch(e) {} }
-function loadRepos() { try { const d = localStorage.getItem(KEYS.repos); if (d) repos = JSON.parse(d); } catch(e) {} }
+function loadRepos() {
+  try {
+    let d = localStorage.getItem(KEYS.repos);
+    // Migrate from old keys
+    if (!d) d = localStorage.getItem('sv_repos') || localStorage.getItem('sv_repos_v2');
+    if (d) { repos = JSON.parse(d); localStorage.setItem(KEYS.repos, d); }
+  } catch(e) {}
+}
 function saveEpg() { try { localStorage.setItem(KEYS.epgSrc, JSON.stringify(epgSrc)); localStorage.setItem(KEYS.epgData, JSON.stringify(epgData)); } catch(e) {} }
-function loadEpg() { try { const s = localStorage.getItem(KEYS.epgSrc); if (s) epgSrc = JSON.parse(s); const d = localStorage.getItem(KEYS.epgData); if (d) epgData = JSON.parse(d); if (!epgData.channels) epgData.channels = {}; if (!epgData.programs) epgData.programs = {}; } catch(e) {} }
+function loadEpg() {
+  try {
+    let s = localStorage.getItem(KEYS.epgSrc);
+    if (!s) s = localStorage.getItem('sv_epg_sources') || localStorage.getItem('sv_epg_src');
+    if (s) { epgSrc = JSON.parse(s); localStorage.setItem(KEYS.epgSrc, s); }
+    let d = localStorage.getItem(KEYS.epgData);
+    if (!d) d = localStorage.getItem('sv_epg_programs') || localStorage.getItem('sv_epg_data');
+    if (d) { epgData = JSON.parse(d); localStorage.setItem(KEYS.epgData, d); }
+    if (!epgData.channels) epgData.channels = {};
+    if (!epgData.programs) epgData.programs = {};
+  } catch(e) {}
+}
 function saveSettings() { try { localStorage.setItem(KEYS.settings, JSON.stringify(settings)); } catch(e) {} }
-function loadSettings() { try { const d = localStorage.getItem(KEYS.settings); if (d) settings = { ...settings, ...JSON.parse(d) }; } catch(e) {} }
+function loadSettings() {
+  try {
+    let d = localStorage.getItem(KEYS.settings);
+    if (!d) d = localStorage.getItem('sv_settings') || localStorage.getItem('sv_settings_v2');
+    if (d) { settings = { ...settings, ...JSON.parse(d) }; localStorage.setItem(KEYS.settings, d); }
+  } catch(e) {}
+}
 
 // ─── M3U Parser ───
 function parseM3U(text) {
@@ -969,11 +993,7 @@ $('imp-no').onclick = () => $('mo-imp').classList.remove('on');
 $('mo-imp').onclick = (e) => { if (e.target === $('mo-imp')) $('mo-imp').classList.remove('on'); };
 
 // File picker
-$('iz').onclick = (e) => {
-  e.stopPropagation();
-  e.preventDefault();
-  $('imp-f').click();
-};
+$('iz').onclick = () => $('imp-f').click();
 $('imp-f').onchange = (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -1101,11 +1121,7 @@ $('fab-repo').onclick = () => {
 };
 $('rp-no').onclick = () => $('mo-repo').classList.remove('on');
 $('mo-repo').onclick = e => { if (e.target === $('mo-repo')) $('mo-repo').classList.remove('on'); };
-$('rp-iz').onclick = (e) => {
-  e.stopPropagation();
-  e.preventDefault();
-  $('rp-f').click();
-};
+$('rp-iz').onclick = () => $('rp-f').click();
 
 $('rp-f').onchange = (e) => {
   const file = e.target.files[0];
