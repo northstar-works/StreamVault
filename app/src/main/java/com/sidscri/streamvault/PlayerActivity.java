@@ -44,16 +44,20 @@ import androidx.media3.ui.PlayerView;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 @OptIn(markerClass = UnstableApi.class)
 public class PlayerActivity extends Activity {
@@ -65,6 +69,7 @@ public class PlayerActivity extends Activity {
     public static final String EXTRA_NOW_NEXT = "now_next";
     public static final String EXTRA_FO_TIMEOUT = "fo_timeout";
     public static final String EXTRA_FO_AUTO = "fo_auto";
+    public static final String EXTRA_SAVE_PATH = "save_path";
 
     // State
     private ExoPlayer player;
@@ -72,7 +77,7 @@ public class PlayerActivity extends Activity {
     private View loadingView;
     private View errorContainer;
     private View overlayTop, overlayCenter, overlayBottom;
-    private TextView titleText, statusText, nowNextText, strengthText, errorText;
+    private TextView titleText, statusText, nowNextText, strengthText, errorText, recStatusText;
     private ImageButton playPauseBtn, lockBtn, recordBtn;
     private Handler handler;
     private Runnable hideOverlayRunnable;
@@ -81,10 +86,12 @@ public class PlayerActivity extends Activity {
     private boolean overlayVisible = false;
     private boolean locked = false;
     private boolean networkAvailable = true;
-    private boolean recording = false;
+    private volatile boolean recording = false;
     private String lastSuccessUrl = null;
+    private String savePath = null;
     private long playbackStartTime = 0;
     private long foTimeoutMs = 15000;
+    private long recordingStartTime = 0;
     private boolean foAuto = true;
     private ConnectivityManager.NetworkCallback networkCallback;
     private Thread recordThread;
@@ -135,6 +142,7 @@ public class PlayerActivity extends Activity {
         // Read failover timeout
         foTimeoutMs = getIntent().getIntExtra(EXTRA_FO_TIMEOUT, 15) * 1000L;
         foAuto = getIntent().getBooleanExtra(EXTRA_FO_AUTO, true);
+        savePath = getIntent().getStringExtra(EXTRA_SAVE_PATH);
 
         // Parse failover JSON
         String json = getIntent().getStringExtra(EXTRA_FAILOVER_JSON);
@@ -264,6 +272,12 @@ public class PlayerActivity extends Activity {
         strengthText.setTextSize(7);
         strengthText.setSingleLine(true);
         titleArea.addView(strengthText);
+
+        recStatusText = new TextView(this);
+        recStatusText.setTextColor(Color.parseColor("#ff4757"));
+        recStatusText.setTextSize(7);
+        recStatusText.setSingleLine(true);
+        titleArea.addView(recStatusText);
 
         top.addView(titleArea, new LinearLayout.LayoutParams(0, -2, 1));
 
@@ -545,13 +559,24 @@ public class PlayerActivity extends Activity {
                     strengthText.setText(display);
                     strengthText.setTextColor(color);
                 }
+
+                // Update recording timer
+                if (recording && recordingStartTime > 0) {
+                    long elapsed = (System.currentTimeMillis() - recordingStartTime) / 1000;
+                    long mins = elapsed / 60;
+                    long secs = elapsed % 60;
+                    recStatusText.setText("⏺ REC " + String.format(Locale.US, "%02d:%02d", mins, secs));
+                } else {
+                    recStatusText.setText("");
+                }
+
                 handler.postDelayed(this, 2000);
             }
         };
         handler.postDelayed(strengthUpdater, 3000);
     }
 
-    // ─── Recording ───
+    // ─── Recording (HLS-aware) ───
     private void toggleRecording() {
         if (recording) stopRecording();
         else startRecording();
@@ -560,50 +585,206 @@ public class PlayerActivity extends Activity {
     private void startRecording() {
         if (currentIdx >= variants.size()) return;
         recording = true;
+        recordingStartTime = System.currentTimeMillis();
         recordBtn.setColorFilter(Color.parseColor("#ff4757"));
         showMsg("⏺ Recording started");
         scheduleHideOverlay();
 
-        final String url = variants.get(currentIdx).url;
-        final String safeName = variants.get(currentIdx).title.replaceAll("[^a-zA-Z0-9]", "_");
-        final String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
+        final String streamUrl = variants.get(currentIdx).url;
+        final String safeName = variants.get(currentIdx).title.replaceAll("[^a-zA-Z0-9_-]", "_");
+        final String ts = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
 
         recordThread = new Thread(() -> {
+            FileOutputStream fos = null;
             try {
-                File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                // Determine save directory
+                File dir;
+                if (savePath != null && !savePath.isEmpty()) {
+                    dir = new File(savePath);
+                } else {
+                    dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                }
                 if (!dir.exists()) dir.mkdirs();
-                File outFile = new File(dir, "SV_" + safeName + "_" + timestamp + ".ts");
+                File outFile = new File(dir, "SV_" + safeName + "_" + ts + ".ts");
+                fos = new FileOutputStream(outFile);
+                long totalBytes = 0;
 
-                HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-                conn.setRequestProperty("User-Agent", "StreamVault/4.1");
-                conn.setConnectTimeout(10000);
-                InputStream in = conn.getInputStream();
-                FileOutputStream fos = new FileOutputStream(outFile);
+                // Probe the stream to determine if HLS or raw
+                HttpURLConnection probe = (HttpURLConnection) new URL(streamUrl).openConnection();
+                probe.setRequestProperty("User-Agent", "StreamVault/4.2");
+                probe.setConnectTimeout(10000);
+                probe.setReadTimeout(10000);
+                probe.setInstanceFollowRedirects(true);
+                InputStream probeIn = probe.getInputStream();
+                byte[] peek = new byte[4096];
+                int peekLen = probeIn.read(peek);
+                String peekStr = peekLen > 0 ? new String(peek, 0, peekLen) : "";
 
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-                while (recording && (bytesRead = in.read(buffer)) != -1) {
-                    fos.write(buffer, 0, bytesRead);
+                boolean isHLS = peekStr.contains("#EXTM3U") || peekStr.contains("#EXT-X-")
+                    || streamUrl.contains(".m3u8");
+
+                if (!isHLS) {
+                    // Raw stream — pipe directly
+                    if (peekLen > 0) { fos.write(peek, 0, peekLen); totalBytes += peekLen; }
+                    byte[] buf = new byte[16384];
+                    int n;
+                    while (recording && (n = probeIn.read(buf)) != -1) {
+                        fos.write(buf, 0, n);
+                        totalBytes += n;
+                    }
+                    probeIn.close();
+                    fos.close();
+                    final long finalBytes = totalBytes;
+                    handler.post(() -> showMsg("⏹ Saved: " + outFile.getName()
+                        + " (" + (finalBytes / 1024) + " KB)"));
+                    return;
+                }
+                probeIn.close();
+                probe.disconnect();
+
+                // HLS recording: download segments
+                String baseUrl = streamUrl.substring(0, streamUrl.lastIndexOf('/') + 1);
+                Set<String> downloadedSegments = new HashSet<>();
+
+                while (recording) {
+                    try {
+                        // Fetch the playlist
+                        HttpURLConnection m3uConn = (HttpURLConnection) new URL(streamUrl).openConnection();
+                        m3uConn.setRequestProperty("User-Agent", "StreamVault/4.2");
+                        m3uConn.setConnectTimeout(8000);
+                        m3uConn.setInstanceFollowRedirects(true);
+                        BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(m3uConn.getInputStream()));
+                        List<String> segmentUrls = new ArrayList<>();
+                        String mediaPlaylistUrl = null;
+                        String line;
+                        boolean nextIsSeg = false;
+
+                        while ((line = reader.readLine()) != null) {
+                            line = line.trim();
+                            if (line.startsWith("#EXTINF:")) {
+                                nextIsSeg = true;
+                                continue;
+                            }
+                            if (line.startsWith("#EXT-X-STREAM-INF")) {
+                                nextIsSeg = true;
+                                continue;
+                            }
+                            if (line.startsWith("#") || line.isEmpty()) continue;
+
+                            String resolved = resolveUrl(baseUrl, line);
+                            if (line.contains(".m3u8") || line.contains(".m3u")) {
+                                mediaPlaylistUrl = resolved;
+                            } else if (nextIsSeg || line.contains(".ts")
+                                || !line.contains(".m3u")) {
+                                segmentUrls.add(resolved);
+                            }
+                            nextIsSeg = false;
+                        }
+                        reader.close();
+                        m3uConn.disconnect();
+
+                        // Master playlist: fetch first media playlist
+                        if (segmentUrls.isEmpty() && mediaPlaylistUrl != null) {
+                            String mBase = mediaPlaylistUrl.substring(
+                                0, mediaPlaylistUrl.lastIndexOf('/') + 1);
+                            HttpURLConnection mc = (HttpURLConnection)
+                                new URL(mediaPlaylistUrl).openConnection();
+                            mc.setRequestProperty("User-Agent", "StreamVault/4.2");
+                            mc.setInstanceFollowRedirects(true);
+                            BufferedReader mr = new BufferedReader(
+                                new InputStreamReader(mc.getInputStream()));
+                            nextIsSeg = false;
+                            while ((line = mr.readLine()) != null) {
+                                line = line.trim();
+                                if (line.startsWith("#EXTINF:")) {
+                                    nextIsSeg = true;
+                                    continue;
+                                }
+                                if (line.startsWith("#") || line.isEmpty()) continue;
+                                if (nextIsSeg || !line.contains(".m3u")) {
+                                    segmentUrls.add(resolveUrl(mBase, line));
+                                }
+                                nextIsSeg = false;
+                            }
+                            mr.close();
+                            mc.disconnect();
+                        }
+
+                        // Download new segments
+                        for (String segUrl : segmentUrls) {
+                            if (!recording) break;
+                            if (downloadedSegments.contains(segUrl)) continue;
+                            downloadedSegments.add(segUrl);
+                            try {
+                                HttpURLConnection sc = (HttpURLConnection)
+                                    new URL(segUrl).openConnection();
+                                sc.setRequestProperty("User-Agent", "StreamVault/4.2");
+                                sc.setConnectTimeout(8000);
+                                sc.setReadTimeout(15000);
+                                sc.setInstanceFollowRedirects(true);
+                                InputStream si = sc.getInputStream();
+                                byte[] buf = new byte[16384];
+                                int n;
+                                while (recording && (n = si.read(buf)) != -1) {
+                                    fos.write(buf, 0, n);
+                                    totalBytes += n;
+                                }
+                                si.close();
+                                sc.disconnect();
+                            } catch (Exception se) {
+                                // Skip bad segment, continue
+                            }
+                        }
+
+                        // Wait before re-fetching playlist (live HLS updates every 2-6s)
+                        if (recording) Thread.sleep(4000);
+
+                    } catch (Exception le) {
+                        if (recording) Thread.sleep(3000);
+                    }
                 }
 
                 fos.close();
-                in.close();
-                handler.post(() -> showMsg("⏹ Saved: " + outFile.getName()));
+                final long finalBytes = totalBytes;
+                final String fileName = outFile.getName();
+                handler.post(() -> showMsg("⏹ Saved: " + fileName
+                    + " (" + (finalBytes > 1048576
+                        ? finalBytes / 1048576 + " MB"
+                        : finalBytes / 1024 + " KB") + ")"));
+
             } catch (Exception e) {
+                if (fos != null) try { fos.close(); } catch (Exception x) {}
                 handler.post(() -> showMsg("Record error: " + e.getMessage()));
             }
             handler.post(() -> {
                 recording = false;
+                recordingStartTime = 0;
                 recordBtn.setColorFilter(Color.parseColor("#80ffffff"));
+                recStatusText.setText("");
             });
         });
         recordThread.start();
     }
 
+    private String resolveUrl(String base, String relative) {
+        if (relative.startsWith("http://") || relative.startsWith("https://")) return relative;
+        if (relative.startsWith("/")) {
+            try {
+                URL u = new URL(base);
+                return u.getProtocol() + "://" + u.getHost()
+                    + (u.getPort() > 0 ? ":" + u.getPort() : "") + relative;
+            } catch (Exception e) {
+                return base + relative;
+            }
+        }
+        return base + relative;
+    }
+
     private void stopRecording() {
         recording = false;
         recordBtn.setColorFilter(Color.parseColor("#80ffffff"));
-        showMsg("⏹ Recording stopped");
+        showMsg("⏹ Stopping recording…");
     }
 
     // ─── Network Monitoring ───

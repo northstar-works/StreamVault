@@ -1,0 +1,6 @@
+v4.3.2 (Build 23)
+- HLS-aware recording (downloads actual video segments, not just manifest)
+- Custom save path for recordings
+- Recording timer overlay (shows elapsed time)
+- Fix: rebuilt from known-working base (svv14-15) to resolve crash-on-stream bug
+- All new features from builds 15-22 properly integrated with readable code
