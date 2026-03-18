@@ -334,7 +334,18 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
   <label>Icon URL</label>
   <input id="in-icon" placeholder="https://logo.png">
   <label>EPG Source URL</label>
-  <input id="in-epgl" placeholder="https://epg.xml">
+  <div class="rw">
+    <div>
+      <label style="font-size:9px;color:var(--t3)">Saved EPG source</label>
+      <select id="in-epgl-sel">
+        <option value="">Select saved EPG…</option>
+      </select>
+    </div>
+    <div>
+      <label style="font-size:9px;color:var(--t3)">Or type / paste new URL</label>
+      <input id="in-epgl" placeholder="https://epg.xml">
+    </div>
+  </div>
   <div class="mab"><button class="bc" id="ed-no">Cancel</button><button class="bs" id="ed-ok">Save</button></div>
 </div>
 </div>
@@ -505,6 +516,46 @@ function loadRepos() {
   } catch(e) {}
 }
 function saveEpg() { try { localStorage.setItem(KEYS.epgSrc, JSON.stringify(epgSrc)); localStorage.setItem(KEYS.epgData, JSON.stringify(epgData)); } catch(e) {} }
+function normalizeEpgUrl(url) {
+  return (url || '').trim();
+}
+function makeEpgSourceName(url) {
+  try {
+    const u = new URL(url);
+    const host = (u.hostname || 'EPG').replace(/^www\./i, '');
+    const file = (u.pathname || '').split('/').filter(Boolean).pop() || '';
+    return file ? host + ' · ' + file : host;
+  } catch (_) {
+    return 'EPG';
+  }
+}
+function findEpgSourceByUrl(url) {
+  const normalized = normalizeEpgUrl(url);
+  return epgSrc.find(s => normalizeEpgUrl(s.url) === normalized) || null;
+}
+function ensureEpgSource(url, name) {
+  const normalized = normalizeEpgUrl(url);
+  if (!normalized) return null;
+  let existing = findEpgSourceByUrl(normalized);
+  if (existing) {
+    if (name && (!existing.name || existing.name === 'EPG')) existing.name = name;
+    saveEpg();
+    return existing;
+  }
+  const src = { id: gid(), name: (name || makeEpgSourceName(normalized) || 'EPG'), url: normalized, lastFetch: 0, chCount: 0 };
+  epgSrc.push(src);
+  saveEpg();
+  return src;
+}
+function fillEpgSourceSelect(selectedUrl) {
+  const sel = $('in-epgl-sel');
+  if (!sel) return;
+  const current = normalizeEpgUrl(selectedUrl);
+  let html = '<option value="">Select saved EPG…</option>';
+  html += epgSrc.map(s => '<option value="' + esc(s.url) + '">' + esc((s.name || 'EPG') + ' — ' + s.url) + '</option>').join('');
+  sel.innerHTML = html;
+  sel.value = current;
+}
 function loadEpg() {
   try {
     let s = localStorage.getItem(KEYS.epgSrc);
@@ -863,6 +914,7 @@ $('fab-add').onclick = () => {
   $('in-cat').value = '';
   $('in-icon').value = '';
   $('in-epgl').value = '';
+  fillEpgSourceSelect('');
   populateEpgDropdown('');
   $('mo-ed').classList.add('on');
 };
@@ -877,6 +929,7 @@ window.openEdit = (id) => {
   $('in-cat').value = m.category || '';
   $('in-icon').value = m.icon || '';
   $('in-epgl').value = m.epgLink || '';
+  fillEpgSourceSelect(m.epgLink || '');
   populateEpgDropdown(m.epgTitle || '');
   $('mo-ed').classList.add('on');
 };
@@ -983,21 +1036,37 @@ window.selectEpg = (el) => {
   $('in-epg-list').style.display = 'none';
 };
 
+$('in-epgl-sel').onchange = (e) => {
+  const val = normalizeEpgUrl(e.target.value);
+  $('in-epgl').value = val;
+};
+$('in-epgl').oninput = () => {
+  const val = normalizeEpgUrl($('in-epgl').value);
+  const existing = findEpgSourceByUrl(val);
+  $('in-epgl-sel').value = existing ? existing.url : '';
+};
+
 $('ed-no').onclick = () => $('mo-ed').classList.remove('on');
 $('mo-ed').onclick = (e) => { if (e.target === $('mo-ed')) $('mo-ed').classList.remove('on'); };
 
-$('ed-ok').onclick = () => {
+$('ed-ok').onclick = async () => {
   const title = $('in-name').value.trim();
   const url = $('in-url').value.trim();
   if (!title) { toast('Title is required'); return; }
   if (!url) { toast('URL is required'); return; }
+
+  const typedEpgUrl = normalizeEpgUrl($('in-epgl').value);
+  let ensuredEpg = null;
+  if (typedEpgUrl) {
+    ensuredEpg = ensureEpgSource(typedEpgUrl);
+  }
 
   const data = {
     title: title,
     url: url,
     category: $('in-cat').value.trim(),
     icon: $('in-icon').value.trim(),
-    epgLink: $('in-epgl').value.trim(),
+    epgLink: typedEpgUrl,
     epgTitle: $('in-epg-val').value,
     baseName: extractBase(title)
   };
@@ -1011,6 +1080,13 @@ $('ed-ok').onclick = () => {
     toast('Added');
   }
   saveItems();
+  if (typedEpgUrl) {
+    fillEpgSourceSelect(typedEpgUrl);
+    renderEpgList();
+    if (ensuredEpg && !ensuredEpg.lastFetch) {
+      fetchEpgSource(ensuredEpg).catch(() => {});
+    }
+  }
   $('mo-ed').classList.remove('on');
   renderCats();
   renderLib();
@@ -1419,13 +1495,12 @@ $('epg-cls').onclick = () => $('mo-epg').classList.remove('on');
 $('mo-epg').onclick = (e) => { if (e.target === $('mo-epg')) $('mo-epg').classList.remove('on'); };
 
 $('epg-add').onclick = async () => {
-  const url = $('epg-url').value.trim();
+  const url = normalizeEpgUrl($('epg-url').value);
   const name = $('epg-nm').value.trim() || 'EPG';
   if (!url) { toast('EPG URL is required'); return; }
-  const src = { id: gid(), name: name, url: url, lastFetch: 0, chCount: 0 };
-  epgSrc.push(src);
-  saveEpg();
+  const src = ensureEpgSource(url, name);
   renderEpgList();
+  fillEpgSourceSelect(url);
   $('epg-url').value = '';
   $('epg-nm').value = '';
   await fetchEpgSource(src);
