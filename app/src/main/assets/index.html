@@ -39,6 +39,28 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
 .sb input::placeholder{color:var(--t3)}
 .sb svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:12px;height:12px;color:var(--t3)}
 
+.libbar{display:flex;gap:6px;align-items:center;padding:4px 16px 2px}
+.libmodes{display:flex;gap:5px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex:1}.libmodes::-webkit-scrollbar{display:none}
+.lmb{padding:6px 10px;border-radius:11px;font-size:9px;font-weight:700;white-space:nowrap;cursor:pointer;background:var(--c1);border:1px solid var(--bd);color:var(--t2);flex-shrink:0}
+.lmb.on{background:var(--ac);border-color:var(--ac);color:#fff}
+.lmb small{opacity:.8;font-size:8px;margin-left:4px}
+.sb.hide{display:none}
+.libx{padding:4px 16px 0}
+.px-card{margin:4px 16px 6px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--r);padding:10px}
+.px-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.px-title{font-size:11px;font-weight:700}.px-sub{font-size:8px;color:var(--t3);margin-top:2px}
+.px-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.px-actions button{padding:7px 10px;border-radius:var(--rs);border:none;cursor:pointer;font-size:9px;font-weight:700}
+.px-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.px-grid .full{grid-column:1/-1}
+.px-results{margin-top:8px;max-height:230px;overflow-y:auto}
+.px-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--bd)}
+.px-row:first-child{border-top:none}
+.px-thumb{width:34px;height:48px;border-radius:6px;background:var(--acs);overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.px-thumb img{width:100%;height:100%;object-fit:cover}
+.px-info{flex:1;min-width:0}.px-info .nm{font-size:10px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.px-info .mt{font-size:8px;color:var(--t3);line-height:1.35}
+.px-row button{padding:7px 9px;border-radius:var(--rs);border:none;cursor:pointer;background:var(--ac);color:#fff;font-size:9px;font-weight:700}
+
 /* Pills */
 .pls{display:flex;gap:3px;padding:3px 16px 5px;overflow-x:auto;-webkit-overflow-scrolling:touch}.pls::-webkit-scrollbar{display:none}
 .pl{padding:3px 8px;border-radius:10px;font-size:8px;font-weight:500;white-space:nowrap;cursor:pointer;background:var(--c1);border:1px solid var(--bd);color:var(--t2);flex-shrink:0}
@@ -205,11 +227,16 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
 
 <!-- ═══ LIBRARY ═══ -->
 <div id="lib-scr" class="scr on">
-  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b11</span>
+  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b29</span>
     <button class="ib" id="btn-imp" title="Import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
     <button class="ib" id="btn-exp" title="Export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
   </div></div>
-  <div class="sb" id="lib-sb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="lib-q" placeholder="Search playlist…"></div>
+  <div class="libbar">
+    <div class="libmodes" id="lib-modes"></div>
+    <button class="ib" id="lib-search-tog" title="Search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
+  </div>
+  <div class="sb hide" id="lib-sb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="lib-q" placeholder="Search current page…"></div>
+  <div id="lib-extra"></div>
   <div class="pls" id="lib-pls"></div>
   <div class="lst" id="lib-lst"></div>
   <button class="fab" id="fab-add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
@@ -476,7 +503,7 @@ http://stream.example.com/cnn
 "use strict";
 
 // ─── Constants & State ───
-const VERSION = '4.3.7', BUILD = 28;
+const VERSION = '4.3.8', BUILD = 29;
 const KEYS = { items: 'sv_items_v3', repos: 'sv_repos_v2', epgSrc: 'sv_epg_src', epgData: 'sv_epg_data', settings: 'sv_settings_v2' };
 const TAG_PRI = ['', 'F', 'H', 'A', 'S'];
 
@@ -484,7 +511,7 @@ let items = [];
 let repos = [];
 let epgSrc = [];
 let epgData = { channels: {}, programs: {} };
-let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [] };
+let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [], plex: { server: '', token: '', section: '', sections: [] } };
 
 let editId = null;
 let delId = null;
@@ -494,6 +521,8 @@ let hlsInst = null;
 let activeCat = 'All';
 let overlayTimer = null;
 let pendingImport = null;
+let activeLibPage = 'library';
+let libSearchOpen = false;
 
 // Browse state
 let brRepo = null;
@@ -1035,18 +1064,228 @@ document.querySelectorAll('.ni').forEach(n => {
   n.onclick = () => showTab(n.dataset.t);
 });
 
+
+function isPlexItem(item) { return !!(item && (item.sourceKind === 'plex' || item.plexMeta)); }
+function isCameraItem(item) {
+  if (!item) return false;
+  const u = item.url || (item.plexMeta && item.plexMeta.url) || '';
+  return !isPlexItem(item) && isWebcamUrl(u);
+}
+function isIptvItem(item) {
+  if (!item) return false;
+  const u = (item.url || '').trim();
+  if (!u || isPlexItem(item) || isCameraItem(item)) return false;
+  const s = getUrlScheme(u);
+  return ['http','https','rtmp','mms','udp'].includes(s) || isLikelyHls(u) || /playlist|channel|live/i.test(u);
+}
+function getLibPageCounts() {
+  return {
+    library: items.filter(m => !isPlexItem(m) && !isCameraItem(m) && !isIptvItem(m)).length,
+    itv: items.filter(isIptvItem).length,
+    icam: items.filter(isCameraItem).length,
+    plex: items.filter(isPlexItem).length
+  };
+}
+function getLibPageDefs() {
+  const c = getLibPageCounts();
+  const defs = [{ id:'library', label:'Library', count:c.library }];
+  if (c.itv) defs.push({ id:'itv', label:'ITV', count:c.itv });
+  if (c.icam) defs.push({ id:'icam', label:'iCam', count:c.icam });
+  if (c.plex || (settings.plex && (settings.plex.server || settings.plex.token))) defs.push({ id:'plex', label:'PlexStr', count:c.plex });
+  return defs;
+}
+function ensureActiveLibPage() {
+  const defs = getLibPageDefs().map(x => x.id);
+  if (!defs.includes(activeLibPage)) activeLibPage = 'library';
+}
+function getItemsForLibPage() {
+  ensureActiveLibPage();
+  if (activeLibPage === 'itv') return items.filter(isIptvItem);
+  if (activeLibPage === 'icam') return items.filter(isCameraItem);
+  if (activeLibPage === 'plex') return items.filter(isPlexItem);
+  return items.filter(m => !isPlexItem(m) && !isCameraItem(m) && !isIptvItem(m));
+}
+function renderLibModes() {
+  ensureActiveLibPage();
+  const defs = getLibPageDefs();
+  $('lib-modes').innerHTML = defs.map(d => `<button class="lmb${d.id===activeLibPage?' on':''}" data-lib-page="${d.id}">${d.label}<small>${d.count}</small></button>`).join('');
+  $('lib-modes').querySelectorAll('.lmb').forEach(btn => btn.onclick = () => {
+    activeLibPage = btn.dataset.libPage;
+    renderCats();
+    renderLibModes();
+    renderLibExtra();
+    renderLib();
+  });
+}
+function updateSearchToggleUi() {
+  $('lib-sb').classList.toggle('hide', !libSearchOpen);
+}
+function getPlexCfg() {
+  settings.plex = settings.plex || { server:'', token:'', section:'', sections:[] };
+  settings.plex.sections = Array.isArray(settings.plex.sections) ? settings.plex.sections : [];
+  return settings.plex;
+}
+function normalizePlexServer(v) { return String(v || '').trim().replace(/\/$/, ''); }
+function plexUrl(path, extra) {
+  const cfg = getPlexCfg();
+  const server = normalizePlexServer((extra && extra.server) || cfg.server);
+  const token = String((extra && extra.token) || cfg.token || '').trim();
+  if (!server) return '';
+  const sep = path.includes('?') ? '&' : '?';
+  return server + path + (token ? sep + 'X-Plex-Token=' + encodeURIComponent(token) : '');
+}
+function parsePlexXmlNodes(xmlText) {
+  const doc = new DOMParser().parseFromString(xmlText, 'text/xml');
+  return Array.from(doc.querySelectorAll('Video, Directory')).map(el => ({
+    ratingKey: el.getAttribute('ratingKey') || '',
+    key: el.getAttribute('key') || '',
+    type: el.getAttribute('type') || '',
+    title: el.getAttribute('title') || el.getAttribute('grandparentTitle') || 'Untitled',
+    year: el.getAttribute('year') || '',
+    thumb: el.getAttribute('thumb') || el.getAttribute('grandparentThumb') || '',
+    summary: el.getAttribute('summary') || '',
+    parentTitle: el.getAttribute('parentTitle') || '',
+    grandparentTitle: el.getAttribute('grandparentTitle') || '',
+    index: el.getAttribute('index') || '',
+    librarySectionID: el.getAttribute('librarySectionID') || ''
+  })).filter(x => x.ratingKey && (x.type === 'movie' || x.type === 'episode' || x.type === 'show' || x.type === 'clip'));
+}
+async function plexConnect(loadToast) {
+  const cfg = getPlexCfg();
+  cfg.server = normalizePlexServer(cfg.server);
+  if (!cfg.server || !cfg.token) throw new Error('Enter Plex server URL and token');
+  if (loadToast) toast('Connecting to Plex…');
+  const resp = await fetch(plexUrl('/library/sections'));
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  const doc = new DOMParser().parseFromString(await resp.text(), 'text/xml');
+  cfg.sections = Array.from(doc.querySelectorAll('Directory')).map(el => ({ key: el.getAttribute('key') || '', title: el.getAttribute('title') || 'Library', type: el.getAttribute('type') || '' })).filter(x => x.key);
+  saveSettings();
+  return cfg.sections;
+}
+function plexThumb(thumb, fallback) {
+  if (thumb) {
+    if (/^https?:\/\//i.test(thumb)) return thumb;
+    const url = plexUrl(thumb);
+    if (url) return url;
+  }
+  return fallback || '';
+}
+function buildPlexPlaybackUrl(meta) {
+  const cfg = getPlexCfg();
+  const server = normalizePlexServer((meta && meta.server) || cfg.server);
+  const token = String((meta && meta.token) || cfg.token || '').trim();
+  const rk = meta && meta.ratingKey;
+  if (!server || !token || !rk) return '';
+  const path = server + '/library/metadata/' + encodeURIComponent(rk);
+  return server + '/video/:/transcode/universal/start.m3u8?path=' + encodeURIComponent(path) + '&protocol=hls&directPlay=1&directStream=1&fastSeek=1&copyts=1&offset=0&X-Plex-Token=' + encodeURIComponent(token);
+}
+async function plexSearch(q) {
+  const cfg = getPlexCfg();
+  cfg.server = normalizePlexServer(cfg.server);
+  if (!cfg.server || !cfg.token) throw new Error('Connect Plex first');
+  if (!q.trim()) return [];
+  const section = cfg.section ? ('&sectionId=' + encodeURIComponent(cfg.section)) : '';
+  let url = plexUrl('/search?query=' + encodeURIComponent(q) + section);
+  let resp = await fetch(url);
+  if (!resp.ok && cfg.section) {
+    url = plexUrl('/library/sections/' + encodeURIComponent(cfg.section) + '/search?query=' + encodeURIComponent(q));
+    resp = await fetch(url);
+  }
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  const text = await resp.text();
+  return parsePlexXmlNodes(text).slice(0, 40);
+}
+function addPlexItem(meta) {
+  const cfg = getPlexCfg();
+  const playback = buildPlexPlaybackUrl({ ...meta, server: cfg.server, token: cfg.token });
+  const thumb = plexThumb(meta.thumb, '');
+  const title = meta.type === 'episode' && meta.grandparentTitle ? (meta.grandparentTitle + ' — ' + meta.title) : meta.title;
+  const category = meta.type === 'movie' ? 'Plex Movie' : 'Plex TV';
+  const existing = items.find(m => m.plexMeta && m.plexMeta.ratingKey === meta.ratingKey && normalizePlexServer(m.plexMeta.server) === normalizePlexServer(cfg.server));
+  if (existing) { toast('Already in PlexStr'); return; }
+  items.push({
+    id: gid(),
+    title,
+    url: playback,
+    category,
+    icon: thumb,
+    epgLink: '',
+    epgTitle: '',
+    region: 'Plex',
+    tags: [],
+    baseName: extractBase(title),
+    added: Date.now(),
+    sourceKind: 'plex',
+    plexMeta: { ratingKey: meta.ratingKey, type: meta.type, title: meta.title, thumb: meta.thumb || '', server: cfg.server, token: cfg.token }
+  });
+  saveItems();
+  renderLibModes();
+  renderCats();
+  renderLib();
+  toast('Added to PlexStr: ' + title);
+}
+function renderLibExtra() {
+  const extra = $('lib-extra');
+  if (activeLibPage !== 'plex') { extra.innerHTML = ''; return; }
+  const cfg = getPlexCfg();
+  const sectionOptions = '<option value="">All libraries</option>' + (cfg.sections || []).map(s => `<option value="${esc(s.key)}"${String(cfg.section||'')===String(s.key)?' selected':''}>${esc(s.title)}${s.type ? ' · ' + esc(s.type) : ''}</option>`).join('');
+  const saved = items.filter(isPlexItem).length;
+  extra.innerHTML = `<div class="px-card"><div class="px-head"><div><div class="px-title">PlexStr</div><div class="px-sub">Connect your Plex server, search your library, and add titles directly into StreamVault.</div></div><span class="cnt">${saved}</span></div><div class="px-grid"><input id="plex-server" class="full" placeholder="http://192.168.1.10:32400" value="${esc(cfg.server || '')}"><input id="plex-token" class="full" placeholder="X-Plex-Token" value="${esc(cfg.token || '')}"><select id="plex-section">${sectionOptions}</select><input id="plex-query" placeholder="Search Plex library…"></div><div class="px-actions"><button class="bc" id="plex-connect">Connect</button><button class="bs" id="plex-search-btn">Search</button></div><div id="plex-status" class="px-sub" style="margin-top:8px">${cfg.sections && cfg.sections.length ? ('Connected · ' + cfg.sections.length + ' libraries') : 'Not connected yet'}</div><div class="px-results" id="plex-results"></div></div>`;
+  $('plex-server').onchange = e => { cfg.server = normalizePlexServer(e.target.value); saveSettings(); };
+  $('plex-token').onchange = e => { cfg.token = String(e.target.value || '').trim(); saveSettings(); };
+  $('plex-section').onchange = e => { cfg.section = e.target.value; saveSettings(); };
+  $('plex-connect').onclick = async () => {
+    cfg.server = normalizePlexServer($('plex-server').value);
+    cfg.token = String($('plex-token').value || '').trim();
+    saveSettings();
+    try {
+      const sections = await plexConnect(true);
+      renderLibExtra();
+      $('plex-status').textContent = 'Connected · ' + sections.length + ' libraries';
+      toast('Plex connected');
+    } catch (e) {
+      $('plex-status').textContent = 'Connection failed · ' + e.message;
+      toast('Plex connect failed: ' + e.message);
+    }
+  };
+  const runSearch = async () => {
+    cfg.server = normalizePlexServer($('plex-server').value);
+    cfg.token = String($('plex-token').value || '').trim();
+    cfg.section = $('plex-section').value || '';
+    saveSettings();
+    const q = $('plex-query').value.trim();
+    if (!q) { toast('Enter a Plex search'); return; }
+    $('plex-results').innerHTML = '<div class="px-sub">Searching Plex…</div>';
+    try {
+      const results = await plexSearch(q);
+      if (!results.length) { $('plex-results').innerHTML = '<div class="px-sub">No results found.</div>'; return; }
+      $('plex-results').innerHTML = results.map(r => {
+        const thumb = plexThumb(r.thumb, '');
+        const meta = [r.type || 'item', r.year || '', r.parentTitle || '', r.summary ? r.summary.slice(0,70) : ''].filter(Boolean).join(' · ');
+        return `<div class="px-row"><div class="px-thumb">${thumb ? '<img src="' + esc(thumb) + '">' : ''}</div><div class="px-info"><div class="nm">${esc(r.type==='episode' && r.grandparentTitle ? (r.grandparentTitle + ' — ' + r.title) : r.title)}</div><div class="mt">${esc(meta)}</div></div><button data-rating="${esc(r.ratingKey)}">Add</button></div>`;
+      }).join('');
+      Array.from($('plex-results').querySelectorAll('button[data-rating]')).forEach((btn, idx) => btn.onclick = () => addPlexItem(results[idx]));
+    } catch (e) {
+      $('plex-results').innerHTML = '<div class="px-sub">Search failed · ' + esc(e.message) + '</div>';
+      toast('Plex search failed: ' + e.message);
+    }
+  };
+  $('plex-search-btn').onclick = runSearch;
+  $('plex-query').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); } };
+}
 // ─── Library Rendering ───
+
 function getCats() {
   const cats = new Set();
-  items.forEach(m => { if (m.category) cats.add(m.category); });
+  getItemsForLibPage().forEach(m => { if (m.category) cats.add(m.category); });
   return ['All', ...Array.from(cats).sort()];
 }
 
 function getFilteredItems() {
   const q = $('lib-q').value.toLowerCase().trim();
-  let filtered = items.filter(m => {
+  let filtered = getItemsForLibPage().filter(m => {
     const matchCat = activeCat === 'All' || m.category === activeCat;
-    const matchQ = !q || m.title.toLowerCase().includes(q) || (m.epgTitle && m.epgTitle.toLowerCase().includes(q));
+    const matchQ = !q || m.title.toLowerCase().includes(q) || (m.epgTitle && m.epgTitle.toLowerCase().includes(q)) || (m.sourceKind === 'plex' && m.region && m.region.toLowerCase().includes(q));
     return matchCat && matchQ;
   });
   return localitySort(filtered);
@@ -1054,6 +1293,7 @@ function getFilteredItems() {
 
 function renderCats() {
   const cats = getCats();
+  $('lib-pls').style.display = activeLibPage === 'plex' ? 'none' : 'flex';
   $('lib-pls').innerHTML = cats.length <= 1 ? '' : cats.map(c =>
     `<div class="pl${c === activeCat ? ' on' : ''}" data-c="${esc(c)}">${esc(c)}</div>`
   ).join('');
@@ -1063,9 +1303,13 @@ function renderCats() {
 }
 
 function renderLib() {
+  renderLibModes();
+  renderLibExtra();
   const f = getFilteredItems();
+  const emptyTitle = activeLibPage === 'itv' ? 'No ITV streams' : activeLibPage === 'icam' ? 'No iCam streams' : activeLibPage === 'plex' ? 'No PlexStr items' : 'No streams';
+  const emptyBody = activeLibPage === 'plex' ? 'Use the PlexStr panel above to connect, search, and add titles from Plex.' : 'Tap + to add, import from the ↓ button, or browse Repos tab';
   if (!f.length) {
-    $('lib-lst').innerHTML = '<div class="emp"><h3>No streams</h3><p>Tap + to add, or import from the ↓ button, or browse Repos tab</p></div>';
+    $('lib-lst').innerHTML = '<div class="emp"><h3>' + emptyTitle + '</h3><p>' + emptyBody + '</p></div>';
     return;
   }
   $('lib-lst').innerHTML = f.map((m, i) => {
@@ -1075,7 +1319,8 @@ function renderLib() {
 
     const catBadge = m.category ? `<span class="tg2" style="background:var(--acs);color:var(--ac)">${esc(m.category)}</span>` : '';
     const regBadge = m.region ? `<span class="tg2" style="background:rgba(46,213,115,.12);color:var(--gn)">${esc(m.region)}</span>` : '';
-    const srcBadge = m.url ? `<span class="tg2" style="background:rgba(108,92,231,.12);color:#8f7bff">${esc(getSourceType(m.url))}</span>` : '';
+    const srcLabel = isPlexItem(m) ? 'PlexStr' : getSourceType(m.url);
+    const srcBadge = m.url || isPlexItem(m) ? `<span class="tg2" style="background:rgba(108,92,231,.12);color:#8f7bff">${esc(srcLabel)}</span>` : '';
     const alts = getAltCount(m);
     const altBadge = alts > 0 ? `<span class="tg2" style="background:rgba(255,165,2,.12);color:var(--or)">${alts}alt</span>` : '';
 
@@ -1083,6 +1328,8 @@ function renderLib() {
     if (m.epgTitle) {
       const nn = getNowNext(m.epgTitle);
       if (nn.now) epgNow = `<div class="en">▶ ${esc(nn.now.title)}</div>`;
+    } else if (isPlexItem(m)) {
+      epgNow = `<div class="en">▶ Plex library item</div>`;
     }
 
     return `<div class="itm" style="animation-delay:${i * 0.01}s" onclick="playItem('${m.id}')">
@@ -1101,9 +1348,20 @@ function renderLib() {
 }
 
 $('lib-q').addEventListener('input', renderLib);
+$('lib-search-tog').onclick = () => {
+  libSearchOpen = !libSearchOpen;
+  if (!libSearchOpen) $('lib-q').value = '';
+  updateSearchToggleUi();
+  renderLib();
+  if (libSearchOpen) setTimeout(() => $('lib-q').focus(), 40);
+};
+updateSearchToggleUi();
+
 
 // ─── Add / Edit Stream ───
 $('fab-add').onclick = () => {
+  if (activeLibPage === 'plex') activeLibPage = 'library';
+
   editId = null;
   $('mo-ed-t').textContent = 'Add Stream';
   $('in-name').value = '';
@@ -2168,6 +2426,17 @@ window.playItem = (id) => {
     if (idx === -1) return;
     curIdx = idx;
     const m = items[idx];
+    if (isPlexItem(m)) {
+      const cfg = getPlexCfg();
+      if (m.plexMeta) {
+        if (cfg.server && cfg.token) {
+          m.plexMeta.server = normalizePlexServer(cfg.server);
+          m.plexMeta.token = cfg.token;
+        }
+        m.url = buildPlexPlaybackUrl(m.plexMeta) || m.url;
+        if (m.plexMeta.thumb && !m.icon) m.icon = plexThumb(m.plexMeta.thumb, '');
+      }
+    }
 
     // Build failover list
     const failoverList = buildFailoverList(m);
@@ -2313,6 +2582,7 @@ loadItems();
 loadRepos();
 loadEpg();
 loadSettings();
+ensureActiveLibPage();
 renderCats();
 renderLib();
 renderRepos();
