@@ -247,6 +247,11 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
   <div class="ss"><h3>Failover</h3>
     <div class="sr"><div><div class="sl">Buffer timeout (sec)</div><div class="sd">Switch source after buffering this long</div></div><input type="number" id="s-fo-t" value="15" min="5" max="60" style="width:60px"></div>
     <div class="sr"><div><div class="sl">Auto-failover</div><div class="sd">Try alternative streams on failure</div></div><div class="tgl on" id="s-fo-auto"></div></div>
+    <div class="sr"><div><div class="sl">Startup alt refresh</div><div class="sd">Re-scan library and repos in background when the app opens</div></div><div class="tgl on" id="s-alt-auto"></div></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+      <button class="bc" id="s-alt-check" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Refresh Alternatives Now</button>
+      <input id="s-alt-status" placeholder="Not checked yet" style="max-width:180px;font-size:9px" readonly>
+    </div>
   </div>
   <div class="ss"><h3>Recording</h3>
     <div class="sr"><div><div class="sl">Save location</div><div class="sd">Folder for recorded files</div></div><input id="s-save-path" placeholder="Downloads/" style="max-width:180px;font-size:9px" readonly></div>
@@ -288,7 +293,7 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
     </div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.3.2 (Build 23)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.3.6 (Build 27)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
   </div>
 </div>
 
@@ -427,7 +432,7 @@ http://stream.example.com/cnn
   <div class="iz" id="epg-iz" style="margin-bottom:10px">
     <p>Choose local XMLTV file</p>
     <div class="hn">.xml or .xml.gz</div>
-    <input type="file" id="epg-f" accept="*/*">
+    <input type="file" id="epg-f" accept=".xml,.gz,.xml.gz,text/xml,application/xml,application/gzip">
   </div>
   <label>Name</label>
   <input id="epg-nm" placeholder="My EPG">
@@ -467,7 +472,7 @@ http://stream.example.com/cnn
 "use strict";
 
 // ─── Constants & State ───
-const VERSION = '4.1.0', BUILD = 11;
+const VERSION = '4.3.6', BUILD = 27;
 const KEYS = { items: 'sv_items_v3', repos: 'sv_repos_v2', epgSrc: 'sv_epg_src', epgData: 'sv_epg_data', settings: 'sv_settings_v2' };
 const TAG_PRI = ['', 'F', 'H', 'A', 'S'];
 
@@ -475,7 +480,7 @@ let items = [];
 let repos = [];
 let epgSrc = [];
 let epgData = { channels: {}, programs: {} };
-let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [] };
+let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [] };
 
 let editId = null;
 let delId = null;
@@ -661,6 +666,7 @@ function restoreBackupPayload(data) {
     m.baseName = m.baseName || extractBase(m.title || m.name || '');
   });
   saveItems(); saveRepos(); saveEpg(); saveSettings();
+  refreshAltCache(true);
   renderCats(); renderLib(); renderRepos(); renderSettings(); renderEpgList(); renderGuide();
 }
 
@@ -807,6 +813,28 @@ function buildFailoverList(item) {
     });
   });
   return result;
+}
+
+function getAltCount(item) {
+  const live = Math.max(0, buildFailoverList(item).length - 1);
+  const cached = settings.altCache && typeof settings.altCache[item.id] === 'number' ? settings.altCache[item.id] : null;
+  return live || cached || 0;
+}
+function refreshAltCache(silent) {
+  const cache = {};
+  items.forEach(m => { cache[m.id] = Math.max(0, buildFailoverList(m).length - 1); });
+  settings.altCache = cache;
+  settings.altLastCheck = Date.now();
+  saveSettings();
+  renderLib();
+  renderSettings();
+  if (!silent) toast('Alternative scan complete');
+}
+function queueStartupAltCheck() {
+  if (settings.autoAltCheck === false) return;
+  setTimeout(() => {
+    try { refreshAltCache(true); } catch (e) { console.error('alt refresh failed', e); }
+  }, 700);
 }
 
 // ─── EPG ───
@@ -989,7 +1017,7 @@ function renderLib() {
 
     const catBadge = m.category ? `<span class="tg2" style="background:var(--acs);color:var(--ac)">${esc(m.category)}</span>` : '';
     const regBadge = m.region ? `<span class="tg2" style="background:rgba(46,213,115,.12);color:var(--gn)">${esc(m.region)}</span>` : '';
-    const alts = buildFailoverList(m).length - 1;
+    const alts = getAltCount(m);
     const altBadge = alts > 0 ? `<span class="tg2" style="background:rgba(255,165,2,.12);color:var(--or)">${alts}alt</span>` : '';
 
     let epgNow = '';
@@ -1191,6 +1219,7 @@ $('ed-ok').onclick = async () => {
     toast('Added');
   }
   saveItems();
+  refreshAltCache(true);
   if (typedEpgUrl) {
     fillEpgSourceSelect(typedEpgUrl);
     renderEpgList();
@@ -1207,8 +1236,8 @@ $('ed-ok').onclick = async () => {
 window.confirmDel = (id, type) => { delId = id; delType = type; $('cod').classList.add('on'); };
 $('co-no').onclick = () => $('cod').classList.remove('on');
 $('co-yes').onclick = () => {
-  if (delType === 'item') { items = items.filter(m => m.id !== delId); saveItems(); renderCats(); renderLib(); }
-  else if (delType === 'repo') { repos = repos.filter(r => r.id !== delId); saveRepos(); renderRepos(); }
+  if (delType === 'item') { items = items.filter(m => m.id !== delId); saveItems(); refreshAltCache(true); renderCats(); renderLib(); }
+  else if (delType === 'repo') { repos = repos.filter(r => r.id !== delId); saveRepos(); refreshAltCache(true); renderRepos(); }
   $('cod').classList.remove('on');
   toast('Deleted');
 };
@@ -1356,6 +1385,7 @@ $('fab-repo').onclick = () => {
 $('rp-no').onclick = () => $('mo-repo').classList.remove('on');
 $('mo-repo').onclick = e => { if (e.target === $('mo-repo')) $('mo-repo').classList.remove('on'); };
 $('rp-iz').onclick = () => $('rp-f').click();
+$('epg-iz').onclick = () => $('epg-f').click();
 
 // Fetch M3U from URL
 $('rp-fetch').onclick = async () => {
@@ -1449,6 +1479,7 @@ window.refreshRepo = async (id) => {
     repo.streams = streams;
     repo.lastRefresh = Date.now();
     saveRepos();
+    refreshAltCache(true);
     renderRepos();
     refreshGuideOnly(repo.name + ': guide refreshed from updated library');
   } catch(e) {
@@ -1805,6 +1836,22 @@ function renderSettings() {
   const tgl = $('s-fo-auto');
   tgl.className = 'tgl' + (settings.foAuto !== false ? ' on' : '');
   tgl.onclick = () => { settings.foAuto = !settings.foAuto; tgl.className = 'tgl' + (settings.foAuto ? ' on' : ''); saveSettings(); };
+
+  const altTgl = $('s-alt-auto');
+  if (altTgl) {
+    altTgl.className = 'tgl' + (settings.autoAltCheck !== false ? ' on' : '');
+    altTgl.onclick = () => {
+      settings.autoAltCheck = !settings.autoAltCheck;
+      altTgl.className = 'tgl' + (settings.autoAltCheck ? ' on' : '');
+      saveSettings();
+    };
+  }
+  const altStatus = $('s-alt-status');
+  if (altStatus) {
+    altStatus.value = settings.altLastCheck ? ('Last scan: ' + new Date(settings.altLastCheck).toLocaleString()) : 'Not checked yet';
+  }
+  const altBtn = $('s-alt-check');
+  if (altBtn) altBtn.onclick = () => refreshAltCache(false);
 
   // Save path
   $('s-save-path').value = getDisplayDir('recording');
@@ -2177,6 +2224,7 @@ loadSettings();
 renderCats();
 renderLib();
 renderRepos();
+queueStartupAltCheck();
 
 // Auto-fetch EPG if stale (older than 1 hour)
 if (epgSrc.length) {
