@@ -293,7 +293,7 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
     </div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.3.6 (Build 27)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.3.7 (Build 28)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
   </div>
 </div>
 
@@ -344,7 +344,11 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
   <label>Title *</label>
   <input id="in-name" placeholder="Stream name">
   <label>Stream URL *</label>
-  <textarea id="in-url" placeholder="https://stream-url.com/live/ch.m3u8"></textarea>
+  <textarea id="in-url" placeholder="https://stream-url.com/live/ch.m3u8&#10;Also supports rtsp://, ftp://, file://, content:// and webcam URLs"></textarea>
+  <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">
+    <button class="bc" id="in-url-pick" type="button" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Browse local file</button>
+    <div style="font-size:9px;color:var(--t3)">Use for device files, downloads, or locally saved streams</div>
+  </div>
   <div class="rw">
     <div><label>Category</label><input id="in-cat" placeholder="Movie, TV, News…"></div>
     <div><label>EPG ID</label>
@@ -472,7 +476,7 @@ http://stream.example.com/cnn
 "use strict";
 
 // ─── Constants & State ───
-const VERSION = '4.3.6', BUILD = 27;
+const VERSION = '4.3.7', BUILD = 28;
 const KEYS = { items: 'sv_items_v3', repos: 'sv_repos_v2', epgSrc: 'sv_epg_src', epgData: 'sv_epg_data', settings: 'sv_settings_v2' };
 const TAG_PRI = ['', 'F', 'H', 'A', 'S'];
 
@@ -711,7 +715,7 @@ function parseM3U(text) {
     } else if (line.startsWith('#')) {
       // Skip other directives
       continue;
-    } else if (line.match(/^https?:\/\//) || line.match(/^rtmp:\/\//)) {
+    } else if (line.match(/^(https?|rtmp|rtsp|rtsps|ftp|ftps|file|content|udp):\/\//i)) {
       // URL line
       if (cur) {
         cur.url = line;
@@ -752,6 +756,32 @@ function extractUrl(raw) {
     }
   } catch(e) {}
   return raw;
+}
+
+function getUrlScheme(raw) {
+  const v = String(raw || '').trim().toLowerCase();
+  const m = v.match(/^([a-z0-9+.-]+):/);
+  return m ? m[1] : '';
+}
+
+function isWebcamUrl(raw) {
+  const v = String(raw || '').trim().toLowerCase();
+  return /webcam|ipcam|ip-camera|mjpeg|snapshot|axis-cgi|video\.cgi/.test(v) || v.startsWith('rtsp://') || v.startsWith('rtsps://');
+}
+
+function getSourceType(raw) {
+  const scheme = getUrlScheme(raw);
+  if (scheme === 'content' || scheme === 'file') return 'Local';
+  if (scheme === 'ftp' || scheme === 'ftps') return 'FTP';
+  if (isWebcamUrl(raw)) return 'Webcam';
+  if (scheme === 'rtsp' || scheme === 'rtsps') return 'RTSP';
+  if (scheme === 'http' || scheme === 'https') return 'Web';
+  return scheme ? scheme.toUpperCase() : 'URL';
+}
+
+function getEpgLocalityScore(id) {
+  const ch = (epgData.channels && epgData.channels[id]) || {};
+  return localityScore({ title: ch.name || id, category: '', region: '' });
 }
 
 // ─── Locality Scoring ───
@@ -820,20 +850,48 @@ function getAltCount(item) {
   const cached = settings.altCache && typeof settings.altCache[item.id] === 'number' ? settings.altCache[item.id] : null;
   return live || cached || 0;
 }
-function refreshAltCache(silent) {
+async function ensureRepoStreamsLoaded(repo) {
+  if (!repo) return [];
+  if (repo.streams && repo.streams.length) return repo.streams;
+  if (!repo.sourceUrl) return repo.streams || [];
+  if (repo._loadingPromise) return repo._loadingPromise;
+  repo._loadingPromise = (async () => {
+    const resp = await fetch(repo.sourceUrl);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status + ' for ' + (repo.name || 'repo'));
+    const text = await resp.text();
+    repo.streams = parseM3U(text).filter(d => d.name && d.url);
+    repo.lastRefresh = Date.now();
+    saveRepos();
+    return repo.streams;
+  })();
+  try {
+    return await repo._loadingPromise;
+  } finally {
+    repo._loadingPromise = null;
+  }
+}
+
+async function refreshAltCache(silent) {
   const cache = {};
+  const repoErrors = [];
+  const needFetch = repos.filter(r => r && r.sourceUrl && (!r.streams || !r.streams.length));
+  if (!silent && needFetch.length) toast('Scanning full repos for alternatives…');
+  for (const r of needFetch) {
+    try { await ensureRepoStreamsLoaded(r); } catch (e) { repoErrors.push((r.name || 'Repo') + ': ' + e.message); }
+  }
   items.forEach(m => { cache[m.id] = Math.max(0, buildFailoverList(m).length - 1); });
   settings.altCache = cache;
   settings.altLastCheck = Date.now();
+  settings.altRepoScan = { checked: settings.altLastCheck, reposLoaded: needFetch.length, repoErrors };
   saveSettings();
   renderLib();
   renderSettings();
-  if (!silent) toast('Alternative scan complete');
+  if (!silent) toast(repoErrors.length ? ('Alternative scan done with ' + repoErrors.length + ' repo warning(s)') : 'Alternative scan complete');
 }
 function queueStartupAltCheck() {
   if (settings.autoAltCheck === false) return;
   setTimeout(() => {
-    try { refreshAltCache(true); } catch (e) { console.error('alt refresh failed', e); }
+    refreshAltCache(true).catch(e => console.error('alt refresh failed', e));
   }, 700);
 }
 
@@ -1017,6 +1075,7 @@ function renderLib() {
 
     const catBadge = m.category ? `<span class="tg2" style="background:var(--acs);color:var(--ac)">${esc(m.category)}</span>` : '';
     const regBadge = m.region ? `<span class="tg2" style="background:rgba(46,213,115,.12);color:var(--gn)">${esc(m.region)}</span>` : '';
+    const srcBadge = m.url ? `<span class="tg2" style="background:rgba(108,92,231,.12);color:#8f7bff">${esc(getSourceType(m.url))}</span>` : '';
     const alts = getAltCount(m);
     const altBadge = alts > 0 ? `<span class="tg2" style="background:rgba(255,165,2,.12);color:var(--or)">${alts}alt</span>` : '';
 
@@ -1030,7 +1089,7 @@ function renderLib() {
       <div class="th">${thumb}</div>
       <div class="nf">
         <div class="nm">${esc(m.title)}</div>
-        <div class="mt">${regBadge}${catBadge}${altBadge}</div>
+        <div class="mt">${regBadge}${catBadge}${srcBadge}${altBadge}</div>
         ${epgNow}
       </div>
       <div class="ab">
@@ -1073,6 +1132,17 @@ window.openEdit = (id) => {
   $('mo-ed').classList.add('on');
 };
 
+window.onNativeLocalStreamPicked = function(uri, label) {
+  $('in-url').value = uri || '';
+  if (label && !$('in-name').value.trim()) $('in-name').value = String(label).split('/').pop().replace(/\.[a-z0-9]+$/i, '');
+  toast('Local stream selected: ' + (label || uri || 'file'));
+};
+
+$('in-url-pick').onclick = () => {
+  if (window.NativePlayer && typeof window.NativePlayer.pickLocalStreamFile === 'function') window.NativePlayer.pickLocalStreamFile();
+  else toast('Local file browsing is available in the Android app build');
+};
+
 function populateEpgDropdown(selected) {
   const searchInput = $('in-epg-search');
   const hiddenVal = $('in-epg-val');
@@ -1100,6 +1170,12 @@ function populateEpgDropdown(selected) {
       const ch = epgData.channels[id];
       const name = ch ? ch.name.toLowerCase() : '';
       return name.includes(q) || id.toLowerCase().includes(q);
+    }).sort((a, b) => {
+      const la = getEpgLocalityScore(a), lb = getEpgLocalityScore(b);
+      if (la !== lb) return lb - la;
+      const an = ((epgData.channels[a] && epgData.channels[a].name) || a).toLowerCase();
+      const bn = ((epgData.channels[b] && epgData.channels[b].name) || b).toLowerCase();
+      return an.localeCompare(bn);
     }).slice(0, 150);
 
     let html = '';
@@ -1588,6 +1664,7 @@ function renderBrowse() {
     const thumb = s.icon
       ? `<img src="${esc(s.icon)}" onerror="this.style.display='none'" style="width:28px;height:28px;border-radius:5px;object-fit:cover">`
       : '';
+    const sourceBadge = `<span class="tg2" style="background:rgba(108,92,231,.12);color:#8f7bff">${esc(getSourceType(s.url))}</span>`;
     const regB = s.region ? '<span style="background:rgba(46,213,115,.12);color:var(--gn);padding:0 3px;border-radius:2px;font-size:7px;font-weight:600;margin-right:2px">' + esc(s.region) + '</span>' : '';
     const catB = s.category ? '<span style="background:var(--acs);color:var(--ac);padding:0 3px;border-radius:2px;font-size:7px;font-weight:600">' + esc(s.category) + '</span>' : '';
     const exMark = exists ? '<span style="color:var(--gn);font-size:7px;margin-left:3px">✓</span>' : '';
@@ -1595,7 +1672,7 @@ function renderBrowse() {
     return `<div class="ri${sel ? ' sel' : ''}" data-url="${esc(key)}" onclick="toggleBrSel(this)">
       <div class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
       ${thumb ? '<div>' + thumb + '</div>' : ''}
-      <div class="rf"><div class="rn">${esc(s.name)}${exMark}</div><div class="rm">${regB}${catB}</div></div>
+      <div class="rf"><div class="rn">${esc(s.name)}${exMark}</div><div class="rm">${regB}${catB}${sourceBadge}</div></div>
     </div>`;
   }).join('');
 }
@@ -1661,6 +1738,7 @@ $('sl-add').onclick = () => {
   renderBrowse();
   renderCats();
   renderLib();
+  refreshAltCache(true);
   toast('Added ' + added + (skipped ? ' · ' + skipped + ' dupes' : ''));
 };
 
@@ -1720,7 +1798,7 @@ function renderEpgList() {
 // ═══ GUIDE ═══
 function renderGuide() {
   const wrap = $('gw');
-  const matched = items.filter(m => m.epgTitle && epgData.programs && epgData.programs[m.epgTitle]).slice(0, 80);
+  const matched = localitySort(items.filter(m => m.epgTitle && epgData.programs && epgData.programs[m.epgTitle])).slice(0, 80);
 
   if (!matched.length) {
     wrap.innerHTML = `<div class="emp" style="height:100%"><h3>No guide data</h3><p>${!epgSrc.length ? 'Add an EPG source via the ⚙ button' : 'Tap refresh or set EPG IDs on your streams'}</p></div>`;
@@ -1848,7 +1926,7 @@ function renderSettings() {
   }
   const altStatus = $('s-alt-status');
   if (altStatus) {
-    altStatus.value = settings.altLastCheck ? ('Last scan: ' + new Date(settings.altLastCheck).toLocaleString()) : 'Not checked yet';
+    altStatus.value = settings.altLastCheck ? ('Last scan: ' + new Date(settings.altLastCheck).toLocaleString() + ((settings.altRepoScan && settings.altRepoScan.reposLoaded) ? (' · full repos ' + settings.altRepoScan.reposLoaded) : '')) : 'Not checked yet';
   }
   const altBtn = $('s-alt-check');
   if (altBtn) altBtn.onclick = () => refreshAltCache(false);
@@ -2121,8 +2199,22 @@ window.playItem = (id) => {
     destroyPlayer();
 
     const url = extractUrl(m.url);
+    const scheme = getUrlScheme(url);
 
-    if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+    if ((scheme === 'content' || scheme === 'file') && window.HTMLVideoElement) {
+      const video = document.createElement('video');
+      video.setAttribute('playsinline', '');
+      video.setAttribute('autoplay', '');
+      video.controls = true;
+      video.style.cssText = 'width:100%;height:100%;background:#000';
+      video.src = url;
+      $('pc').appendChild(video);
+      $('ld2').style.display = 'none';
+      video.play().catch(() => {});
+    } else if ((scheme === 'rtsp' || scheme === 'rtsps' || scheme === 'ftp' || scheme === 'ftps') && !(window.NativePlayer && typeof window.NativePlayer.isAvailable === 'function' && window.NativePlayer.isAvailable())) {
+      $('pc').innerHTML = '<div style="padding:18px;color:var(--t2);font-size:10px;line-height:1.5">This source type (' + esc(getSourceType(url)) + ') is supported in the Android app build. Open this stream there for native playback.</div>';
+      $('ld2').style.display = 'none';
+    } else if (typeof Hls !== 'undefined' && Hls.isSupported()) {
       const video = document.createElement('video');
       video.setAttribute('playsinline', '');
       video.setAttribute('autoplay', '');

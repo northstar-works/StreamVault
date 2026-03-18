@@ -38,6 +38,7 @@ import androidx.media3.datasource.DataSource;
 import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.hls.HlsMediaSource;
+import androidx.media3.exoplayer.rtsp.RtspMediaSource;
 import androidx.media3.exoplayer.source.MediaSource;
 import androidx.media3.exoplayer.source.ProgressiveMediaSource;
 import androidx.media3.ui.PlayerView;
@@ -183,6 +184,19 @@ public class PlayerActivity extends Activity {
                 variants.add(new Variant(url, title != null ? title : "Stream", "", ""));
             }
         }
+    }
+
+    private String getScheme(String raw) {
+        if (raw == null) return "";
+        int idx = raw.indexOf(':');
+        if (idx <= 0) return "";
+        return raw.substring(0, idx).toLowerCase(Locale.US);
+    }
+
+    private boolean isLikelyHls(String raw) {
+        if (raw == null) return false;
+        String v = raw.toLowerCase(Locale.US);
+        return v.contains(".m3u8") || v.contains("m3u_plus") || v.contains("type=m3u") || v.contains("output=m3u8");
     }
 
     // ─── UI ───
@@ -441,7 +455,7 @@ public class PlayerActivity extends Activity {
 
         // Create player
         DataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
-            .setUserAgent("StreamVault/4.1 ExoPlayer")
+            .setUserAgent("StreamVault/4.3.7 ExoPlayer")
             .setConnectTimeoutMs(12000)
             .setReadTimeoutMs(12000)
             .setAllowCrossProtocolRedirects(true);
@@ -450,12 +464,19 @@ public class PlayerActivity extends Activity {
         playerView.setPlayer(player);
         playbackStartTime = System.currentTimeMillis();
 
-        // Try HLS first (most IPTV is HLS)
-        MediaSource hlsSource = new HlsMediaSource.Factory(httpFactory)
-            .setAllowChunklessPreparation(true)
-            .createMediaSource(MediaItem.fromUri(Uri.parse(v.url)));
+        final String scheme = getScheme(v.url);
+        final boolean useRtsp = "rtsp".equals(scheme) || "rtsps".equals(scheme);
+        final boolean preferHls = !useRtsp && isLikelyHls(v.url);
+        final MediaSource primarySource = useRtsp
+            ? new RtspMediaSource.Factory().createMediaSource(MediaItem.fromUri(Uri.parse(v.url)))
+            : (preferHls
+                ? new HlsMediaSource.Factory(httpFactory)
+                    .setAllowChunklessPreparation(true)
+                    .createMediaSource(MediaItem.fromUri(Uri.parse(v.url)))
+                : new ProgressiveMediaSource.Factory(httpFactory)
+                    .createMediaSource(MediaItem.fromUri(Uri.parse(v.url))));
 
-        final boolean[] hlsFailed = {false};
+        final boolean[] primaryFailed = {false};
 
         player.addListener(new Player.Listener() {
             @Override
@@ -474,9 +495,8 @@ public class PlayerActivity extends Activity {
             @Override
             public void onPlayerError(PlaybackException error) {
                 cancelFailoverTimeout();
-                if (!hlsFailed[0]) {
-                    // HLS failed — retry as progressive
-                    hlsFailed[0] = true;
+                if (!primaryFailed[0] && preferHls) {
+                    primaryFailed[0] = true;
                     try {
                         player.stop();
                         MediaSource progressive = new ProgressiveMediaSource.Factory(httpFactory)
@@ -489,7 +509,7 @@ public class PlayerActivity extends Activity {
                     }
                     return;
                 }
-                // Both HLS and progressive failed
+                // Primary playback failed
                 if (!locked && foAuto && networkAvailable) {
                     tryNextVariant();
                 } else if (!networkAvailable) {
@@ -501,7 +521,7 @@ public class PlayerActivity extends Activity {
             }
         });
 
-        player.setMediaSource(hlsSource);
+        player.setMediaSource(primarySource);
         player.setPlayWhenReady(true);
         player.prepare();
 

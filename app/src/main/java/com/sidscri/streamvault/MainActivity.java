@@ -40,6 +40,7 @@ import java.nio.charset.StandardCharsets;
 public class MainActivity extends Activity {
 
     private static final int FILE_CHOOSER_REQUEST = 1001;
+    private static final int LOCAL_STREAM_FILE_REQUEST = 1002;
     private static final int RECORDING_DIR_REQUEST = 1003;
     private static final int BACKUP_DIR_REQUEST = 1004;
     private WebView webView;
@@ -216,6 +217,12 @@ public class MainActivity extends Activity {
             });
         }
 
+
+        @JavascriptInterface
+        public void pickLocalStreamFile() {
+            runOnUiThread(() -> openLocalFilePicker());
+        }
+
         @JavascriptInterface
         public void pickRecordingDirectory() {
             runOnUiThread(() -> openDirectoryPicker(RECORDING_DIR_REQUEST));
@@ -229,6 +236,21 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void exportBackup(String backupJson, String filename, String targetDir) {
             runOnUiThread(() -> exportBackupToStorage(backupJson, filename, targetDir));
+        }
+    }
+
+    private void openLocalFilePicker() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("*/*");
+            intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{
+                "video/*", "audio/*", "application/x-mpegURL", "application/vnd.apple.mpegurl", "application/octet-stream"
+            });
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            startActivityForResult(Intent.createChooser(intent, "Choose local stream or media file"), LOCAL_STREAM_FILE_REQUEST);
+        } catch (Exception e) {
+            toastNative("File picker unavailable: " + e.getMessage());
         }
     }
 
@@ -349,6 +371,20 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == LOCAL_STREAM_FILE_REQUEST) {
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+                Uri uri = data.getData();
+                try {
+                    final int takeFlags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                    getContentResolver().takePersistableUriPermission(uri, takeFlags | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                } catch (Exception ignored) {}
+                String label = uri.getLastPathSegment() != null ? uri.getLastPathSegment() : uri.toString();
+                webView.evaluateJavascript(
+                    "window.onNativeLocalStreamPicked && window.onNativeLocalStreamPicked(" + quoteJs(uri.toString()) + "," + quoteJs(label) + ");", null);
+            }
+            return;
+        }
+
         if (requestCode == FILE_CHOOSER_REQUEST && fileUploadCallback != null) {
             Uri[] results = null;
             if (resultCode == RESULT_OK && data != null) {
