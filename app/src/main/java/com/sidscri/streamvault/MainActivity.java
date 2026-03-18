@@ -3,6 +3,8 @@ package com.sidscri.streamvault;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
@@ -10,6 +12,8 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.provider.MediaStore;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -22,10 +26,22 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import android.widget.Toast;
+
+import androidx.documentfile.provider.DocumentFile;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
+
+import org.json.JSONObject;
+import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends Activity {
 
     private static final int FILE_CHOOSER_REQUEST = 1001;
+    private static final int RECORDING_DIR_REQUEST = 1003;
+    private static final int BACKUP_DIR_REQUEST = 1004;
     private WebView webView;
     private FrameLayout fullscreenContainer;
     private View customView;
@@ -46,7 +62,6 @@ public class MainActivity extends Activity {
             getWindow().setNavigationBarColor(Color.parseColor("#0a0a0f"));
         }
 
-        // Storage permission for recording (Android 9 and below)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
             Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
@@ -90,7 +105,6 @@ public class MainActivity extends Activity {
         ws.setDatabaseEnabled(true);
         ws.setJavaScriptCanOpenWindowsAutomatically(true);
         ws.setUserAgentString(ws.getUserAgentString() + " StreamVault/4.1");
-        // Allow cross-origin fetch for EPG XML files
         ws.setAllowUniversalAccessFromFileURLs(true);
 
         CookieManager cm = CookieManager.getInstance();
@@ -99,7 +113,6 @@ public class MainActivity extends Activity {
             cm.setAcceptThirdPartyCookies(webView, true);
         }
 
-        // JavaScript → Native bridge
         webView.addJavascriptInterface(new NativeBridge(), "NativePlayer");
 
         webView.setWebViewClient(new WebViewClient() {
@@ -112,8 +125,6 @@ public class MainActivity extends Activity {
         });
 
         webView.setWebChromeClient(new WebChromeClient() {
-            // File chooser — ALWAYS use custom intent to avoid Android
-            // greying out .m3u files due to unknown MIME type
             @Override
             public boolean onShowFileChooser(WebView webView,
                 ValueCallback<Uri[]> filePathCallback,
@@ -125,12 +136,9 @@ public class MainActivity extends Activity {
                 fileUploadCallback = filePathCallback;
 
                 try {
-                    // Don't use fileChooserParams.createIntent() — it filters
-                    // by MIME type and greys out .m3u files on many devices
                     Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
                     intent.setType("*/*");
                     intent.addCategory(Intent.CATEGORY_OPENABLE);
-                    // Also try ACTION_OPEN_DOCUMENT as fallback
                     Intent chooser = Intent.createChooser(intent, "Choose file");
                     startActivityForResult(chooser, FILE_CHOOSER_REQUEST);
                 } catch (Exception e) {
@@ -140,7 +148,6 @@ public class MainActivity extends Activity {
                 return true;
             }
 
-            // Fullscreen video
             @Override
             public void onShowCustomView(View view, CustomViewCallback callback) {
                 if (customView != null) {
@@ -173,21 +180,12 @@ public class MainActivity extends Activity {
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
     }
 
-    /**
-     * JavaScript bridge. IMPORTANT: No method overloading!
-     * Android WebView does NOT support overloaded @JavascriptInterface methods.
-     */
     public class NativeBridge {
-
         @JavascriptInterface
         public boolean isAvailable() {
             return true;
         }
 
-        /**
-         * Single entry point for playback. ALL parameters are Strings
-         * to avoid WebView type conversion issues.
-         */
         @JavascriptInterface
         public void playStream(String failoverJson, String title,
             String category, String nowNext,
@@ -217,6 +215,135 @@ public class MainActivity extends Activity {
                 startActivity(intent);
             });
         }
+
+        @JavascriptInterface
+        public void pickRecordingDirectory() {
+            runOnUiThread(() -> openDirectoryPicker(RECORDING_DIR_REQUEST));
+        }
+
+        @JavascriptInterface
+        public void pickBackupDirectory() {
+            runOnUiThread(() -> openDirectoryPicker(BACKUP_DIR_REQUEST));
+        }
+
+        @JavascriptInterface
+        public void exportBackup(String backupJson, String filename, String targetDir) {
+            runOnUiThread(() -> exportBackupToStorage(backupJson, filename, targetDir));
+        }
+    }
+
+    private void openDirectoryPicker(int requestCode) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+                | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+            startActivityForResult(intent, requestCode);
+        } catch (Exception e) {
+            toastNative("Folder picker unavailable: " + e.getMessage());
+        }
+    }
+
+    private void exportBackupToStorage(String backupJson, String filename, String targetDir) {
+        String safeFilename = (filename != null && !filename.trim().isEmpty())
+            ? filename.trim() : ("streamvault-backup-" + System.currentTimeMillis() + ".json");
+
+        try {
+            String savedPath;
+            if (targetDir != null && targetDir.startsWith("content://")) {
+                Uri treeUri = Uri.parse(targetDir);
+                final int takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+                try { getContentResolver().takePersistableUriPermission(treeUri, takeFlags); } catch (Exception ignored) {}
+                DocumentFile tree = DocumentFile.fromTreeUri(this, treeUri);
+                if (tree == null || (!tree.exists() && !tree.canWrite())) {
+                    throw new IllegalStateException("Selected backup folder is not available");
+                }
+                DocumentFile existing = tree.findFile(safeFilename);
+                if (existing != null) existing.delete();
+                DocumentFile out = tree.createFile("application/json", safeFilename);
+                if (out == null) throw new IllegalStateException("Could not create backup file");
+                try (OutputStream os = getContentResolver().openOutputStream(out.getUri(), "w")) {
+                    if (os == null) throw new IllegalStateException("Could not open backup file");
+                    os.write(backupJson.getBytes(StandardCharsets.UTF_8));
+                }
+                savedPath = describeTreeUri(treeUri) + "/" + safeFilename;
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ContentValues values = new ContentValues();
+                values.put(MediaStore.Downloads.DISPLAY_NAME, safeFilename);
+                values.put(MediaStore.Downloads.MIME_TYPE, "application/json");
+                values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/StreamVault");
+                values.put(MediaStore.Downloads.IS_PENDING, 1);
+                ContentResolver resolver = getContentResolver();
+                Uri uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                if (uri == null) throw new IllegalStateException("Could not create backup in Downloads");
+                try (OutputStream os = resolver.openOutputStream(uri, "w")) {
+                    if (os == null) throw new IllegalStateException("Could not open backup output stream");
+                    os.write(backupJson.getBytes(StandardCharsets.UTF_8));
+                }
+                values.clear();
+                values.put(MediaStore.Downloads.IS_PENDING, 0);
+                resolver.update(uri, values, null, null);
+                savedPath = "Downloads/StreamVault/" + safeFilename;
+            } else {
+                File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "StreamVault");
+                if (!dir.exists() && !dir.mkdirs()) {
+                    throw new IllegalStateException("Could not create Downloads/StreamVault");
+                }
+                File outFile = new File(dir, safeFilename);
+                try (FileOutputStream fos = new FileOutputStream(outFile)) {
+                    fos.write(backupJson.getBytes(StandardCharsets.UTF_8));
+                }
+                savedPath = outFile.getAbsolutePath();
+            }
+            notifyJsBackupSaved(savedPath);
+            toastNative("Backup saved to " + savedPath);
+        } catch (Exception e) {
+            notifyJsBackupError(e.getMessage() != null ? e.getMessage() : String.valueOf(e));
+            toastNative("Backup failed: " + e.getMessage());
+        }
+    }
+
+    private String describeTreeUri(Uri treeUri) {
+        try {
+            String docId = android.provider.DocumentsContract.getTreeDocumentId(treeUri);
+            if (docId == null || docId.isEmpty()) return "Selected folder";
+            int idx = docId.indexOf(':');
+            String vol = idx >= 0 ? docId.substring(0, idx) : docId;
+            String path = idx >= 0 ? docId.substring(idx + 1) : "";
+            String base;
+            if ("primary".equalsIgnoreCase(vol)) base = "Internal storage";
+            else base = vol;
+            return path.isEmpty() ? base : (base + "/" + path);
+        } catch (Exception e) {
+            return "Selected folder";
+        }
+    }
+
+    private void sendDirectoryPickedEvent(String kind, Uri uri) {
+        String label = describeTreeUri(uri);
+        String js = "window.onNativeDirectoryPicked && window.onNativeDirectoryPicked(" +
+            quoteJs(kind) + "," + quoteJs(uri.toString()) + "," + quoteJs(label) + ");";
+        webView.evaluateJavascript(js, null);
+    }
+
+    private void notifyJsBackupSaved(String savedPath) {
+        String js = "window.onNativeBackupSaved && window.onNativeBackupSaved(" + quoteJs(savedPath) + ");";
+        webView.evaluateJavascript(js, null);
+    }
+
+    private void notifyJsBackupError(String message) {
+        String js = "window.onNativeBackupError && window.onNativeBackupError(" + quoteJs(message) + ");";
+        webView.evaluateJavascript(js, null);
+    }
+
+    private String quoteJs(String value) {
+        if (value == null) return "null";
+        return JSONObject.quote(value);
+    }
+
+    private void toastNative(String msg) {
+        Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
     }
 
     @Override
@@ -232,6 +359,16 @@ public class MainActivity extends Activity {
             }
             fileUploadCallback.onReceiveValue(results);
             fileUploadCallback = null;
+            return;
+        }
+
+        if ((requestCode == RECORDING_DIR_REQUEST || requestCode == BACKUP_DIR_REQUEST)
+            && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            Uri uri = data.getData();
+            final int takeFlags = data.getFlags()
+                & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            try { getContentResolver().takePersistableUriPermission(uri, takeFlags); } catch (Exception ignored) {}
+            sendDirectoryPickedEvent(requestCode == RECORDING_DIR_REQUEST ? "recording" : "backup", uri);
         }
     }
 

@@ -28,6 +28,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.OptIn;
+import androidx.documentfile.provider.DocumentFile;
 import androidx.media3.common.Format;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
@@ -49,6 +50,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.text.SimpleDateFormat;
@@ -98,6 +100,16 @@ public class PlayerActivity extends Activity {
 
     private final List<Variant> variants = new ArrayList<>();
     private int currentIdx = 0;
+
+    static class RecordingTarget {
+        final OutputStream outputStream;
+        final String displayPath;
+
+        RecordingTarget(OutputStream outputStream, String displayPath) {
+            this.outputStream = outputStream;
+            this.displayPath = displayPath;
+        }
+    }
 
     static class Variant {
         final String url, title, region, tag;
@@ -634,18 +646,12 @@ public class PlayerActivity extends Activity {
         final String ts = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
 
         recordThread = new Thread(() -> {
-            FileOutputStream fos = null;
+            OutputStream fos = null;
+            String outDisplayPath = null;
             try {
-                // Determine save directory
-                File dir;
-                if (savePath != null && !savePath.isEmpty()) {
-                    dir = new File(savePath);
-                } else {
-                    dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                }
-                if (!dir.exists()) dir.mkdirs();
-                File outFile = new File(dir, "SV_" + safeName + "_" + ts + ".ts");
-                fos = new FileOutputStream(outFile);
+                RecordingTarget target = openRecordingTarget("SV_" + safeName + "_" + ts + ".ts");
+                fos = target.outputStream;
+                outDisplayPath = target.displayPath;
                 long totalBytes = 0;
 
                 // Probe the stream to determine if HLS or raw
@@ -674,7 +680,8 @@ public class PlayerActivity extends Activity {
                     probeIn.close();
                     fos.close();
                     final long finalBytes = totalBytes;
-                    handler.post(() -> showMsg("⏹ Saved: " + outFile.getName()
+                    final String savedPath = outDisplayPath;
+                    handler.post(() -> showMsg("⏹ Saved to: " + savedPath
                         + " (" + (finalBytes / 1024) + " KB)"));
                     return;
                 }
@@ -786,8 +793,8 @@ public class PlayerActivity extends Activity {
 
                 fos.close();
                 final long finalBytes = totalBytes;
-                final String fileName = outFile.getName();
-                handler.post(() -> showMsg("⏹ Saved: " + fileName
+                final String savedPath = outDisplayPath;
+                handler.post(() -> showMsg("⏹ Saved to: " + savedPath
                     + " (" + (finalBytes > 1048576
                         ? finalBytes / 1048576 + " MB"
                         : finalBytes / 1024 + " KB") + ")"));
@@ -818,6 +825,45 @@ public class PlayerActivity extends Activity {
             }
         }
         return base + relative;
+    }
+
+    private RecordingTarget openRecordingTarget(String filename) throws Exception {
+        if (savePath != null && savePath.startsWith("content://")) {
+            Uri treeUri = Uri.parse(savePath);
+            DocumentFile tree = DocumentFile.fromTreeUri(this, treeUri);
+            if (tree == null) throw new IllegalStateException("Selected recording folder is not available");
+            DocumentFile out = tree.createFile("video/mp2t", filename);
+            if (out == null) throw new IllegalStateException("Could not create recording file");
+            OutputStream os = getContentResolver().openOutputStream(out.getUri(), "w");
+            if (os == null) throw new IllegalStateException("Could not open recording file");
+            return new RecordingTarget(os, describeTreeUri(treeUri) + "/" + filename);
+        }
+
+        File dir;
+        if (savePath != null && !savePath.isEmpty()) {
+            dir = new File(savePath);
+        } else {
+            dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+        }
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw new IllegalStateException("Could not create recording folder");
+        }
+        File outFile = new File(dir, filename);
+        return new RecordingTarget(new FileOutputStream(outFile), outFile.getAbsolutePath());
+    }
+
+    private String describeTreeUri(Uri treeUri) {
+        try {
+            String docId = android.provider.DocumentsContract.getTreeDocumentId(treeUri);
+            if (docId == null || docId.isEmpty()) return "Selected folder";
+            int idx = docId.indexOf(':');
+            String vol = idx >= 0 ? docId.substring(0, idx) : docId;
+            String path = idx >= 0 ? docId.substring(idx + 1) : "";
+            String base = "primary".equalsIgnoreCase(vol) ? "Internal storage" : vol;
+            return path.isEmpty() ? base : (base + "/" + path);
+        } catch (Exception e) {
+            return "Selected folder";
+        }
     }
 
     private void stopRecording() {
