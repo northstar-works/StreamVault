@@ -227,7 +227,7 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
 
 <!-- ═══ LIBRARY ═══ -->
 <div id="lib-scr" class="scr on">
-  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b29</span>
+  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b30</span>
     <button class="ib" id="btn-imp" title="Import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
     <button class="ib" id="btn-exp" title="Export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
   </div></div>
@@ -319,8 +319,21 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
       <input type="file" id="bk-imp" accept=".json,application/json" style="display:none">
     </div>
   </div>
+  <div class="ss"><h3>Plex / PlexStr</h3>
+    <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Step 1: connect to your Plex server here. After a successful test, use Add Plex Stream to open the PlexStr add page with library and title pickers.</p>
+    <div style="display:grid;gap:6px">
+      <input id="s-plex-server" placeholder="Plex server URL · http://192.168.1.10:32400" style="padding:7px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px">
+      <input id="s-plex-token" placeholder="Plex token" style="padding:7px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px">
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+      <button class="bc" id="s-plex-test" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Connect / Test</button>
+      <button class="bs" id="s-plex-open" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Add Plex Stream</button>
+      <button class="bc" id="s-plex-clear" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Clear Plex</button>
+    </div>
+    <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
+  </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.3.7 (Build 28)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.3.8 (Build 30)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
   </div>
 </div>
 
@@ -512,6 +525,7 @@ let repos = [];
 let epgSrc = [];
 let epgData = { channels: {}, programs: {} };
 let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [], plex: { server: '', token: '', section: '', sections: [] } };
+let plexAddMode = false;
 
 let editId = null;
 let delId = null;
@@ -1056,6 +1070,7 @@ function showTab(id) {
   $(id).classList.add('on');
   document.querySelectorAll('.ni').forEach(n => n.classList.toggle('on', n.dataset.t === id));
   $('bnav').style.display = (id === 'player-scr' || id === 'br-scr') ? 'none' : 'flex';
+  if (id !== 'lib-scr') plexAddMode = false;
   if (id === 'guide-scr') renderGuide();
   if (id === 'set-scr') renderSettings();
 }
@@ -1091,11 +1106,12 @@ function getLibPageDefs() {
   const defs = [{ id:'library', label:'Library', count:c.library }];
   if (c.itv) defs.push({ id:'itv', label:'ITV', count:c.itv });
   if (c.icam) defs.push({ id:'icam', label:'iCam', count:c.icam });
-  if (c.plex || (settings.plex && (settings.plex.server || settings.plex.token))) defs.push({ id:'plex', label:'PlexStr', count:c.plex });
+  if (c.plex) defs.push({ id:'plex', label:'PlexStr', count:c.plex });
   return defs;
 }
 function ensureActiveLibPage() {
   const defs = getLibPageDefs().map(x => x.id);
+  if (plexAddMode && activeLibPage === 'plex') return;
   if (!defs.includes(activeLibPage)) activeLibPage = 'library';
 }
 function getItemsForLibPage() {
@@ -1111,6 +1127,7 @@ function renderLibModes() {
   $('lib-modes').innerHTML = defs.map(d => `<button class="lmb${d.id===activeLibPage?' on':''}" data-lib-page="${d.id}">${d.label}<small>${d.count}</small></button>`).join('');
   $('lib-modes').querySelectorAll('.lmb').forEach(btn => btn.onclick = () => {
     activeLibPage = btn.dataset.libPage;
+    if (activeLibPage !== 'plex') plexAddMode = false;
     renderCats();
     renderLibModes();
     renderLibExtra();
@@ -1226,11 +1243,11 @@ function addPlexItem(meta) {
 }
 function renderLibExtra() {
   const extra = $('lib-extra');
-  if (activeLibPage !== 'plex') { extra.innerHTML = ''; return; }
+  if (activeLibPage !== 'plex' && !plexAddMode) { extra.innerHTML = ''; return; }
   const cfg = getPlexCfg();
   const sectionOptions = '<option value="">All libraries</option>' + (cfg.sections || []).map(s => `<option value="${esc(s.key)}"${String(cfg.section||'')===String(s.key)?' selected':''}>${esc(s.title)}${s.type ? ' · ' + esc(s.type) : ''}</option>`).join('');
   const saved = items.filter(isPlexItem).length;
-  extra.innerHTML = `<div class="px-card"><div class="px-head"><div><div class="px-title">PlexStr</div><div class="px-sub">Connect your Plex server, search your library, and add titles directly into StreamVault.</div></div><span class="cnt">${saved}</span></div><div class="px-grid"><input id="plex-server" class="full" placeholder="http://192.168.1.10:32400" value="${esc(cfg.server || '')}"><input id="plex-token" class="full" placeholder="X-Plex-Token" value="${esc(cfg.token || '')}"><select id="plex-section">${sectionOptions}</select><input id="plex-query" placeholder="Search Plex library…"></div><div class="px-actions"><button class="bc" id="plex-connect">Connect</button><button class="bs" id="plex-search-btn">Search</button></div><div id="plex-status" class="px-sub" style="margin-top:8px">${cfg.sections && cfg.sections.length ? ('Connected · ' + cfg.sections.length + ' libraries') : 'Not connected yet'}</div><div class="px-results" id="plex-results"></div></div>`;
+  extra.innerHTML = `<div class="px-card"><div class="px-head"><div><div class="px-title">PlexStr</div><div class="px-sub">Search your Plex library and add titles directly into StreamVault.</div></div><span class="cnt">${saved}</span></div><div class="px-grid"><input id="plex-server" class="full" placeholder="http://192.168.1.10:32400" value="${esc(cfg.server || '')}"><input id="plex-token" class="full" placeholder="X-Plex-Token" value="${esc(cfg.token || '')}"><select id="plex-section">${sectionOptions}</select><input id="plex-query" placeholder="Search Plex library…"></div><div class="px-actions"><button class="bc" id="plex-connect">Connect</button><button class="bs" id="plex-search-btn">Search</button><button class="bc" id="plex-open-lib">Open PlexStr Library</button></div><div id="plex-status" class="px-sub" style="margin-top:8px">${cfg.sections && cfg.sections.length ? ('Connected · ' + cfg.sections.length + ' libraries') : 'Not connected yet'}</div><div class="px-results" id="plex-results"></div></div>`;
   $('plex-server').onchange = e => { cfg.server = normalizePlexServer(e.target.value); saveSettings(); };
   $('plex-token').onchange = e => { cfg.token = String(e.target.value || '').trim(); saveSettings(); };
   $('plex-section').onchange = e => { cfg.section = e.target.value; saveSettings(); };
@@ -1271,6 +1288,30 @@ function renderLibExtra() {
     }
   };
   $('plex-search-btn').onclick = runSearch;
+  $('plex-open-lib').onclick = async () => {
+    cfg.server = normalizePlexServer($('plex-server').value);
+    cfg.token = String($('plex-token').value || '').trim();
+    cfg.section = $('plex-section').value || '';
+    saveSettings();
+    $('plex-results').innerHTML = '<div class="px-sub">Loading library…</div>';
+    try {
+      if (!cfg.sections || !cfg.sections.length) await plexConnect(false);
+      const target = cfg.section ? ('/library/sections/' + encodeURIComponent(cfg.section) + '/all') : '/library/recentlyAdded';
+      const resp = await fetch(plexUrl(target));
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const results = parsePlexXmlNodes(await resp.text()).slice(0, 60);
+      if (!results.length) { $('plex-results').innerHTML = '<div class="px-sub">No library items found.</div>'; return; }
+      $('plex-results').innerHTML = results.map(r => {
+        const thumb = plexThumb(r.thumb, '');
+        const meta = [r.type || 'item', r.year || '', r.parentTitle || ''].filter(Boolean).join(' · ');
+        return `<div class="px-row"><div class="px-thumb">${thumb ? '<img src="' + esc(thumb) + '">' : ''}</div><div class="px-info"><div class="nm">${esc(r.type==='episode' && r.grandparentTitle ? (r.grandparentTitle + ' — ' + r.title) : r.title)}</div><div class="mt">${esc(meta)}</div></div><button data-rating="${esc(r.ratingKey)}">Add</button></div>`;
+      }).join('');
+      Array.from($('plex-results').querySelectorAll('button[data-rating]')).forEach((btn, idx) => btn.onclick = () => addPlexItem(results[idx]));
+    } catch (e) {
+      $('plex-results').innerHTML = '<div class="px-sub">Library open failed · ' + esc(e.message) + '</div>';
+      toast('Plex library open failed: ' + e.message);
+    }
+  };
   $('plex-query').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); } };
 }
 // ─── Library Rendering ───
@@ -1307,7 +1348,7 @@ function renderLib() {
   renderLibExtra();
   const f = getFilteredItems();
   const emptyTitle = activeLibPage === 'itv' ? 'No ITV streams' : activeLibPage === 'icam' ? 'No iCam streams' : activeLibPage === 'plex' ? 'No PlexStr items' : 'No streams';
-  const emptyBody = activeLibPage === 'plex' ? 'Use the PlexStr panel above to connect, search, and add titles from Plex.' : 'Tap + to add, import from the ↓ button, or browse Repos tab';
+  const emptyBody = activeLibPage === 'plex' ? 'Use the PlexStr panel above to open your Plex library or search and add titles.' : 'Tap + to add, import from the ↓ button, or browse Repos tab';
   if (!f.length) {
     $('lib-lst').innerHTML = '<div class="emp"><h3>' + emptyTitle + '</h3><p>' + emptyBody + '</p></div>';
     return;
@@ -2152,6 +2193,29 @@ window.onNativeBackupError = function(message) {
   toast('Backup failed: ' + message);
 };
 
+
+function updatePlexSettingsStatus(msg, ok) {
+  const el = $('s-plex-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = ok ? 'var(--gn)' : 'var(--t2)';
+}
+function openPlexAddPage() {
+  const cfg = getPlexCfg();
+  if (!cfg.server || !cfg.token) { toast('Connect Plex first'); return; }
+  plexAddMode = true;
+  activeLibPage = 'plex';
+  activeCat = 'All';
+  libSearchOpen = false;
+  updateSearchToggleUi();
+  $('lib-q').value = '';
+  showTab('lib-scr');
+  renderCats();
+  renderLibModes();
+  renderLibExtra();
+  renderLib();
+}
+
 function renderSettings() {
   // Startup channel
   const sel = $('s-startup');
@@ -2244,6 +2308,33 @@ function renderSettings() {
     } finally {
       $('bk-imp').value = '';
     }
+  };
+
+  const plexCfg = getPlexCfg();
+  $('s-plex-server').value = plexCfg.server || '';
+  $('s-plex-token').value = plexCfg.token || '';
+  updatePlexSettingsStatus(plexCfg.sections && plexCfg.sections.length ? ('Connected · ' + plexCfg.sections.length + ' libraries') : 'Not connected yet', !!(plexCfg.sections && plexCfg.sections.length));
+  $('s-plex-server').onchange = e => { plexCfg.server = normalizePlexServer(e.target.value); saveSettings(); };
+  $('s-plex-token').onchange = e => { plexCfg.token = String(e.target.value || '').trim(); saveSettings(); };
+  $('s-plex-test').onclick = async () => {
+    plexCfg.server = normalizePlexServer($('s-plex-server').value);
+    plexCfg.token = String($('s-plex-token').value || '').trim();
+    saveSettings();
+    try {
+      const sections = await plexConnect(true);
+      updatePlexSettingsStatus('Connected · ' + sections.length + ' libraries', true);
+      toast('Plex connected');
+    } catch (e) {
+      updatePlexSettingsStatus('Connection failed · ' + e.message, false);
+      toast('Plex connect failed: ' + e.message);
+    }
+  };
+  $('s-plex-open').onclick = () => openPlexAddPage();
+  $('s-plex-clear').onclick = () => {
+    settings.plex = { server:'', token:'', section:'', sections:[] };
+    saveSettings();
+    renderSettings();
+    toast('Plex settings cleared');
   };
 
   // Localities
