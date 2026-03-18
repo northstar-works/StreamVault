@@ -77,8 +77,8 @@ public class PlayerActivity extends Activity {
     private View loadingView;
     private View errorContainer;
     private View overlayTop, overlayCenter, overlayBottom;
-    private TextView titleText, statusText, nowNextText, strengthText, errorText, recStatusText;
-    private ImageButton playPauseBtn, lockBtn, recordBtn;
+    private TextView titleText, statusText, nowNextText, strengthText, errorText, recStatusText, sourceInfoText;
+    private ImageButton playPauseBtn, lockBtn, recordBtn, prevBtn, nextBtn;
     private Handler handler;
     private Runnable hideOverlayRunnable;
     private Runnable failoverTimeoutRunnable;
@@ -304,6 +304,16 @@ public class PlayerActivity extends Activity {
     private View buildCenterOverlay() {
         LinearLayout center = new LinearLayout(this);
         center.setGravity(Gravity.CENTER);
+        center.setOrientation(LinearLayout.HORIZONTAL);
+
+        prevBtn = makeButton(android.R.drawable.ic_media_previous);
+        prevBtn.setBackgroundColor(Color.parseColor("#33000000"));
+        prevBtn.setColorFilter(Color.WHITE);
+        prevBtn.setOnClickListener(v -> {
+            playPreviousVariant();
+            scheduleHideOverlay();
+        });
+        center.addView(prevBtn);
 
         playPauseBtn = new ImageButton(this);
         playPauseBtn.setImageResource(android.R.drawable.ic_media_pause);
@@ -318,7 +328,19 @@ public class PlayerActivity extends Activity {
                 scheduleHideOverlay();
             }
         });
-        center.addView(playPauseBtn);
+        LinearLayout.LayoutParams ppLp = new LinearLayout.LayoutParams(-2, -2);
+        ppLp.leftMargin = dp(12);
+        ppLp.rightMargin = dp(12);
+        center.addView(playPauseBtn, ppLp);
+
+        nextBtn = makeButton(android.R.drawable.ic_media_next);
+        nextBtn.setBackgroundColor(Color.parseColor("#33000000"));
+        nextBtn.setColorFilter(Color.WHITE);
+        nextBtn.setOnClickListener(v -> {
+            playNextVariant();
+            scheduleHideOverlay();
+        });
+        center.addView(nextBtn);
 
         return center;
     }
@@ -329,13 +351,13 @@ public class PlayerActivity extends Activity {
         bottom.setBackgroundColor(Color.parseColor("#CC000000"));
         bottom.setGravity(Gravity.CENTER);
 
-        TextView info = new TextView(this);
-        info.setTextColor(Color.parseColor("#40ffffff"));
-        info.setTextSize(7);
-        info.setSingleLine(true);
-        info.setGravity(Gravity.CENTER);
-        info.setText("Source 1/" + variants.size());
-        bottom.addView(info);
+        sourceInfoText = new TextView(this);
+        sourceInfoText.setTextColor(Color.parseColor("#40ffffff"));
+        sourceInfoText.setTextSize(7);
+        sourceInfoText.setSingleLine(true);
+        sourceInfoText.setGravity(Gravity.CENTER);
+        sourceInfoText.setText("Source 1/" + variants.size());
+        bottom.addView(sourceInfoText);
 
         return bottom;
     }
@@ -398,6 +420,9 @@ public class PlayerActivity extends Activity {
         titleText.setText(display);
         statusText.setText("Source " + (idx + 1) + "/" + variants.size()
             + (locked ? " · 🔒" : ""));
+        if (sourceInfoText != null) sourceInfoText.setText("Source " + (idx + 1) + "/" + variants.size() + " · Tap ◀ ▶ for previous / next");
+        if (prevBtn != null) prevBtn.setAlpha(variants.size() > 1 ? 1f : 0.45f);
+        if (nextBtn != null) nextBtn.setAlpha(variants.size() > 1 ? 1f : 0.45f);
         strengthText.setText("");
 
         if (idx > 0) showMsg("Trying: " + display);
@@ -469,6 +494,20 @@ public class PlayerActivity extends Activity {
         player.prepare();
 
         showOverlayBriefly();
+    }
+
+    private void playPreviousVariant() {
+        if (variants.isEmpty()) return;
+        int next = currentIdx - 1;
+        if (next < 0) next = variants.size() - 1;
+        playVariant(next);
+    }
+
+    private void playNextVariant() {
+        if (variants.isEmpty()) return;
+        int next = currentIdx + 1;
+        if (next >= variants.size()) next = 0;
+        playVariant(next);
     }
 
     private void tryNextVariant() {

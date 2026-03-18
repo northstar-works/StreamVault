@@ -219,7 +219,8 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
 <div id="guide-scr" class="scr">
   <div class="hd"><h1>Guide</h1><div class="hd-r">
     <button class="ib" id="btn-emgr" title="EPG sources"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83-2.83l-.06.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06c.38-.47.5-1.1.33-1.82a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9c.17-.73.05-1.35-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06c.47.38 1.1.5 1.82.33a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51c.73.17 1.35.05 1.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06c-.38.47-.5 1.1-.33 1.82a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button>
-    <button class="ib" id="btn-eref" title="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg></button>
+    <button class="ib" id="btn-gsync" title="Refresh guide from library"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v6h6"/><path d="M20 20v-6h-6"/><path d="M5.5 14A8 8 0 0019 8.5"/><path d="M18.5 10A8 8 0 005 15.5"/></svg></button>
+    <button class="ib" id="btn-eref" title="Refresh EPG download"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg></button>
   </div></div>
   <div class="gw" id="gw"></div>
 </div>
@@ -236,6 +237,7 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
   <div class="hd"><h1>Settings</h1></div>
   <div class="ss"><h3>Startup</h3>
     <div class="sr"><div><div class="sl">Default channel</div><div class="sd">Play on app launch</div></div><select id="s-startup"><option value="">None</option></select></div>
+    <div class="sr" style="margin-top:8px"><div><div class="sl">Default EPG source</div><div class="sd">Used for new streams and imports when no EPG source is set</div></div><select id="s-def-epg"><option value="">None</option></select></div>
   </div>
   <div class="ss"><h3>Locality Priorities</h3>
     <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Local areas prioritized in search, filters & failover. Top = highest priority.</p>
@@ -268,6 +270,14 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
       </div>
     </div>
   </div>
+  <div class="ss"><h3>Backup & Restore</h3>
+    <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Backup or restore your library, EPG sources/data, repositories, and settings in one file.</p>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="bs" id="bk-exp" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Backup All</button>
+      <button class="bc" id="bk-imp-btn" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Restore Backup</button>
+      <input type="file" id="bk-imp" accept=".json,application/json" style="display:none">
+    </div>
+  </div>
   <div class="ss"><h3>About</h3>
     <p style="font-size:9px;color:var(--t2)">StreamVault v4.3.2 (Build 23)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
   </div>
@@ -278,7 +288,7 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
   <div class="hd"><button class="ib" id="br-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button><h1 id="br-title" style="flex:1;margin-left:6px;font-size:14px">Repo</h1><span class="cnt" id="br-cnt">0</span></div>
   <div class="sb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="br-q" placeholder="Search…"></div>
   <div class="fbar"><span class="flbl">Region:</span><select class="fsel" id="f-reg"><option>All</option></select><span class="flbl">Genre:</span><select class="fsel" id="f-gen"><option>All</option></select></div>
-  <div class="slb" id="slb"><span id="slcnt">0 selected</span><div><button class="sbc" id="sl-all">All</button><button class="sbc" id="sl-clr">Clear</button><button class="sba" id="sl-add">Add to Playlist</button></div></div>
+  <div class="slb" id="slb"><span id="slcnt">0 selected</span><div><button class="sbc" id="sl-all">All</button><button class="sbc" id="sl-clr">Clear</button><button class="sbc" id="sl-epg">Bulk EPG</button><button class="sba" id="sl-add">Add to Playlist</button></div></div>
   <div class="lst" id="br-lst"></div>
 </div>
 
@@ -404,9 +414,29 @@ http://stream.example.com/cnn
   <div id="epg-lst"></div>
   <label style="margin-top:10px">Add EPG URL (.xml or .xml.gz)</label>
   <input id="epg-url" placeholder="https://provider.com/epg.xml">
+  <label>Or upload local XML / XML.GZ</label>
+  <div class="iz" id="epg-iz" style="margin-bottom:10px">
+    <p>Choose local XMLTV file</p>
+    <div class="hn">.xml or .xml.gz</div>
+    <input type="file" id="epg-f" accept="*/*">
+  </div>
   <label>Name</label>
   <input id="epg-nm" placeholder="My EPG">
   <div class="mab"><button class="bc" id="epg-cls">Close</button><button class="bs" id="epg-add">Add & Fetch</button></div>
+</div>
+</div>
+
+
+<!-- Bulk EPG -->
+<div class="mo" id="mo-bepg">
+<div class="mc">
+  <h2>Bulk EPG Selector</h2>
+  <p style="font-size:9px;color:var(--t2);margin-bottom:8px">Apply an EPG source URL to the currently selected repo channels before adding them to your library.</p>
+  <label>Saved EPG source</label>
+  <select id="be-src"><option value="">Select saved EPG…</option></select>
+  <label>Or type / paste new URL</label>
+  <input id="be-url" placeholder="https://provider.com/epg.xml">
+  <div class="mab"><button class="bc" id="be-no">Cancel</button><button class="bs" id="be-yes">Apply</button></div>
 </div>
 </div>
 
@@ -436,7 +466,7 @@ let items = [];
 let repos = [];
 let epgSrc = [];
 let epgData = { channels: {}, programs: {} };
-let settings = { localities: [], startupChannel: '', foTimeout: 15, foAuto: true, savePath: '', schedules: [] };
+let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, savePath: '', schedules: [] };
 
 let editId = null;
 let delId = null;
@@ -575,6 +605,54 @@ function loadSettings() {
     if (!d) d = localStorage.getItem('sv_settings') || localStorage.getItem('sv_settings_v2');
     if (d) { settings = { ...settings, ...JSON.parse(d) }; localStorage.setItem(KEYS.settings, d); }
   } catch(e) {}
+}
+
+function refreshGuideOnly(msg) {
+  renderLib();
+  renderGuide();
+  if (msg) toast(msg);
+}
+function getDefaultEpgSourceUrl() {
+  return normalizeEpgUrl(settings.defaultEpgSource || '');
+}
+function applyDefaultEpgSource(data) {
+  if (!data) return data;
+  if (!normalizeEpgUrl(data.epgLink)) {
+    const def = getDefaultEpgSourceUrl();
+    if (def) data.epgLink = def;
+  }
+  return data;
+}
+function makeBackupPayload() {
+  return {
+    type: 'streamvault-backup',
+    version: VERSION,
+    build: BUILD,
+    exportedAt: Date.now(),
+    items: items,
+    repos: repos,
+    epgSrc: epgSrc,
+    epgData: epgData,
+    settings: settings
+  };
+}
+function restoreBackupPayload(data) {
+  if (!data || typeof data !== 'object') throw new Error('Invalid backup');
+  items = Array.isArray(data.items) ? data.items : [];
+  repos = Array.isArray(data.repos) ? data.repos : [];
+  epgSrc = Array.isArray(data.epgSrc) ? data.epgSrc : [];
+  epgData = data.epgData && typeof data.epgData === 'object' ? data.epgData : { channels:{}, programs:{} };
+  settings = { ...settings, ...(data.settings || {}) };
+  items.forEach(m => {
+    m.icon = m.icon || '';
+    m.epgLink = m.epgLink || '';
+    m.epgTitle = m.epgTitle || '';
+    m.region = m.region || '';
+    m.tags = m.tags || [];
+    m.baseName = m.baseName || extractBase(m.title || m.name || '');
+  });
+  saveItems(); saveRepos(); saveEpg(); saveSettings();
+  renderCats(); renderLib(); renderRepos(); renderSettings(); renderEpgList(); renderGuide();
 }
 
 // ─── M3U Parser ───
@@ -763,6 +841,29 @@ function parseXMLDate(s) {
   return d.getTime();
 }
 
+async function importLocalEpgFile(file, nameOverride) {
+  if (!file) return;
+  const lower = (file.name || '').toLowerCase();
+  const name = (nameOverride || '').trim() || file.name.replace(/\.(xml|gz)$/i, '');
+  toast('Importing EPG file…');
+  let text;
+  if (lower.endsWith('.gz')) {
+    const buf = await file.arrayBuffer();
+    const ds = new DecompressionStream('gzip');
+    text = await new Response(new Blob([buf]).stream().pipeThrough(ds)).text();
+  } else {
+    text = await file.text();
+  }
+  const parsed = parseXMLTV(text);
+  const src = { id: gid(), name: name || 'Local XMLTV', url: 'local://' + gid(), lastFetch: Date.now(), chCount: Object.keys(parsed.channels || {}).length, localFileName: file.name || 'epg.xml' };
+  epgSrc.push(src);
+  Object.assign(epgData.channels, parsed.channels);
+  Object.keys(parsed.programs || {}).forEach(k => { epgData.programs[k] = parsed.programs[k]; });
+  saveEpg();
+  renderEpgList();
+  fillEpgSourceSelect(getDefaultEpgSourceUrl());
+  refreshGuideOnly('Imported XMLTV: ' + src.chCount + ' channels');
+}
 async function fetchEpgSource(src) {
   toast('Fetching EPG: ' + (src.name || 'EPG') + '…');
   try {
@@ -913,8 +1014,9 @@ $('fab-add').onclick = () => {
   $('in-url').value = '';
   $('in-cat').value = '';
   $('in-icon').value = '';
-  $('in-epgl').value = '';
-  fillEpgSourceSelect('');
+  const defEpg = getDefaultEpgSourceUrl();
+  $('in-epgl').value = defEpg;
+  fillEpgSourceSelect(defEpg);
   populateEpgDropdown('');
   $('mo-ed').classList.add('on');
 };
@@ -1061,7 +1163,7 @@ $('ed-ok').onclick = async () => {
     ensuredEpg = ensureEpgSource(typedEpgUrl);
   }
 
-  const data = {
+  const data = applyDefaultEpgSource({
     title: title,
     url: url,
     category: $('in-cat').value.trim(),
@@ -1069,7 +1171,7 @@ $('ed-ok').onclick = async () => {
     epgLink: typedEpgUrl,
     epgTitle: $('in-epg-val').value,
     baseName: extractBase(title)
-  };
+  });
 
   if (editId) {
     const m = items.find(x => x.id === editId);
@@ -1089,7 +1191,7 @@ $('ed-ok').onclick = async () => {
   }
   $('mo-ed').classList.remove('on');
   renderCats();
-  renderLib();
+  refreshGuideOnly();
 };
 
 // ─── Delete ───
@@ -1339,7 +1441,7 @@ window.refreshRepo = async (id) => {
     repo.lastRefresh = Date.now();
     saveRepos();
     renderRepos();
-    toast(repo.name + ': ' + streams.length + ' streams (was ' + oldCount + ')');
+    refreshGuideOnly(repo.name + ': guide refreshed from updated library');
   } catch(e) {
     toast('Refresh failed: ' + e.message);
   }
@@ -1469,16 +1571,49 @@ window.toggleBrSel = (el) => {
 $('br-q').addEventListener('input', renderBrowse);
 $('sl-all').onclick = () => { getBrowseFiltered().forEach(s => brSel.add(s.url)); renderBrowse(); };
 $('sl-clr').onclick = () => { brSel.clear(); renderBrowse(); };
+$('sl-epg').onclick = () => {
+  if (brSel.size === 0) { toast('Select channels first'); return; }
+  const sel = $('be-src');
+  sel.innerHTML = '<option value="">Select saved EPG…</option>' + epgSrc.map(s => '<option value="' + esc(s.url) + '">' + esc((s.name || 'EPG') + ' — ' + s.url) + '</option>').join('');
+  const def = getDefaultEpgSourceUrl();
+  $('be-url').value = def;
+  sel.value = def;
+  $('mo-bepg').classList.add('on');
+};
+$('be-no').onclick = () => $('mo-bepg').classList.remove('on');
+$('mo-bepg').onclick = (e) => { if (e.target === $('mo-bepg')) $('mo-bepg').classList.remove('on'); };
+$('be-src').onchange = (e) => { $('be-url').value = normalizeEpgUrl(e.target.value); };
+$('be-url').oninput = () => {
+  const found = findEpgSourceByUrl($('be-url').value);
+  $('be-src').value = found ? found.url : '';
+};
+$('be-yes').onclick = () => {
+  const url = normalizeEpgUrl($('be-url').value);
+  if (!url) { toast('Pick or enter an EPG URL'); return; }
+  const src = ensureEpgSource(url);
+  let applied = 0;
+  (brRepo && brRepo.streams || []).forEach(s => {
+    if (!brSel.has(s.url)) return;
+    s.epgLink = url;
+    applied++;
+  });
+  saveRepos();
+  renderEpgList();
+  if (src && !src.lastFetch && !String(src.url).startsWith('local://')) fetchEpgSource(src).catch(() => {});
+  $('mo-bepg').classList.remove('on');
+  toast('Bulk EPG applied to ' + applied + ' selected channel(s)');
+};
+
 $('sl-add').onclick = () => {
   if (!brRepo || brSel.size === 0) return;
   let added = 0, skipped = 0;
   (brRepo.streams || []).filter(x => brSel.has(x.url)).forEach(d => {
     if (items.some(m => m.url === d.url)) { skipped++; return; }
-    items.push({
+    items.push(applyDefaultEpgSource({
       id: gid(), title: d.name, url: d.url, category: d.category, icon: d.icon,
       epgLink: d.epgLink, epgTitle: d.epgTitle, region: d.region,
       tags: d.tags || [], baseName: d.baseName || extractBase(d.name), added: Date.now()
-    });
+    }));
     added++;
   });
   saveItems();
@@ -1494,6 +1629,18 @@ $('btn-emgr').onclick = () => { renderEpgList(); $('mo-epg').classList.add('on')
 $('epg-cls').onclick = () => $('mo-epg').classList.remove('on');
 $('mo-epg').onclick = (e) => { if (e.target === $('mo-epg')) $('mo-epg').classList.remove('on'); };
 
+$('epg-f').onchange = async (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  try {
+    await importLocalEpgFile(file, $('epg-nm').value.trim());
+    $('epg-f').value = '';
+    $('epg-nm').value = '';
+  } catch (err) {
+    toast('EPG file error: ' + err.message);
+  }
+};
+
 $('epg-add').onclick = async () => {
   const url = normalizeEpgUrl($('epg-url').value);
   const name = $('epg-nm').value.trim() || 'EPG';
@@ -1507,6 +1654,7 @@ $('epg-add').onclick = async () => {
 };
 
 $('btn-eref').onclick = () => fetchAllEpg();
+$('btn-gsync').onclick = () => refreshGuideOnly('Guide refreshed from current library and cached EPG');
 
 function renderEpgList() {
   if (!epgSrc.length) {
@@ -1608,6 +1756,11 @@ function renderSettings() {
     items.map(m => `<option value="${m.id}"${settings.startupChannel === m.id ? ' selected' : ''}>${esc(m.title)}</option>`).join('');
   sel.onchange = (e) => { settings.startupChannel = e.target.value; saveSettings(); };
 
+  // Default EPG source
+  const defSel = $('s-def-epg');
+  defSel.innerHTML = '<option value="">None</option>' + epgSrc.map(s => `<option value="${esc(s.url)}"${getDefaultEpgSourceUrl() === normalizeEpgUrl(s.url) ? ' selected' : ''}>${esc((s.name || 'EPG') + ' — ' + s.url)}</option>`).join('');
+  defSel.onchange = (e) => { settings.defaultEpgSource = normalizeEpgUrl(e.target.value); saveSettings(); };
+
   // Failover timeout
   $('s-fo-t').value = settings.foTimeout || 15;
   $('s-fo-t').onchange = (e) => { settings.foTimeout = parseInt(e.target.value) || 15; saveSettings(); };
@@ -1625,6 +1778,27 @@ function renderSettings() {
   const chOpts = '<option value="">Channel…</option>' + items.map(m => `<option value="${m.id}">${esc(m.title)}</option>`).join('');
   $('sc-ch').innerHTML = chOpts;
   $('sc-ch2').innerHTML = chOpts;
+
+  // Backup / Restore
+  $('bk-exp').onclick = () => {
+    const data = JSON.stringify(makeBackupPayload(), null, 2);
+    downloadFile(data, 'application/json', 'streamvault-backup-' + dateStr() + '.json');
+    toast('Backup exported');
+  };
+  $('bk-imp-btn').onclick = () => $('bk-imp').click();
+  $('bk-imp').onchange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      restoreBackupPayload(data);
+      toast('Backup restored');
+    } catch (err) {
+      toast('Restore failed: ' + err.message);
+    } finally {
+      $('bk-imp').value = '';
+    }
+  };
 
   // Localities
   renderLocalities();
