@@ -227,7 +227,7 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
 
 <!-- ═══ LIBRARY ═══ -->
 <div id="lib-scr" class="scr on">
-  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b30</span>
+  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b31</span>
     <button class="ib" id="btn-imp" title="Import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
     <button class="ib" id="btn-exp" title="Export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
   </div></div>
@@ -333,7 +333,7 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
     <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.3.8 (Build 30)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.3.10 (Build 31)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
   </div>
 </div>
 
@@ -516,7 +516,7 @@ http://stream.example.com/cnn
 "use strict";
 
 // ─── Constants & State ───
-const VERSION = '4.3.8', BUILD = 29;
+const VERSION = '4.3.10', BUILD = 31;
 const KEYS = { items: 'sv_items_v3', repos: 'sv_repos_v2', epgSrc: 'sv_epg_src', epgData: 'sv_epg_data', settings: 'sv_settings_v2' };
 const TAG_PRI = ['', 'F', 'H', 'A', 'S'];
 
@@ -1187,14 +1187,115 @@ function plexThumb(thumb, fallback) {
   }
   return fallback || '';
 }
+function getPlexClientId() {
+  settings.plex = settings.plex || { server:'', token:'', section:'', sections:[] };
+  if (!settings.plex.clientId) {
+    settings.plex.clientId = 'streamvault-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    saveSettings();
+  }
+  return settings.plex.clientId;
+}
 function buildPlexPlaybackUrl(meta) {
   const cfg = getPlexCfg();
   const server = normalizePlexServer((meta && meta.server) || cfg.server);
   const token = String((meta && meta.token) || cfg.token || '').trim();
   const rk = meta && meta.ratingKey;
   if (!server || !token || !rk) return '';
-  const path = server + '/library/metadata/' + encodeURIComponent(rk);
-  return server + '/video/:/transcode/universal/start.m3u8?path=' + encodeURIComponent(path) + '&protocol=hls&directPlay=1&directStream=1&fastSeek=1&copyts=1&offset=0&X-Plex-Token=' + encodeURIComponent(token);
+  const path = ((meta && meta.key) ? String(meta.key) : ('/library/metadata/' + encodeURIComponent(rk)));
+  const session = 'sv-' + rk + '-' + Date.now();
+  const params = new URLSearchParams({
+    path,
+    mediaIndex: String((meta && meta.mediaIndex) || 0),
+    partIndex: String((meta && meta.partIndex) || 0),
+    protocol: 'hls',
+    directPlay: '0',
+    directStream: '1',
+    subtitles: 'auto',
+    subtitleSize: '100',
+    audioBoost: '100',
+    maxVideoBitrate: '12000',
+    videoQuality: '80',
+    session,
+    fastSeek: '1',
+    copyts: '1',
+    offset: '0',
+    hasMDE: '1',
+    'X-Plex-Platform': 'Android',
+    'X-Plex-Product': 'StreamVault',
+    'X-Plex-Device': 'Android',
+    'X-Plex-Device-Name': 'StreamVault',
+    'X-Plex-Client-Identifier': getPlexClientId(),
+    'X-Plex-Token': token
+  });
+  return server + '/video/:/transcode/universal/start.m3u8?' + params.toString();
+}
+function parsePlexMetadata(xmlText) {
+  const doc = new DOMParser().parseFromString(xmlText, 'text/xml');
+  const v = doc.querySelector('Video');
+  if (!v) return null;
+  const media = v.querySelector('Media');
+  const part = media ? media.querySelector('Part') : null;
+  const videoStream = media ? media.querySelector('Stream[streamType="1"]') : null;
+  const audioStream = media ? media.querySelector('Stream[streamType="2"]') : null;
+  return {
+    ratingKey: v.getAttribute('ratingKey') || '',
+    key: v.getAttribute('key') || ('/library/metadata/' + (v.getAttribute('ratingKey') || '')),
+    type: v.getAttribute('type') || '',
+    title: v.getAttribute('title') || v.getAttribute('grandparentTitle') || 'Untitled',
+    mediaIndex: media ? Number(media.getAttribute('index') || 0) : 0,
+    partIndex: part ? Number(part.getAttribute('index') || 0) : 0,
+    duration: Number(v.getAttribute('duration') || 0),
+    container: (media && media.getAttribute('container') || '').toLowerCase(),
+    videoCodec: (videoStream && videoStream.getAttribute('codec') || '').toLowerCase(),
+    audioCodec: (audioStream && audioStream.getAttribute('codec') || '').toLowerCase(),
+    width: Number((media && media.getAttribute('width')) || 0),
+    height: Number((media && media.getAttribute('height')) || 0),
+    partKey: part ? (part.getAttribute('key') || '') : '',
+    thumb: v.getAttribute('thumb') || v.getAttribute('grandparentThumb') || ''
+  };
+}
+function isPlexDirectSafe(meta) {
+  if (!meta || !meta.partKey) return false;
+  const container = (meta.container || '').toLowerCase();
+  const v = (meta.videoCodec || '').toLowerCase();
+  const a = (meta.audioCodec || '').toLowerCase();
+  const goodContainer = ['mp4','m4v'].includes(container);
+  const goodVideo = ['h264','avc1'].includes(v);
+  const goodAudio = ['aac','mp3'].includes(a);
+  const tooLarge = (meta.width || 0) > 1920 || (meta.height || 0) > 1080;
+  return goodContainer && goodVideo && goodAudio && !tooLarge;
+}
+function buildPlexDirectUrl(meta) {
+  const cfg = getPlexCfg();
+  const server = normalizePlexServer((meta && meta.server) || cfg.server);
+  const token = String((meta && meta.token) || cfg.token || '').trim();
+  const partKey = meta && meta.partKey;
+  if (!server || !token || !partKey) return '';
+  const sep = String(partKey).includes('?') ? '&' : '?';
+  return server + partKey + sep + 'download=0&X-Plex-Token=' + encodeURIComponent(token);
+}
+async function resolvePlexPlaybackMeta(meta) {
+  const cfg = getPlexCfg();
+  const server = normalizePlexServer((meta && meta.server) || cfg.server);
+  const token = String((meta && meta.token) || cfg.token || '').trim();
+  const rk = meta && meta.ratingKey;
+  if (!server || !token || !rk) throw new Error('Missing Plex server, token, or rating key');
+  const resp = await fetch(server + '/library/metadata/' + encodeURIComponent(rk) + '?includeGuids=1&includeMarkers=1&X-Plex-Token=' + encodeURIComponent(token));
+  if (!resp.ok) throw new Error('Plex metadata HTTP ' + resp.status);
+  const parsed = parsePlexMetadata(await resp.text());
+  if (!parsed) throw new Error('Plex metadata parse failed');
+  return { ...meta, ...parsed, server, token };
+}
+async function resolvePlexPlayback(item) {
+  const meta = item && item.plexMeta ? item.plexMeta : item;
+  const resolved = await resolvePlexPlaybackMeta(meta);
+  const directUrl = isPlexDirectSafe(resolved) ? buildPlexDirectUrl(resolved) : '';
+  const transcodeUrl = buildPlexPlaybackUrl(resolved);
+  const urls = [];
+  if (transcodeUrl) urls.push({ url: transcodeUrl, mode: 'transcode' });
+  if (directUrl) urls.push({ url: directUrl, mode: 'direct' });
+  if (!urls.length) throw new Error('No playable Plex URL generated');
+  return { meta: resolved, urls };
 }
 async function plexSearch(q) {
   const cfg = getPlexCfg();
@@ -1214,7 +1315,6 @@ async function plexSearch(q) {
 }
 function addPlexItem(meta) {
   const cfg = getPlexCfg();
-  const playback = buildPlexPlaybackUrl({ ...meta, server: cfg.server, token: cfg.token });
   const thumb = plexThumb(meta.thumb, '');
   const title = meta.type === 'episode' && meta.grandparentTitle ? (meta.grandparentTitle + ' — ' + meta.title) : meta.title;
   const category = meta.type === 'movie' ? 'Plex Movie' : 'Plex TV';
@@ -1223,7 +1323,7 @@ function addPlexItem(meta) {
   items.push({
     id: gid(),
     title,
-    url: playback,
+    url: '',
     category,
     icon: thumb,
     epgLink: '',
@@ -2511,12 +2611,13 @@ function destroyPlayer() {
   $('ld2').style.display = 'flex';
 }
 
-window.playItem = (id) => {
+window.playItem = async (id) => {
   try {
     const idx = items.findIndex(m => m.id === id);
     if (idx === -1) return;
     curIdx = idx;
     const m = items[idx];
+    let failoverList;
     if (isPlexItem(m)) {
       const cfg = getPlexCfg();
       if (m.plexMeta) {
@@ -2524,13 +2625,22 @@ window.playItem = (id) => {
           m.plexMeta.server = normalizePlexServer(cfg.server);
           m.plexMeta.token = cfg.token;
         }
-        m.url = buildPlexPlaybackUrl(m.plexMeta) || m.url;
+        toast('Preparing Plex stream…');
+        const resolvedPlex = await resolvePlexPlayback(m);
+        m.plexMeta = { ...m.plexMeta, ...resolvedPlex.meta };
+        m.url = resolvedPlex.urls[0].url || m.url;
         if (m.plexMeta.thumb && !m.icon) m.icon = plexThumb(m.plexMeta.thumb, '');
+        failoverList = resolvedPlex.urls.map((u, idx) => ({
+          url: extractUrl(u.url),
+          title: idx === 0 ? ((m.title || 'Plex item') + ' · Plex ' + u.mode) : ((m.title || 'Plex item') + ' · Plex fallback ' + u.mode),
+          region: 'Plex',
+          tag: u.mode
+        }));
       }
     }
 
     // Build failover list
-    const failoverList = buildFailoverList(m);
+    if (!failoverList) failoverList = buildFailoverList(m);
     const category = [m.category, m.epgTitle].filter(Boolean).join(' · ');
 
     // Now/Next EPG
