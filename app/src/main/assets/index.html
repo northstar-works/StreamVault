@@ -218,6 +218,9 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
 .ld2{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:5}
 .spn{width:32px;height:32px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--ac);border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
+body.tv-mode .bnav .ni,body.tv-mode button,body.tv-mode input,body.tv-mode select,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode .epg-opt,body.tv-mode .lmb,body.tv-mode .tgl{outline:none}
+body.tv-mode .tv-f,body.tv-mode .ni:focus,body.tv-mode button:focus,body.tv-mode input:focus,body.tv-mode select:focus,body.tv-mode .itm:focus,body.tv-mode .rc:focus,body.tv-mode .ri:focus,body.tv-mode .epg-opt:focus,body.tv-mode .lmb:focus,body.tv-mode .tgl:focus{box-shadow:0 0 0 2px var(--ac),0 0 0 4px rgba(108,92,231,.25)!important;transform:none}
+body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .itm,body.tv-mode .rc{min-height:44px}
 </style>
 </head>
 <body>
@@ -265,6 +268,14 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
   <div class="ss"><h3>Startup</h3>
     <div class="sr"><div><div class="sl">Default channel</div><div class="sd">Play on app launch</div></div><select id="s-startup"><option value="">None</option></select></div>
     <div class="sr" style="margin-top:8px"><div><div class="sl">Default EPG source</div><div class="sd">Used for new streams and imports when no EPG source is set</div></div><select id="s-def-epg"><option value="">None</option></select></div>
+  </div>
+
+  <div class="ss"><h3>Home Tabs</h3>
+    <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Choose the order of source tabs shown on the home screen. The generic Library tab has been removed.</p>
+    <div id="tab-order-lst"></div>
+  </div>
+  <div class="ss"><h3>TV / Fire TV</h3>
+    <div class="sr"><div><div class="sl">TV mode</div><div class="sd">Auto enables remote-friendly focus on Fire TV / Android TV</div></div><select id="s-tv-mode"><option value="auto">Auto</option><option value="on">On</option><option value="off">Off</option></select></div>
   </div>
   <div class="ss"><h3>Locality Priorities</h3>
     <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Local areas prioritized in search, filters & failover. Top = highest priority.</p>
@@ -368,7 +379,7 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
 
 <!-- Bottom Nav -->
 <div class="bnav" id="bnav">
-  <div class="ni on" data-t="lib-scr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><span>Library</span></div>
+  <div class="ni on" data-t="lib-scr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><span>Home</span></div>
   <div class="ni" data-t="guide-scr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>Guide</span></div>
   <div class="ni" data-t="repo-scr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg><span>Repos</span></div>
   <div class="ni" data-t="set-scr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4"/></svg><span>Settings</span></div>
@@ -524,7 +535,7 @@ let items = [];
 let repos = [];
 let epgSrc = [];
 let epgData = { channels: {}, programs: {} };
-let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [], plex: { server: '', token: '', section: '', sections: [] } };
+let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [], tabOrder: ['itv','plex','icam'], tvMode: 'auto', plex: { server: '', token: '', section: '', sections: [] } };
 let plexAddMode = false;
 
 let editId = null;
@@ -535,8 +546,10 @@ let hlsInst = null;
 let activeCat = 'All';
 let overlayTimer = null;
 let pendingImport = null;
-let activeLibPage = 'library';
+let activeLibPage = 'all';
 let libSearchOpen = false;
+let isTvDevice = false;
+let tvFocusIndex = 0;
 
 // Browse state
 let brRepo = null;
@@ -1093,38 +1106,45 @@ function isIptvItem(item) {
   const s = getUrlScheme(u);
   return ['http','https','rtmp','mms','udp'].includes(s) || isLikelyHls(u) || /playlist|channel|live/i.test(u);
 }
+
 function getLibPageCounts() {
   return {
-    library: items.filter(m => !isPlexItem(m) && !isCameraItem(m) && !isIptvItem(m)).length,
+    all: items.length,
     itv: items.filter(isIptvItem).length,
     icam: items.filter(isCameraItem).length,
     plex: items.filter(isPlexItem).length
   };
 }
+function getTabOrder() {
+  const fallback = ['itv','plex','icam'];
+  const raw = Array.isArray(settings.tabOrder) ? settings.tabOrder.slice() : fallback.slice();
+  const clean = raw.filter(id => fallback.includes(id));
+  fallback.forEach(id => { if (!clean.includes(id)) clean.push(id); });
+  settings.tabOrder = clean;
+  return clean;
+}
 function getLibPageDefs() {
   const c = getLibPageCounts();
-  const defs = [{ id:'library', label:'Library', count:c.library }];
-  if (c.itv) defs.push({ id:'itv', label:'ITV', count:c.itv });
-  if (c.icam) defs.push({ id:'icam', label:'iCam', count:c.icam });
-  if (c.plex) defs.push({ id:'plex', label:'PlexStr', count:c.plex });
-  return defs;
+  const labels = { itv:'ITV', plex:'PlexStr', icam:'iCam' };
+  return getTabOrder().filter(id => c[id]).map(id => ({ id, label: labels[id], count: c[id] }));
 }
 function ensureActiveLibPage() {
   const defs = getLibPageDefs().map(x => x.id);
-  if (plexAddMode && activeLibPage === 'plex') return;
-  if (!defs.includes(activeLibPage)) activeLibPage = 'library';
+  if (plexAddMode && defs.includes('plex')) { activeLibPage = 'plex'; return; }
+  if (!defs.includes(activeLibPage)) activeLibPage = defs[0] || 'all';
 }
 function getItemsForLibPage() {
   ensureActiveLibPage();
   if (activeLibPage === 'itv') return items.filter(isIptvItem);
   if (activeLibPage === 'icam') return items.filter(isCameraItem);
   if (activeLibPage === 'plex') return items.filter(isPlexItem);
-  return items.filter(m => !isPlexItem(m) && !isCameraItem(m) && !isIptvItem(m));
+  return items;
 }
 function renderLibModes() {
   ensureActiveLibPage();
   const defs = getLibPageDefs();
   $('lib-modes').innerHTML = defs.map(d => `<button class="lmb${d.id===activeLibPage?' on':''}" data-lib-page="${d.id}">${d.label}<small>${d.count}</small></button>`).join('');
+  $('lib-modes').style.display = defs.length ? 'flex' : 'none';
   $('lib-modes').querySelectorAll('.lmb').forEach(btn => btn.onclick = () => {
     activeLibPage = btn.dataset.libPage;
     if (activeLibPage !== 'plex') plexAddMode = false;
@@ -1132,6 +1152,7 @@ function renderLibModes() {
     renderLibModes();
     renderLibExtra();
     renderLib();
+    refreshTvFocus();
   });
 }
 function updateSearchToggleUi() {
@@ -1501,7 +1522,7 @@ updateSearchToggleUi();
 
 // ─── Add / Edit Stream ───
 $('fab-add').onclick = () => {
-  if (activeLibPage === 'plex') activeLibPage = 'library';
+  if (activeLibPage === 'plex') activeLibPage = (getLibPageDefs()[0] || {}).id || 'all';
 
   editId = null;
   $('mo-ed-t').textContent = 'Add Stream';
@@ -2294,6 +2315,69 @@ window.onNativeBackupError = function(message) {
 };
 
 
+
+function nativeIsTvDevice() {
+  try { return !!(window.NativePlayer && typeof window.NativePlayer.isTv === 'function' && window.NativePlayer.isTv()); } catch (e) { return false; }
+}
+function shouldUseTvMode() {
+  const mode = settings.tvMode || 'auto';
+  if (mode === 'on') return true;
+  if (mode === 'off') return false;
+  return nativeIsTvDevice();
+}
+function applyTvMode() {
+  isTvDevice = shouldUseTvMode();
+  document.body.classList.toggle('tv-mode', isTvDevice);
+  refreshTvFocus();
+}
+function getTvFocusableElements() {
+  if (!isTvDevice) return [];
+  return Array.from(document.querySelectorAll('button, input, select, .ni, .itm, .rc, .ri, .epg-opt, .lmb, .tgl'))
+    .filter(el => el && el.offsetParent !== null && !el.disabled && !el.classList.contains('hide'));
+}
+function refreshTvFocus() {
+  if (!isTvDevice) return;
+  const els = getTvFocusableElements();
+  if (!els.length) return;
+  if (tvFocusIndex >= els.length) tvFocusIndex = 0;
+  els.forEach((el, idx) => {
+    el.tabIndex = idx === tvFocusIndex ? 0 : -1;
+    el.classList.toggle('tv-f', idx === tvFocusIndex);
+  });
+  const cur = els[tvFocusIndex];
+  if (cur && document.activeElement !== cur) cur.focus({ preventScroll: false });
+}
+function moveTvFocus(dir) {
+  const els = getTvFocusableElements();
+  if (!els.length) return;
+  tvFocusIndex = (tvFocusIndex + dir + els.length) % els.length;
+  refreshTvFocus();
+}
+window.__svHandleTvKey = function(code) {
+  if (!isTvDevice) return false;
+  if ([19,21].includes(code)) { moveTvFocus(-1); return true; }
+  if ([20,22].includes(code)) { moveTvFocus(1); return true; }
+  if ([23,66,160].includes(code)) {
+    const el = getTvFocusableElements()[tvFocusIndex];
+    if (el) { el.click(); return true; }
+    return false;
+  }
+  if (code === 4) {
+    if ($('player-scr').classList.contains('on')) { destroyPlayer(); showTab('lib-scr'); refreshTvFocus(); return true; }
+    if ($('br-scr').classList.contains('on')) { showTab('repo-scr'); refreshTvFocus(); return true; }
+  }
+  return false;
+};
+document.addEventListener('focusin', e => {
+  if (!isTvDevice) return;
+  const els = getTvFocusableElements();
+  const idx = els.indexOf(e.target);
+  if (idx >= 0) {
+    tvFocusIndex = idx;
+    els.forEach((el, i) => el.classList.toggle('tv-f', i === idx));
+  }
+});
+
 function updatePlexSettingsStatus(msg, ok) {
   const el = $('s-plex-status');
   if (!el) return;
@@ -2316,7 +2400,35 @@ function openPlexAddPage() {
   renderLib();
 }
 
+
+function moveTabOrder(idx, dir) {
+  const order = getTabOrder();
+  const next = idx + dir;
+  if (next < 0 || next >= order.length) return;
+  const temp = order[idx];
+  order[idx] = order[next];
+  order[next] = temp;
+  settings.tabOrder = order;
+  saveSettings();
+  renderTabOrderSettings();
+  renderLibModes();
+  renderLib();
+}
+function renderTabOrderSettings() {
+  const host = $('tab-order-lst');
+  if (!host) return;
+  const labels = { itv:'ITV', plex:'PlexStr', icam:'iCam' };
+  const order = getTabOrder();
+  host.innerHTML = order.map((id, i) => `<div class="lr"><div><div class="ln">${labels[id]}</div><div class="lm">${id === 'itv' ? 'IPTV / stream URLs' : id === 'plex' ? 'Plex library streams' : 'RTSP / camera streams'}</div></div><div class="lra">${i > 0 ? '<button onclick="moveTabOrder(' + i + ',-1)">↑</button>' : ''}${i < order.length - 1 ? '<button onclick="moveTabOrder(' + i + ',1)">↓</button>' : ''}</div></div>`).join('');
+}
+
 function renderSettings() {
+  renderTabOrderSettings();
+  const tvSel = $('s-tv-mode');
+  if (tvSel) {
+    tvSel.value = settings.tvMode || 'auto';
+    tvSel.onchange = (e) => { settings.tvMode = e.target.value || 'auto'; saveSettings(); applyTvMode(); };
+  }
   // Startup channel
   const sel = $('s-startup');
   sel.innerHTML = '<option value="">None (show library)</option>' +
@@ -2784,9 +2896,11 @@ loadRepos();
 loadEpg();
 loadSettings();
 ensureActiveLibPage();
+applyTvMode();
 renderCats();
 renderLib();
 renderRepos();
+refreshTvFocus();
 queueStartupAltCheck();
 
 // Auto-fetch EPG if stale (older than 1 hour)

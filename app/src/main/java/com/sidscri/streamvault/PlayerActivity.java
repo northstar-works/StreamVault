@@ -15,6 +15,7 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.GestureDetector;
+import android.view.KeyEvent;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -1038,5 +1039,47 @@ public class PlayerActivity extends Activity {
             } catch (Exception e) { /* ignore */ }
         }
         super.onDestroy();
+    }
+
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            switch (event.getKeyCode()) {
+                case KeyEvent.KEYCODE_DPAD_CENTER:
+                case KeyEvent.KEYCODE_ENTER:
+                case KeyEvent.KEYCODE_NUMPAD_ENTER:
+                    toggleOverlay();
+                    if (player != null) {
+                        if (player.isPlaying()) player.pause(); else player.play();
+                        updatePlayPauseIcon();
+                    }
+                    scheduleHideOverlay();
+                    return true;
+                case KeyEvent.KEYCODE_DPAD_LEFT:
+                    playPreviousVariant();
+                    scheduleHideOverlay();
+                    return true;
+                case KeyEvent.KEYCODE_DPAD_RIGHT:
+                    playNextVariant();
+                    scheduleHideOverlay();
+                    return true;
+                case KeyEvent.KEYCODE_DPAD_UP:
+                case KeyEvent.KEYCODE_DPAD_DOWN:
+                    toggleOverlay();
+                    scheduleHideOverlay();
+                    return true;
+                case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
+                    if (player != null) {
+                        if (player.isPlaying()) player.pause(); else player.play();
+                        updatePlayPauseIcon();
+                    }
+                    return true;
+                case KeyEvent.KEYCODE_BACK:
+                    finish();
+                    return true;
+            }
+        }
+        return super.dispatchKeyEvent(event);
     }
 }

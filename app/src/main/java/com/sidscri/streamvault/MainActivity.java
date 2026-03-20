@@ -7,6 +7,8 @@ import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
+import android.view.KeyEvent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
@@ -38,6 +40,11 @@ import org.json.JSONObject;
 import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends Activity {
+
+    private boolean isTvDevice() {
+        int uiMode = getResources().getConfiguration().uiMode & Configuration.UI_MODE_TYPE_MASK;
+        return uiMode == Configuration.UI_MODE_TYPE_TELEVISION || getPackageManager().hasSystemFeature("android.software.leanback");
+    }
 
     private static final int FILE_CHOOSER_REQUEST = 1001;
     private static final int LOCAL_STREAM_FILE_REQUEST = 1002;
@@ -185,6 +192,11 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public boolean isAvailable() {
             return true;
+        }
+
+        @JavascriptInterface
+        public boolean isTv() {
+            return isTvDevice();
         }
 
         @JavascriptInterface
@@ -460,5 +472,21 @@ public class MainActivity extends Activity {
             webView.destroy();
         }
         super.onDestroy();
+    }
+
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN && webView != null && isTvDevice()) {
+            int code = event.getKeyCode();
+            if (code == KeyEvent.KEYCODE_DPAD_UP || code == KeyEvent.KEYCODE_DPAD_DOWN ||
+                code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT ||
+                code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER ||
+                code == KeyEvent.KEYCODE_NUMPAD_ENTER || code == KeyEvent.KEYCODE_BACK) {
+                webView.evaluateJavascript("window.__svHandleTvKey && window.__svHandleTvKey(" + code + ")", null);
+                return true;
+            }
+        }
+        return super.dispatchKeyEvent(event);
     }
 }
