@@ -57,7 +57,7 @@ Thumbs.db
 # Gradle wrapper jar — F-Droid will generate this during build
 # Uncomment if you want to commit the jar:
 # !gradle/wrapper/gradle-wrapper.jar
-gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.jar
 
 # Fastlane
 fastlane/report.xml
