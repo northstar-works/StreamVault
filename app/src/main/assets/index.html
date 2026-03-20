@@ -344,7 +344,7 @@ body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .itm,body.tv-mode .rc{min-
     <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.4.1 (Build 33)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.4.2 (Build 34)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
   </div>
 </div>
 
@@ -556,6 +556,11 @@ let brRepo = null;
 let brSel = new Set();
 let brReg = 'All';
 let brGen = 'All';
+let brQueryDebounce = null;
+let brFilteredCache = { key: '', items: [] };
+let brWindowStart = 0;
+let brWindowSize = 80;
+let brActiveIndex = 0;
 
 // ─── Utilities ───
 const $ = id => document.getElementById(id);
@@ -2008,8 +2013,11 @@ window.openRepo = async (id) => {
   if (!r) return;
   brRepo = r;
   brSel = new Set();
-  brReg = 'All';
+  brReg = loadBrowseRegionDefault(r);
   brGen = 'All';
+  brFilteredCache = { key: '', items: [] };
+  brWindowStart = 0;
+  brActiveIndex = 0;
   $('br-title').textContent = r.name;
   $('br-q').value = '';
   showTab('br-scr');
@@ -2037,6 +2045,26 @@ window.openRepo = async (id) => {
 
 $('br-back').onclick = () => showTab('repo-scr');
 
+
+function getLocaleRegionDefault() {
+  try {
+    const saved = localStorage.getItem('sv_repo_region_pref');
+    if (saved) return saved;
+  } catch(e) {}
+  try {
+    const loc = (navigator.language || Intl.DateTimeFormat().resolvedOptions().locale || 'en-US');
+    const m = String(loc).match(/-([A-Z]{2})\b/i);
+    return m ? m[1].toUpperCase() : 'US';
+  } catch(e) { return 'US'; }
+}
+function loadBrowseRegionDefault(r) {
+  const want = getLocaleRegionDefault();
+  const regs = new Set((r && r.streams || []).map(s => (s.region || '').toUpperCase()).filter(Boolean));
+  return regs.has(want) ? want : 'All';
+}
+function getBrowseSearchValue() {
+  return $('br-q').value.toLowerCase().trim();
+}
 function buildBrowseDropdowns() {
   if (!brRepo) return;
   const regs = ['All', ...new Set((brRepo.streams || []).map(s => s.region).filter(Boolean))].sort();
@@ -2044,19 +2072,29 @@ function buildBrowseDropdowns() {
   $('f-reg').innerHTML = regs.map(r => `<option${r === brReg ? ' selected' : ''}>${r}</option>`).join('');
   $('f-gen').innerHTML = gens.map(g => `<option${g === brGen ? ' selected' : ''}>${g}</option>`).join('');
 }
-
-$('f-reg').onchange = (e) => { brReg = e.target.value; renderBrowse(); };
-$('f-gen').onchange = (e) => { brGen = e.target.value; renderBrowse(); };
+function invalidateBrowseCache() {
+  brFilteredCache = { key: '', items: [] };
+}
+function saveBrowseRegionPref(val) {
+  try { if (val && val !== 'All') localStorage.setItem('sv_repo_region_pref', val); } catch(e) {}
+}
+$('f-reg').onchange = (e) => { brReg = e.target.value; saveBrowseRegionPref(brReg); invalidateBrowseCache(); brWindowStart = 0; brActiveIndex = 0; renderBrowse(); };
+$('f-gen').onchange = (e) => { brGen = e.target.value; invalidateBrowseCache(); brWindowStart = 0; brActiveIndex = 0; renderBrowse(); };
 
 function getBrowseFiltered() {
   if (!brRepo) return [];
-  const q = $('br-q').value.toLowerCase().trim();
+  const q = getBrowseSearchValue();
+  const key = [brRepo.id || brRepo.name || '', brReg, brGen, q].join('|');
+  if (brFilteredCache.key === key) return brFilteredCache.items;
   let filtered = (brRepo.streams || []).filter(s => {
+    if (!s._svSearch) s._svSearch = ((s.name || '') + ' ' + (s.category || '') + ' ' + (s.region || '')).toLowerCase();
     return (brReg === 'All' || s.region === brReg) &&
            (brGen === 'All' || s.category === brGen) &&
-           (!q || s.name.toLowerCase().includes(q) || (s.category && s.category.toLowerCase().includes(q)));
+           (!q || s._svSearch.includes(q));
   });
-  return localitySort(filtered);
+  filtered = localitySort(filtered);
+  brFilteredCache = { key, items: filtered };
+  return filtered;
 }
 
 function renderBrowse() {
@@ -2064,7 +2102,6 @@ function renderBrowse() {
   const existingUrls = new Set(items.map(m => m.url));
   $('br-cnt').textContent = f.length + '/' + (brRepo ? (brRepo.streams || []).length : 0);
 
-  // Selection bar
   if (brSel.size > 0) {
     $('slb').classList.add('on');
     $('slcnt').textContent = brSel.size + ' selected';
@@ -2077,7 +2114,16 @@ function renderBrowse() {
     return;
   }
 
-  $('br-lst').innerHTML = f.map(s => {
+  if (brActiveIndex >= f.length) brActiveIndex = Math.max(0, f.length - 1);
+  if (brActiveIndex < brWindowStart) brWindowStart = brActiveIndex;
+  if (brActiveIndex >= brWindowStart + brWindowSize) brWindowStart = Math.max(0, brActiveIndex - brWindowSize + 1);
+
+  const start = Math.max(0, Math.min(brWindowStart, Math.max(0, f.length - 1)));
+  const end = Math.min(f.length, start + brWindowSize);
+  const visible = f.slice(start, end);
+
+  $('br-lst').innerHTML = visible.map((s, idx) => {
+    const realIdx = start + idx;
     const key = s.url;
     const sel = brSel.has(key);
     const exists = existingUrls.has(key);
@@ -2088,15 +2134,30 @@ function renderBrowse() {
     const regB = s.region ? '<span style="background:rgba(46,213,115,.12);color:var(--gn);padding:0 3px;border-radius:2px;font-size:7px;font-weight:600;margin-right:2px">' + esc(s.region) + '</span>' : '';
     const catB = s.category ? '<span style="background:var(--acs);color:var(--ac);padding:0 3px;border-radius:2px;font-size:7px;font-weight:600">' + esc(s.category) + '</span>' : '';
     const exMark = exists ? '<span style="color:var(--gn);font-size:7px;margin-left:3px">✓</span>' : '';
+    const tvCls = (isTvDevice && $('br-scr').classList.contains('on') && realIdx === brActiveIndex) ? ' tv-f' : '';
 
-    return `<div class="ri${sel ? ' sel' : ''}" data-url="${esc(key)}" onclick="toggleBrSel(this)">
+    return `<div class="ri${sel ? ' sel' : ''}${tvCls}" data-url="${esc(key)}" data-idx="${realIdx}" onclick="toggleBrSel(this)">
       <div class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
       ${thumb ? '<div>' + thumb + '</div>' : ''}
       <div class="rf"><div class="rn">${esc(s.name)}${exMark}</div><div class="rm">${regB}${catB}${sourceBadge}</div></div>
     </div>`;
   }).join('');
+  const activeEl = $('br-lst').querySelector('.ri.tv-f');
+  if (activeEl) activeEl.scrollIntoView({ block: 'nearest' });
 }
 
+function moveBrowseSelection(dir) {
+  const f = getBrowseFiltered();
+  if (!f.length) return false;
+  brActiveIndex = Math.max(0, Math.min(f.length - 1, brActiveIndex + dir));
+  renderBrowse();
+  return true;
+}
+function activateBrowseSelection() {
+  const el = $('br-lst').querySelector('.ri.tv-f');
+  if (el) { toggleBrSel(el); return true; }
+  return false;
+}
 window.toggleBrSel = (el) => {
   const url = el.dataset.url;
   if (brSel.has(url)) { brSel.delete(url); el.classList.remove('sel'); }
@@ -2105,7 +2166,15 @@ window.toggleBrSel = (el) => {
   else { $('slb').classList.remove('on'); }
 };
 
-$('br-q').addEventListener('input', renderBrowse);
+$('br-q').addEventListener('input', () => {
+  clearTimeout(brQueryDebounce);
+  brQueryDebounce = setTimeout(() => {
+    invalidateBrowseCache();
+    brWindowStart = 0;
+    brActiveIndex = 0;
+    renderBrowse();
+  }, 180);
+});
 $('sl-all').onclick = () => { getBrowseFiltered().forEach(s => brSel.add(s.url)); renderBrowse(); };
 $('sl-clr').onclick = () => { brSel.clear(); renderBrowse(); };
 $('sl-epg').onclick = () => {
@@ -2332,7 +2401,10 @@ function applyTvMode() {
 }
 function getTvFocusableElements() {
   if (!isTvDevice) return [];
-  return Array.from(document.querySelectorAll('button, input, select, .ni, .itm, .rc, .ri, .epg-opt, .lmb, .tgl, .fab, .ib'))
+  const q = $('br-scr') && $('br-scr').classList.contains('on')
+    ? 'button, input, select, .ni, .itm, .rc, .epg-opt, .lmb, .tgl, .fab, .ib'
+    : 'button, input, select, .ni, .itm, .rc, .ri, .epg-opt, .lmb, .tgl, .fab, .ib';
+  return Array.from(document.querySelectorAll(q))
     .filter(el => {
       if (!el || el.disabled || el.classList.contains('hide')) return false;
       const cs = getComputedStyle(el);
@@ -2360,6 +2432,11 @@ function moveTvFocus(dir) {
 }
 window.__svHandleTvKey = function(code) {
   if (!isTvDevice) return false;
+  if ($('br-scr').classList.contains('on')) {
+    if (code === 19) return moveBrowseSelection(-1);
+    if (code === 20) return moveBrowseSelection(1);
+    if ([23,66,160].includes(code)) return activateBrowseSelection();
+  }
   if ([19,21].includes(code)) { moveTvFocus(-1); return true; }
   if ([20,22].includes(code)) { moveTvFocus(1); return true; }
   if ([23,66,160].includes(code)) {
