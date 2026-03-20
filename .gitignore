@@ -58,7 +58,7 @@ Thumbs.db
 # Uncomment if you want to commit the jar:
 <<<<<<< Updated upstream
 # !gradle/wrapper/gradle-wrapper.jar
-!gradle/wrapper/gradle-wrapper.jar
+gradle/wrapper/gradle-wrapper.jar
 =======
 gradle/wrapper/gradle-wrapper.jar
 >>>>>>> Stashed changes
