@@ -10,8 +10,27 @@ android {
         applicationId "com.sidscri.streamvault"
         minSdk 24
         targetSdk 34
-        versionCode 32
-        versionName "4.4.0"
+        versionCode 33
+        versionName "4.4.1"
+    }
+
+
+
+    flavorDimensions += "device"
+    productFlavors {
+        mobile {
+            dimension "device"
+            applicationId "com.sidscri.streamvault"
+            resValue "string", "app_name", "StreamVault"
+            buildConfigField "String", "DEVICE_FLAVOR", '"mobile"'
+        }
+        tv {
+            dimension "device"
+            applicationId "com.sidscri.streamvault.tv"
+            versionNameSuffix "-tv"
+            resValue "string", "app_name", "StreamVault TV"
+            buildConfigField "String", "DEVICE_FLAVOR", '"tv"'
+        }
     }
 
     buildTypes {
@@ -22,6 +41,16 @@ android {
         debug {
             applicationIdSuffix ".debug"
             debuggable true
+        }
+    }
+
+
+
+    applicationVariants.configureEach { variant ->
+        variant.outputs.configureEach {
+            def flavor = variant.flavorName ?: 'base'
+            def buildType = variant.buildType.name
+            outputFileName = "StreamVault-${defaultConfig.versionName}-${flavor}-${buildType}.apk"
         }
     }
 
