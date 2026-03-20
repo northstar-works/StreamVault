@@ -30,18 +30,17 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Set up Gradle
+      - name: Set up Gradle 8.4
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.4'
 
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
-
-      - name: Verify Gradle wrapper files
+      - name: Verify Gradle files
         run: |
-          test -f ./gradlew || (echo "gradlew not found in repo root" && exit 1)
-          test -f ./gradle/wrapper/gradle-wrapper.properties || (echo "gradle-wrapper.properties missing" && exit 1)
-          test -f ./gradle/wrapper/gradle-wrapper.jar || (echo "gradle-wrapper.jar missing" && exit 1)
-          ls -l ./gradlew ./gradle/wrapper
+          test -f ./build.gradle || (echo "build.gradle not found in repo root" && exit 1)
+          test -f ./settings.gradle || (echo "settings.gradle not found in repo root" && exit 1)
+          test -f ./app/build.gradle || (echo "app/build.gradle not found" && exit 1)
+          gradle --version
 
       - name: Add signing config to build
         run: |
@@ -69,7 +68,7 @@ jobs:
           fi
 
       - name: Build release APKs
-        run: ./gradlew --no-daemon assembleMobileRelease assembleTvRelease
+        run: gradle --no-daemon assembleMobileRelease assembleTvRelease
 
       - name: Verify APKs exist
         run: |
