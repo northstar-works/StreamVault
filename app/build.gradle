@@ -10,11 +10,14 @@ android {
         applicationId "com.sidscri.streamvault"
         minSdk 24
         targetSdk 34
-        versionCode 33
-        versionName "4.4.1"
+        versionCode 34
+        versionName "4.4.2"
     }
 
 
+    buildFeatures {
+        buildConfig true
+    }
 
     flavorDimensions += "device"
     productFlavors {

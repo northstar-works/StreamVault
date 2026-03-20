@@ -219,7 +219,7 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
 .spn{width:32px;height:32px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--ac);border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 body.tv-mode .bnav .ni,body.tv-mode button,body.tv-mode input,body.tv-mode select,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode .epg-opt,body.tv-mode .lmb,body.tv-mode .tgl{outline:none}
-body.tv-mode .tv-f,body.tv-mode .ni:focus,body.tv-mode button:focus,body.tv-mode input:focus,body.tv-mode select:focus,body.tv-mode .itm:focus,body.tv-mode .rc:focus,body.tv-mode .ri:focus,body.tv-mode .epg-opt:focus,body.tv-mode .lmb:focus,body.tv-mode .tgl:focus{box-shadow:0 0 0 2px var(--ac),0 0 0 4px rgba(108,92,231,.25)!important;transform:none}
+body.tv-mode .tv-f,body.tv-mode .ni:focus,body.tv-mode button:focus,body.tv-mode input:focus,body.tv-mode select:focus,body.tv-mode .itm:focus,body.tv-mode .rc:focus,body.tv-mode .ri:focus,body.tv-mode .epg-opt:focus,body.tv-mode .lmb:focus,body.tv-mode .tgl:focus,body.tv-mode .fab:focus,body.tv-mode .ib:focus{box-shadow:0 0 0 2px var(--ac),0 0 0 4px rgba(108,92,231,.25)!important;transform:none}
 body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .itm,body.tv-mode .rc{min-height:44px}
 </style>
 </head>
@@ -344,7 +344,7 @@ body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .itm,body.tv-mode .rc{min-
     <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.3.10 (Build 31)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.4.1 (Build 33)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
   </div>
 </div>
 
@@ -2332,8 +2332,13 @@ function applyTvMode() {
 }
 function getTvFocusableElements() {
   if (!isTvDevice) return [];
-  return Array.from(document.querySelectorAll('button, input, select, .ni, .itm, .rc, .ri, .epg-opt, .lmb, .tgl'))
-    .filter(el => el && el.offsetParent !== null && !el.disabled && !el.classList.contains('hide'));
+  return Array.from(document.querySelectorAll('button, input, select, .ni, .itm, .rc, .ri, .epg-opt, .lmb, .tgl, .fab, .ib'))
+    .filter(el => {
+      if (!el || el.disabled || el.classList.contains('hide')) return false;
+      const cs = getComputedStyle(el);
+      if (cs.display === 'none' || cs.visibility === 'hidden' || cs.pointerEvents === 'none') return false;
+      return !!(el.getClientRects && el.getClientRects().length);
+    });
 }
 function refreshTvFocus() {
   if (!isTvDevice) return;

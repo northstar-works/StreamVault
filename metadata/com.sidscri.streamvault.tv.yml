@@ -13,13 +13,13 @@ RepoType: git
 Repo: https://github.com/sidscri/StreamVault.git
 
 Builds:
-  - versionName: 4.4.0-tv
-    versionCode: 32
-    commit: v4.4.0
+  - versionName: 4.4.1-tv
+    versionCode: 33
+    commit: v4.4.1
     gradle:
       - tv
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 4.4.0-tv
-CurrentVersionCode: 32
+CurrentVersion: 4.4.1-tv
+CurrentVersionCode: 33
