@@ -98,7 +98,6 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
 .slb .sba{background:#fff;color:var(--ac)}.slb .sbc{background:rgba(255,255,255,.2);color:#fff}
 .ri{display:flex;align-items:center;gap:6px;padding:6px;margin-bottom:2px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);cursor:pointer}
 .ri.sel{border-color:var(--ac);background:rgba(108,92,231,.08)}
-body.tv-mode .ri.tv-f{box-shadow:0 0 0 2px var(--ac),0 0 0 4px rgba(108,92,231,.25)!important}
 .ri .ck{width:16px;height:16px;border-radius:4px;border:2px solid var(--bd);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .ri.sel .ck{background:var(--ac);border-color:var(--ac)}.ri.sel .ck svg{display:block}
 .ri .ck svg{width:10px;height:10px;color:#fff;display:none}
@@ -345,7 +344,7 @@ body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .itm,body.tv-mode .rc{min-
     <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.4.1 (Build 33)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.4.2 (Build 34)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
   </div>
 </div>
 
@@ -555,28 +554,18 @@ let tvFocusIndex = 0;
 // Browse state
 let brRepo = null;
 let brSel = new Set();
-let brReg = getDefaultRegionFilter();
+let brReg = 'All';
 let brGen = 'All';
-let brFilteredCache = [];
-let brFocusIndex = 0;
+let brQueryDebounce = null;
+let brFilteredCache = { key: '', items: [] };
 let brWindowStart = 0;
-const BR_WINDOW_SIZE = 80;
-let brSearchTimer = null;
+let brWindowSize = 80;
+let brActiveIndex = 0;
 
 // ─── Utilities ───
 const $ = id => document.getElementById(id);
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 function gid() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 6); }
-function getDefaultRegionFilter() {
-  try {
-    const saved = localStorage.getItem('sv_default_repo_region');
-    if (saved) return saved;
-  } catch(e) {}
-  const lang = (navigator.language || '').toUpperCase();
-  const m = lang.match(/-([A-Z]{2})$/);
-  return m ? m[1] : 'US';
-}
-function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 function toast(msg) {
   const t = $('toast');
   t.textContent = msg;
@@ -2024,11 +2013,11 @@ window.openRepo = async (id) => {
   if (!r) return;
   brRepo = r;
   brSel = new Set();
-  brReg = getDefaultRegionFilter();
+  brReg = loadBrowseRegionDefault(r);
   brGen = 'All';
-  brFocusIndex = 0;
+  brFilteredCache = { key: '', items: [] };
   brWindowStart = 0;
-  brFilteredCache = [];
+  brActiveIndex = 0;
   $('br-title').textContent = r.name;
   $('br-q').value = '';
   showTab('br-scr');
@@ -2056,51 +2045,60 @@ window.openRepo = async (id) => {
 
 $('br-back').onclick = () => showTab('repo-scr');
 
+
+function getLocaleRegionDefault() {
+  try {
+    const saved = localStorage.getItem('sv_repo_region_pref');
+    if (saved) return saved;
+  } catch(e) {}
+  try {
+    const loc = (navigator.language || Intl.DateTimeFormat().resolvedOptions().locale || 'en-US');
+    const m = String(loc).match(/-([A-Z]{2})\b/i);
+    return m ? m[1].toUpperCase() : 'US';
+  } catch(e) { return 'US'; }
+}
+function loadBrowseRegionDefault(r) {
+  const want = getLocaleRegionDefault();
+  const regs = new Set((r && r.streams || []).map(s => (s.region || '').toUpperCase()).filter(Boolean));
+  return regs.has(want) ? want : 'All';
+}
+function getBrowseSearchValue() {
+  return $('br-q').value.toLowerCase().trim();
+}
 function buildBrowseDropdowns() {
   if (!brRepo) return;
-  const repoRegs = [...new Set((brRepo.streams || []).map(s => s.region).filter(Boolean))].sort();
-  const regs = ['All', ...repoRegs];
-  if (brReg !== 'All' && !repoRegs.includes(brReg)) brReg = 'All';
+  const regs = ['All', ...new Set((brRepo.streams || []).map(s => s.region).filter(Boolean))].sort();
   const gens = ['All', ...new Set((brRepo.streams || []).map(s => s.category).filter(Boolean))].sort();
   $('f-reg').innerHTML = regs.map(r => `<option${r === brReg ? ' selected' : ''}>${r}</option>`).join('');
   $('f-gen').innerHTML = gens.map(g => `<option${g === brGen ? ' selected' : ''}>${g}</option>`).join('');
 }
-
-function resetBrowseFocus() {
-  brFocusIndex = 0;
-  brWindowStart = 0;
+function invalidateBrowseCache() {
+  brFilteredCache = { key: '', items: [] };
 }
-
-$('f-reg').onchange = (e) => {
-  brReg = e.target.value;
-  try { localStorage.setItem('sv_default_repo_region', brReg); } catch(err) {}
-  resetBrowseFocus();
-  renderBrowse();
-};
-$('f-gen').onchange = (e) => { brGen = e.target.value; resetBrowseFocus(); renderBrowse(); };
+function saveBrowseRegionPref(val) {
+  try { if (val && val !== 'All') localStorage.setItem('sv_repo_region_pref', val); } catch(e) {}
+}
+$('f-reg').onchange = (e) => { brReg = e.target.value; saveBrowseRegionPref(brReg); invalidateBrowseCache(); brWindowStart = 0; brActiveIndex = 0; renderBrowse(); };
+$('f-gen').onchange = (e) => { brGen = e.target.value; invalidateBrowseCache(); brWindowStart = 0; brActiveIndex = 0; renderBrowse(); };
 
 function getBrowseFiltered() {
   if (!brRepo) return [];
-  const q = $('br-q').value.toLowerCase().trim();
-  if (!brRepo._prepared) {
-    (brRepo.streams || []).forEach(s => {
-      s._nameLc = (s.name || '').toLowerCase();
-      s._catLc = (s.category || '').toLowerCase();
-      s._searchBlob = (s._nameLc + ' ' + s._catLc + ' ' + ((s.region || '').toLowerCase())).trim();
-    });
-    brRepo._prepared = true;
-  }
-  const filtered = (brRepo.streams || []).filter(s => {
+  const q = getBrowseSearchValue();
+  const key = [brRepo.id || brRepo.name || '', brReg, brGen, q].join('|');
+  if (brFilteredCache.key === key) return brFilteredCache.items;
+  let filtered = (brRepo.streams || []).filter(s => {
+    if (!s._svSearch) s._svSearch = ((s.name || '') + ' ' + (s.category || '') + ' ' + (s.region || '')).toLowerCase();
     return (brReg === 'All' || s.region === brReg) &&
            (brGen === 'All' || s.category === brGen) &&
-           (!q || s._searchBlob.includes(q));
+           (!q || s._svSearch.includes(q));
   });
-  return localitySort(filtered);
+  filtered = localitySort(filtered);
+  brFilteredCache = { key, items: filtered };
+  return filtered;
 }
 
 function renderBrowse() {
-  brFilteredCache = getBrowseFiltered();
-  const f = brFilteredCache;
+  const f = getBrowseFiltered();
   const existingUrls = new Set(items.map(m => m.url));
   $('br-cnt').textContent = f.length + '/' + (brRepo ? (brRepo.streams || []).length : 0);
 
@@ -2116,18 +2114,16 @@ function renderBrowse() {
     return;
   }
 
-  brFocusIndex = clamp(brFocusIndex, 0, f.length - 1);
-  if (brFocusIndex < brWindowStart) brWindowStart = brFocusIndex;
-  const maxStart = Math.max(0, f.length - BR_WINDOW_SIZE);
-  if (brFocusIndex >= brWindowStart + BR_WINDOW_SIZE) brWindowStart = brFocusIndex - BR_WINDOW_SIZE + 1;
-  brWindowStart = clamp(brWindowStart, 0, maxStart);
+  if (brActiveIndex >= f.length) brActiveIndex = Math.max(0, f.length - 1);
+  if (brActiveIndex < brWindowStart) brWindowStart = brActiveIndex;
+  if (brActiveIndex >= brWindowStart + brWindowSize) brWindowStart = Math.max(0, brActiveIndex - brWindowSize + 1);
 
-  const start = brWindowStart;
-  const end = Math.min(f.length, start + BR_WINDOW_SIZE);
+  const start = Math.max(0, Math.min(brWindowStart, Math.max(0, f.length - 1)));
+  const end = Math.min(f.length, start + brWindowSize);
   const visible = f.slice(start, end);
 
-  $('br-lst').innerHTML = visible.map((s, offset) => {
-    const idx = start + offset;
+  $('br-lst').innerHTML = visible.map((s, idx) => {
+    const realIdx = start + idx;
     const key = s.url;
     const sel = brSel.has(key);
     const exists = existingUrls.has(key);
@@ -2138,21 +2134,31 @@ function renderBrowse() {
     const regB = s.region ? '<span style="background:rgba(46,213,115,.12);color:var(--gn);padding:0 3px;border-radius:2px;font-size:7px;font-weight:600;margin-right:2px">' + esc(s.region) + '</span>' : '';
     const catB = s.category ? '<span style="background:var(--acs);color:var(--ac);padding:0 3px;border-radius:2px;font-size:7px;font-weight:600">' + esc(s.category) + '</span>' : '';
     const exMark = exists ? '<span style="color:var(--gn);font-size:7px;margin-left:3px">✓</span>' : '';
-    const tvCls = isTvDevice && idx === brFocusIndex ? ' tv-f' : '';
+    const tvCls = (isTvDevice && $('br-scr').classList.contains('on') && realIdx === brActiveIndex) ? ' tv-f' : '';
 
-    return `<div class="ri${sel ? ' sel' : ''}${tvCls}" data-idx="${idx}" data-url="${esc(key)}" onclick="toggleBrSel(this)">
+    return `<div class="ri${sel ? ' sel' : ''}${tvCls}" data-url="${esc(key)}" data-idx="${realIdx}" onclick="toggleBrSel(this)">
       <div class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
       ${thumb ? '<div>' + thumb + '</div>' : ''}
       <div class="rf"><div class="rn">${esc(s.name)}${exMark}</div><div class="rm">${regB}${catB}${sourceBadge}</div></div>
     </div>`;
   }).join('');
-
-  const activeRow = $('br-lst').querySelector(`.ri[data-idx="${brFocusIndex}"]`);
-  if (activeRow && isTvDevice) activeRow.scrollIntoView({ block: 'nearest' });
+  const activeEl = $('br-lst').querySelector('.ri.tv-f');
+  if (activeEl) activeEl.scrollIntoView({ block: 'nearest' });
 }
 
+function moveBrowseSelection(dir) {
+  const f = getBrowseFiltered();
+  if (!f.length) return false;
+  brActiveIndex = Math.max(0, Math.min(f.length - 1, brActiveIndex + dir));
+  renderBrowse();
+  return true;
+}
+function activateBrowseSelection() {
+  const el = $('br-lst').querySelector('.ri.tv-f');
+  if (el) { toggleBrSel(el); return true; }
+  return false;
+}
 window.toggleBrSel = (el) => {
-  brFocusIndex = Number(el.dataset.idx || 0);
   const url = el.dataset.url;
   if (brSel.has(url)) { brSel.delete(url); el.classList.remove('sel'); }
   else { brSel.add(url); el.classList.add('sel'); }
@@ -2160,21 +2166,14 @@ window.toggleBrSel = (el) => {
   else { $('slb').classList.remove('on'); }
 };
 
-function moveBrowseFocus(dir) {
-  if (!brFilteredCache.length) return;
-  brFocusIndex = clamp(brFocusIndex + dir, 0, brFilteredCache.length - 1);
-  renderBrowse();
-}
-
-function activateBrowseFocus() {
-  const row = $('br-lst').querySelector(`.ri[data-idx="${brFocusIndex}"]`);
-  if (row) { row.click(); return true; }
-  return false;
-}
-
 $('br-q').addEventListener('input', () => {
-  clearTimeout(brSearchTimer);
-  brSearchTimer = setTimeout(() => { resetBrowseFocus(); renderBrowse(); }, 180);
+  clearTimeout(brQueryDebounce);
+  brQueryDebounce = setTimeout(() => {
+    invalidateBrowseCache();
+    brWindowStart = 0;
+    brActiveIndex = 0;
+    renderBrowse();
+  }, 180);
 });
 $('sl-all').onclick = () => { getBrowseFiltered().forEach(s => brSel.add(s.url)); renderBrowse(); };
 $('sl-clr').onclick = () => { brSel.clear(); renderBrowse(); };
@@ -2402,7 +2401,10 @@ function applyTvMode() {
 }
 function getTvFocusableElements() {
   if (!isTvDevice) return [];
-  return Array.from(document.querySelectorAll('button, input, select, .ni, .itm, .rc, .epg-opt, .lmb, .tgl, .fab, .ib'))
+  const q = $('br-scr') && $('br-scr').classList.contains('on')
+    ? 'button, input, select, .ni, .itm, .rc, .epg-opt, .lmb, .tgl, .fab, .ib'
+    : 'button, input, select, .ni, .itm, .rc, .ri, .epg-opt, .lmb, .tgl, .fab, .ib';
+  return Array.from(document.querySelectorAll(q))
     .filter(el => {
       if (!el || el.disabled || el.classList.contains('hide')) return false;
       const cs = getComputedStyle(el);
@@ -2431,9 +2433,9 @@ function moveTvFocus(dir) {
 window.__svHandleTvKey = function(code) {
   if (!isTvDevice) return false;
   if ($('br-scr').classList.contains('on')) {
-    if (code === 19) { moveBrowseFocus(-1); return true; }
-    if (code === 20) { moveBrowseFocus(1); return true; }
-    if ([23,66,160].includes(code)) return activateBrowseFocus();
+    if (code === 19) return moveBrowseSelection(-1);
+    if (code === 20) return moveBrowseSelection(1);
+    if ([23,66,160].includes(code)) return activateBrowseSelection();
   }
   if ([19,21].includes(code)) { moveTvFocus(-1); return true; }
   if ([20,22].includes(code)) { moveTvFocus(1); return true; }
