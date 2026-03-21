@@ -149,19 +149,19 @@ body.tv-mode .hd{padding-top:10px}
 
 /* Guide */
 .gw{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}.gw::-webkit-scrollbar{display:none}
-.grow{display:grid;grid-template-columns:132px 1fr;height:46px;min-height:46px;border-bottom:1px solid rgba(255,255,255,.18);align-items:stretch}
-.gch{width:132px;min-width:132px;padding:6px 8px;display:flex;align-items:center;gap:6px;background:linear-gradient(90deg,var(--c1),var(--c1));position:sticky;left:0;z-index:8;border-right:1px solid rgba(255,255,255,.22);cursor:pointer;font-size:8px;font-weight:600;height:46px;overflow:hidden}
+.grow{display:grid;grid-template-columns:var(--guide-chw,136px) 1fr;height:var(--guide-rowh,48px);min-height:var(--guide-rowh,48px);border-bottom:1px solid rgba(255,255,255,.18);align-items:stretch}
+.gch{width:var(--guide-chw,136px);min-width:var(--guide-chw,136px);padding:7px 10px;display:flex;align-items:center;gap:8px;background:linear-gradient(90deg,var(--c1),var(--c1));position:sticky;left:0;z-index:8;border-right:1px solid rgba(255,255,255,.22);cursor:pointer;font-size:8px;font-weight:600;height:var(--guide-rowh,48px);overflow:hidden}
 .gch:active{background:var(--c2)}
 .gch img{width:20px;height:20px;border-radius:3px;flex-shrink:0;object-fit:cover}
-.gch .gch-t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.1}
-.gpr{position:absolute;top:1px;bottom:1px;padding:5px 7px;border-right:1px solid rgba(255,255,255,.12);overflow:hidden;display:flex;flex-direction:column;justify-content:center;font-size:7px;background:rgba(255,255,255,.02)}
-.gpr .gt{font-weight:600;overflow:hidden;text-overflow:ellipsis;line-height:1.05;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
-.gpr .gti{font-size:5px;color:var(--t3);line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
-.gpr.now{background:rgba(108,92,231,.1);border-left:2px solid var(--ac)}
-.gpr.past{opacity:.4}
+.gpr{position:absolute;top:4px;bottom:4px;padding:5px 7px;border:1px solid rgba(255,255,255,.10);overflow:hidden;display:flex;flex-direction:column;justify-content:center;font-size:8px;background:rgba(255,255,255,.03);z-index:2}
+.gpr .gt{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.08}
+.gpr .gti{font-size:6px;color:var(--t3);line-height:1.05;margin-top:2px}
+.gpr.now{background:rgba(108,92,231,.16);border-left:3px solid var(--ac)}
+.gpr.past{opacity:.5}
 .gnl{position:absolute;top:0;bottom:0;width:2px;background:var(--rd);z-index:4;pointer-events:none}
 
-.guide-strip{position:relative;flex:1;min-width:2240px;background:linear-gradient(180deg,rgba(255,255,255,.01),rgba(255,255,255,0));height:46px;overflow:hidden}
+.guide-strip{position:relative;flex:1;min-width:2240px;background:linear-gradient(180deg,rgba(255,255,255,.01),rgba(255,255,255,0));height:var(--guide-rowh,48px);overflow:hidden}
+.guide-strip::before{content:'';position:absolute;inset:0;background-image:repeating-linear-gradient(to right,transparent 0,transparent calc(var(--guide-slotw,160px) - 1px),rgba(255,255,255,.10) calc(var(--guide-slotw,160px) - 1px),rgba(255,255,255,.10) var(--guide-slotw,160px));pointer-events:none;z-index:0}
 .px-note{font-size:8px;color:var(--t2);margin-top:6px;line-height:1.4}
 
 /* EPG Cards */
@@ -2388,7 +2388,10 @@ function renderGuide() {
   }
 
   const now = Date.now();
-  const slotW = 160, chW = 132, guideRowH = 46;
+  const isTv = !!isTvDevice;
+  const slotW = isTv ? 170 : 150;
+  const chW = isTv ? 150 : 132;
+  const guideRowH = isTv ? 52 : 46;
   const startTime = new Date(now);
   startTime.setMinutes(startTime.getMinutes() < 30 ? 0 : 30, 0, 0);
   startTime.setHours(startTime.getHours() - 1);
@@ -2396,44 +2399,42 @@ function renderGuide() {
   const slots = [];
   for (let i = 0; i < 14; i++) slots.push(new Date(startTime.getTime() + i * 1800000));
   const endTime = slots[13].getTime() + 1800000;
+  const stripW = slotW * slots.length;
+  const rowVars = `--guide-slotw:${slotW}px;--guide-chw:${chW}px;--guide-rowh:${guideRowH}px;`;
 
-  let html = '<div style="display:flex;flex-direction:column;min-width:max-content">';
+  let html = `<div style="display:flex;flex-direction:column;min-width:${chW + stripW}px;${rowVars}">`;
 
-  // Time header
-  html += '<div style="display:flex;position:sticky;top:0;z-index:5;background:var(--bg)">';
-  html += `<div style="width:${chW}px;min-width:${chW}px;height:${guideRowH}px;padding:5px 8px;font-size:8px;color:var(--t3);border-bottom:1px solid var(--bd);position:sticky;left:0;z-index:6;background:var(--bg);display:flex;align-items:center">Channel</div>`;
+  html += '<div style="display:grid;grid-template-columns:var(--guide-chw) ' + stripW + 'px;position:sticky;top:0;z-index:12;background:var(--bg)">';
+  html += `<div style="width:${chW}px;min-width:${chW}px;height:${guideRowH}px;padding:6px 10px;font-size:${isTv ? 9 : 8}px;color:var(--t3);border-bottom:1px solid var(--bd);position:sticky;left:0;z-index:13;background:var(--bg);display:flex;align-items:center">Channel</div>`;
+  html += `<div style="display:flex;width:${stripW}px;height:${guideRowH}px;background:var(--bg)">`;
   slots.forEach(s => {
     const h = s.getHours(), m = s.getMinutes();
-    html += `<div style="min-width:${slotW}px;width:${slotW}px;height:${guideRowH}px;padding:5px;font-size:8px;font-weight:600;color:var(--t3);text-align:center;border-bottom:1px solid var(--bd);border-left:1px solid var(--bd);display:flex;align-items:center;justify-content:center">${h % 12 || 12}:${m.toString().padStart(2,'0')}${h >= 12 ? 'p' : 'a'}</div>`;
+    html += `<div style="min-width:${slotW}px;width:${slotW}px;height:${guideRowH}px;padding:6px;font-size:${isTv ? 9 : 8}px;font-weight:700;color:var(--t3);text-align:center;border-bottom:1px solid var(--bd);border-left:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center">${h % 12 || 12}:${m.toString().padStart(2,'0')}${h >= 12 ? 'p' : 'a'}</div>`;
   });
-  html += '</div>';
+  html += '</div></div>';
 
-  // Channel rows
-  matched.forEach((m, rowIdx) => {
-    const progs = epgData.programs[m.epgTitle] || [];
+  matched.forEach(m => {
+    const progs = (epgData.programs[m.epgTitle] || []).filter(p => p.stop > startTime.getTime() && p.start < endTime);
     const ch = epgData.channels[m.epgTitle];
 
-    html += '<div class="grow">';
-    html += `<div class="gch" data-tv-zone="guide-channel" data-guide-row="${rowIdx}" role="button" tabindex="-1" onclick="playItem('${m.id}')">`;
+    html += `<div class="grow" style="grid-template-columns:${chW}px ${stripW}px;height:${guideRowH}px;min-height:${guideRowH}px">`;
+    html += `<div class="gch" role="button" tabindex="-1" onclick="playItem('${m.id}')" style="width:${chW}px;min-width:${chW}px;height:${guideRowH}px">`;
     if (m.icon || (ch && ch.icon)) html += `<img src="${esc(m.icon || ch.icon)}" onerror="this.style.display='none'">`;
-    html += `<span class="gch-t">${esc(m.title)}</span></div>`;
-    html += '<div class="guide-strip">';
+    html += `<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.title)}</span></div>`;
+    html += `<div class="guide-strip" style="width:${stripW}px;min-width:${stripW}px;height:${guideRowH}px">`;
 
-    progs.filter(p => p.stop > startTime.getTime() && p.start < endTime).forEach(p => {
+    progs.forEach(p => {
       const pStart = Math.max(p.start, startTime.getTime());
       const pStop = Math.min(p.stop, endTime);
-      const left = (pStart - startTime.getTime()) / 1800000 * slotW;
-      const width = (pStop - pStart) / 1800000 * slotW;
+      const left = Math.max(0, (pStart - startTime.getTime()) / 1800000 * slotW);
+      const width = Math.max(34, (pStop - pStart) / 1800000 * slotW);
       const isNow = p.start <= now && p.stop > now;
       const isPast = p.stop <= now;
-      html += `<div class="gpr${isNow ? ' now' : ''}${isPast ? ' past' : ''}" data-tv-zone="guide-program" data-guide-row="${rowIdx}" role="button" tabindex="-1" aria-label="${esc(m.title)} ${esc(p.title)}" onclick="playItem('${m.id}')" style="left:${left}px;width:${width}px"><div class="gt">${esc(p.title)}</div><div class="gti">${fmtTime(p.start)}-${fmtTime(p.stop)}</div></div>`;
+      html += `<div class="gpr${isNow ? ' now' : ''}${isPast ? ' past' : ''}" role="button" tabindex="-1" aria-label="${esc(m.title)} ${esc(p.title)}" onclick="playItem('${m.id}')" style="left:${left}px;width:${Math.min(width, stripW - left)}px"><div class="gt">${esc(p.title)}</div><div class="gti">${fmtTime(p.start)}-${fmtTime(p.stop)}</div></div>`;
     });
 
-    // Now line
     const nowLeft = (now - startTime.getTime()) / 1800000 * slotW;
-    if (nowLeft >= 0 && nowLeft <= slotW * 14) {
-      html += `<div class="gnl" style="left:${nowLeft}px"></div>`;
-    }
+    if (nowLeft >= 0 && nowLeft <= stripW) html += `<div class="gnl" style="left:${nowLeft}px"></div>`;
 
     html += '</div></div>';
   });
@@ -2441,9 +2442,8 @@ function renderGuide() {
   html += '</div>';
   wrap.innerHTML = html;
 
-  // Scroll to now
   setTimeout(() => {
-    const nowOff = (now - startTime.getTime()) / 1800000 * slotW - 80;
+    const nowOff = (now - startTime.getTime()) / 1800000 * slotW - (isTv ? 120 : 90);
     wrap.scrollLeft = Math.max(0, nowOff);
     if (isTvDevice) refreshTvFocus();
   }, 100);
@@ -2673,92 +2673,55 @@ function focusHomeGridHorizontal(current, dirCode) {
   }
   return false;
 }
-
-function getGuideRowIndex(el) {
-  const row = el && el.getAttribute ? Number(el.getAttribute('data-guide-row')) : NaN;
-  return Number.isFinite(row) ? row : -1;
+function cycleSelectOption(el, step) {
+  if (!el || (el.tagName || '').toLowerCase() !== 'select') return false;
+  const opts = Array.from(el.options || []).filter(o => !o.disabled);
+  if (!opts.length) return false;
+  let enabledIndex = opts.findIndex(o => o.value === el.value);
+  if (enabledIndex < 0) enabledIndex = Math.max(0, el.selectedIndex || 0);
+  enabledIndex = (enabledIndex + step + opts.length) % opts.length;
+  const next = opts[enabledIndex];
+  if (!next) return false;
+  el.value = next.value;
+  el.selectedIndex = Array.from(el.options).indexOf(next);
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  return true;
 }
-function getGuideFocusableByZone(zone) {
-  return getTvFocusableElements().filter(el => getTvZone(el) === zone);
-}
-function focusGuideRowTarget(zone, rowIdx, current) {
-  const candidates = getGuideFocusableByZone(zone).filter(el => getGuideRowIndex(el) === rowIdx);
-  if (!candidates.length) return false;
-  if (zone === 'guide-channel') {
-    const idx = getTvFocusableElements().indexOf(candidates[0]);
-    return idx >= 0 ? focusElementAtIndex(idx) : false;
+function focusWithinContainerRows(container, current, dirCode) {
+  if (!container || !current) return false;
+  const els = getTvFocusableElements().map((el, idx) => ({ el, idx, rect: el.getBoundingClientRect() }))
+    .filter(x => container.contains(x.el) && !(x.el.closest && x.el.closest('#bnav')));
+  if (!els.length) return false;
+  const curIdx = els.findIndex(x => x.el === current);
+  if (curIdx < 0) return false;
+  const cur = els[curIdx];
+  const cy = cur.rect.top + cur.rect.height / 2;
+  const cx = cur.rect.left + cur.rect.width / 2;
+  const rowBand = Math.max(22, Math.min(46, cur.rect.height * 0.9));
+  const sameRow = els.filter(x => Math.abs((x.rect.top + x.rect.height / 2) - cy) <= rowBand && x.el !== current);
+  if (dirCode === 21) {
+    const left = sameRow.filter(x => (x.rect.left + x.rect.width / 2) < cx - 6).sort((a,b) => b.rect.left - a.rect.left);
+    if (left.length) return focusElementAtIndex(left[0].idx);
+    return false;
   }
-  const curRect = current && current.getBoundingClientRect ? current.getBoundingClientRect() : null;
-  const cx = curRect ? (curRect.left + curRect.width / 2) : 0;
-  candidates.sort((a,b) => {
-    const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
-    const da = Math.abs((ra.left + ra.width / 2) - cx);
-    const db = Math.abs((rb.left + rb.width / 2) - cx);
-    if (da !== db) return da - db;
-    return ra.left - rb.left;
+  if (dirCode === 22) {
+    const right = sameRow.filter(x => (x.rect.left + x.rect.width / 2) > cx + 6).sort((a,b) => a.rect.left - b.rect.left);
+    if (right.length) return focusElementAtIndex(right[0].idx);
+    return false;
+  }
+  const vertical = els.filter(x => x.el !== current && ((dirCode === 20 && (x.rect.top + x.rect.height / 2) > cy + 6) || (dirCode === 19 && (x.rect.top + x.rect.height / 2) < cy - 6)));
+  if (!vertical.length) return false;
+  vertical.sort((a,b) => {
+    const ay = Math.abs((a.rect.top + a.rect.height / 2) - cy);
+    const by = Math.abs((b.rect.top + b.rect.height / 2) - cy);
+    if (ay !== by) return ay - by;
+    return Math.abs((a.rect.left + a.rect.width / 2) - cx) - Math.abs((b.rect.left + b.rect.width / 2) - cx);
   });
-  const idx = getTvFocusableElements().indexOf(candidates[0]);
-  return idx >= 0 ? focusElementAtIndex(idx) : false;
+  const nearestY = Math.abs((vertical[0].rect.top + vertical[0].rect.height / 2) - cy);
+  const targetRow = vertical.filter(x => Math.abs(Math.abs((x.rect.top + x.rect.height / 2) - cy) - nearestY) <= 18)
+    .sort((a,b) => Math.abs((a.rect.left + a.rect.width / 2) - cx) - Math.abs((b.rect.left + b.rect.width / 2) - cx));
+  return targetRow.length ? focusElementAtIndex(targetRow[0].idx) : false;
 }
-function focusGuideHorizontal(current, dirCode) {
-  const zone = getTvZone(current);
-  const rowIdx = getGuideRowIndex(current);
-  if (rowIdx < 0) return false;
-  const els = getTvFocusableElements();
-  if (zone === 'guide-channel' && dirCode === 22) {
-    const rowPrograms = getGuideFocusableByZone('guide-program').filter(el => getGuideRowIndex(el) === rowIdx).sort((a,b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
-    if (!rowPrograms.length) return false;
-    const idx = els.indexOf(rowPrograms[0]);
-    return idx >= 0 ? focusElementAtIndex(idx) : false;
-  }
-  if (zone === 'guide-program') {
-    const rowPrograms = getGuideFocusableByZone('guide-program').filter(el => getGuideRowIndex(el) === rowIdx).sort((a,b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
-    const pos = rowPrograms.indexOf(current);
-    if (dirCode === 21) {
-      if (pos > 0) {
-        const idx = els.indexOf(rowPrograms[pos - 1]);
-        return idx >= 0 ? focusElementAtIndex(idx) : false;
-      }
-      return focusGuideRowTarget('guide-channel', rowIdx, current);
-    }
-    if (dirCode === 22) {
-      if (pos >= 0 && pos < rowPrograms.length - 1) {
-        const idx = els.indexOf(rowPrograms[pos + 1]);
-        return idx >= 0 ? focusElementAtIndex(idx) : false;
-      }
-      return false;
-    }
-  }
-  return false;
-}
-function focusGuideVertical(current, dirCode) {
-  const zone = getTvZone(current);
-  if (zone !== 'guide-channel' && zone !== 'guide-program') return false;
-  const rowIdx = getGuideRowIndex(current);
-  if (rowIdx < 0) return false;
-  const delta = dirCode === 20 ? 1 : -1;
-  const targetRow = rowIdx + delta;
-  const rowTarget = focusGuideRowTarget(zone, targetRow, current);
-  if (rowTarget) return true;
-  if (dirCode === 20) {
-    const navEls = getTvFocusableElements().filter(el => el.closest && el.closest('#bnav'));
-    if (navEls.length) {
-      let bestIdx = -1;
-      let bestScore = Infinity;
-      const curRect = current.getBoundingClientRect();
-      const cx = curRect.left + curRect.width / 2;
-      navEls.forEach(navEl => {
-        const idx = getTvFocusableElements().indexOf(navEl);
-        const r = navEl.getBoundingClientRect();
-        const score = Math.abs((r.left + r.width / 2) - cx);
-        if (idx >= 0 && score < bestScore) { bestScore = score; bestIdx = idx; }
-      });
-      if (bestIdx >= 0) return focusElementAtIndex(bestIdx);
-    }
-  }
-  return false;
-}
-
 function moveTvFocusSpatial(dirCode) {
   const els = getTvFocusableElements();
   if (!els.length) return false;
@@ -2771,9 +2734,15 @@ function moveTvFocusSpatial(dirCode) {
   const cy = currentRect.top + currentRect.height / 2;
   const currentZone = getTvZone(current);
 
+  if (current && current.tagName && current.tagName.toLowerCase() === 'select' && (dirCode === 21 || dirCode === 22)) {
+    return cycleSelectOption(current, dirCode === 22 ? 1 : -1);
+  }
+  const settingsContainer = current && current.closest && current.closest('#settings-scr');
+  if (settingsContainer && focusWithinContainerRows(settingsContainer, current, dirCode)) return true;
+  const repoFilterBar = current && current.closest && current.closest('.fbar');
+  if (repoFilterBar && focusWithinContainerRows(repoFilterBar, current, dirCode)) return true;
+
   if ((dirCode === 21 || dirCode === 22) && focusWithinGroupRow(current, dirCode)) return true;
-  if ((currentZone === 'guide-channel' || currentZone === 'guide-program') && (dirCode === 21 || dirCode === 22) && focusGuideHorizontal(current, dirCode)) return true;
-  if ((currentZone === 'guide-channel' || currentZone === 'guide-program') && (dirCode === 19 || dirCode === 20) && focusGuideVertical(current, dirCode)) return true;
 
   if (currentZone === 'group-bar') {
     if (dirCode === 22) {
@@ -2917,7 +2886,7 @@ window.__svHandleTvKey = function(code) {
       setTimeout(refreshTvFocus, 30);
       return true;
     }
-    if (tag === 'select') { el.focus(); el.click && el.click(); return true; }
+    if (tag === 'select') { el.focus(); if (typeof el.showPicker === 'function' && !isTvDevice) { try { el.showPicker(); return true; } catch(e) {} } return cycleSelectOption(el, 1) || true; }
     if (tag === 'textarea') { el.focus(); return true; }
     if (tag === 'input') {
       const type = (el.type || '').toLowerCase();
