@@ -153,7 +153,7 @@ body.tv-mode .hd{padding-top:10px}
 .gch{width:var(--guide-chw,136px);min-width:var(--guide-chw,136px);padding:7px 10px;display:flex;align-items:center;gap:8px;background:linear-gradient(90deg,var(--c1),var(--c1));position:sticky;left:0;z-index:8;border-right:1px solid rgba(255,255,255,.22);cursor:pointer;font-size:8px;font-weight:600;height:var(--guide-rowh,48px);overflow:hidden}
 .gch:active{background:var(--c2)}
 .gch img{width:20px;height:20px;border-radius:3px;flex-shrink:0;object-fit:cover}
-.gpr{position:absolute;top:4px;bottom:4px;padding:5px 7px;border:1px solid rgba(255,255,255,.10);overflow:hidden;display:flex;flex-direction:column;justify-content:center;font-size:8px;background:rgba(255,255,255,.03);z-index:2}
+.gpr{position:absolute;top:4px;bottom:4px;padding:5px 7px;border:1px solid rgba(255,255,255,.10);overflow:hidden;display:flex;flex-direction:column;justify-content:center;font-size:8px;background:rgba(255,255,255,.03);z-index:2;min-width:0}
 .gpr .gt{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.08}
 .gpr .gti{font-size:6px;color:var(--t3);line-height:1.05;margin-top:2px}
 .gpr.now{background:rgba(108,92,231,.16);border-left:3px solid var(--ac)}
@@ -368,7 +368,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.5.9 (Build 44)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.5.10 (Build 45)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
   </div>
 </div>
 
@@ -1091,6 +1091,25 @@ function getNowNext(epgId) {
 
 function getAllEpgIds() {
   return Object.keys(epgData.channels || {}).sort();
+}
+
+function getGuidePrograms(epgId, startMs, endMs) {
+  const list = Array.isArray(epgData.programs && epgData.programs[epgId]) ? epgData.programs[epgId] : [];
+  if (!list.length) return [];
+  const seen = new Set();
+  const out = [];
+  const pushProg = (p) => {
+    if (!p || !(p.stop > startMs && p.start < endMs)) return;
+    const key = [p.start, p.stop, p.title || ''].join('|');
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(p);
+  };
+  for (const p of list) pushProg(p);
+  const nn = getNowNext(epgId);
+  if (nn.now) pushProg(nn.now);
+  if (nn.next) pushProg(nn.next);
+  return out.sort((a, b) => a.start - b.start);
 }
 
 function timeAgo(ts) {
@@ -2389,17 +2408,19 @@ function renderGuide() {
 
   const now = Date.now();
   const isTv = !!isTvDevice;
-  const slotW = isTv ? 170 : 150;
-  const chW = isTv ? 150 : 132;
-  const guideRowH = isTv ? 52 : 46;
+  const slotW = isTv ? 170 : 154;
+  const chW = isTv ? 150 : 136;
+  const guideRowH = isTv ? 52 : 50;
   const startTime = new Date(now);
   startTime.setMinutes(startTime.getMinutes() < 30 ? 0 : 30, 0, 0);
   startTime.setHours(startTime.getHours() - 1);
+  const startMs = startTime.getTime();
 
   const slots = [];
-  for (let i = 0; i < 14; i++) slots.push(new Date(startTime.getTime() + i * 1800000));
+  for (let i = 0; i < 14; i++) slots.push(new Date(startMs + i * 1800000));
   const endTime = slots[13].getTime() + 1800000;
   const stripW = slotW * slots.length;
+  const minProgWidth = isTv ? 40 : 56;
   const rowVars = `--guide-slotw:${slotW}px;--guide-chw:${chW}px;--guide-rowh:${guideRowH}px;`;
 
   let html = `<div style="display:flex;flex-direction:column;min-width:${chW + stripW}px;${rowVars}">`;
@@ -2414,7 +2435,7 @@ function renderGuide() {
   html += '</div></div>';
 
   matched.forEach(m => {
-    const progs = (epgData.programs[m.epgTitle] || []).filter(p => p.stop > startTime.getTime() && p.start < endTime);
+    const progs = getGuidePrograms(m.epgTitle, startMs, endTime);
     const ch = epgData.channels[m.epgTitle];
 
     html += `<div class="grow" style="grid-template-columns:${chW}px ${stripW}px;height:${guideRowH}px;min-height:${guideRowH}px">`;
@@ -2424,16 +2445,19 @@ function renderGuide() {
     html += `<div class="guide-strip" style="width:${stripW}px;min-width:${stripW}px;height:${guideRowH}px">`;
 
     progs.forEach(p => {
-      const pStart = Math.max(p.start, startTime.getTime());
+      const pStart = Math.max(p.start, startMs);
       const pStop = Math.min(p.stop, endTime);
-      const left = Math.max(0, (pStart - startTime.getTime()) / 1800000 * slotW);
-      const width = Math.max(34, (pStop - pStart) / 1800000 * slotW);
+      const left = Math.max(0, ((pStart - startMs) / 1800000) * slotW);
+      const rawWidth = ((pStop - pStart) / 1800000) * slotW;
+      const width = Math.max(minProgWidth, rawWidth);
+      const clippedWidth = Math.max(Math.min(width, stripW - left), Math.min(rawWidth, stripW - left));
+      if (clippedWidth <= 2) return;
       const isNow = p.start <= now && p.stop > now;
       const isPast = p.stop <= now;
-      html += `<div class="gpr${isNow ? ' now' : ''}${isPast ? ' past' : ''}" role="button" tabindex="-1" aria-label="${esc(m.title)} ${esc(p.title)}" onclick="playItem('${m.id}')" style="left:${left}px;width:${Math.min(width, stripW - left)}px"><div class="gt">${esc(p.title)}</div><div class="gti">${fmtTime(p.start)}-${fmtTime(p.stop)}</div></div>`;
+      html += `<div class="gpr${isNow ? ' now' : ''}${isPast ? ' past' : ''}" role="button" tabindex="-1" aria-label="${esc(m.title)} ${esc(p.title)}" onclick="playItem('${m.id}')" style="left:${left}px;width:${clippedWidth}px"><div class="gt">${esc(p.title)}</div><div class="gti">${fmtTime(p.start)}-${fmtTime(p.stop)}</div></div>`;
     });
 
-    const nowLeft = (now - startTime.getTime()) / 1800000 * slotW;
+    const nowLeft = ((now - startMs) / 1800000) * slotW;
     if (nowLeft >= 0 && nowLeft <= stripW) html += `<div class="gnl" style="left:${nowLeft}px"></div>`;
 
     html += '</div></div>';
@@ -2443,7 +2467,7 @@ function renderGuide() {
   wrap.innerHTML = html;
 
   setTimeout(() => {
-    const nowOff = (now - startTime.getTime()) / 1800000 * slotW - (isTv ? 120 : 90);
+    const nowOff = ((now - startMs) / 1800000) * slotW - (isTv ? 120 : 90);
     wrap.scrollLeft = Math.max(0, nowOff);
     if (isTvDevice) refreshTvFocus();
   }, 100);
