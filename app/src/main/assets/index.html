@@ -2460,6 +2460,56 @@ function moveTvFocusSpatial(dirCode) {
   const els = getTvFocusableElements();
   if (!els.length) return false;
   const current = els[tvFocusIndex] || document.activeElement || els[0];
+  const inBottomNav = !!(current && current.closest && current.closest('#bnav'));
+  const navEls = els.filter(el => el.closest && el.closest('#bnav'));
+
+  if (!inBottomNav && dirCode === 20 && navEls.length) {
+    const curRect = current.getBoundingClientRect();
+    const nearBottom = curRect.bottom >= (window.innerHeight - 170);
+    if (nearBottom) {
+      let bestNavIdx = els.indexOf(navEls[0]);
+      let bestNavScore = Infinity;
+      navEls.forEach(navEl => {
+        const r = navEl.getBoundingClientRect();
+        const score = Math.abs((r.left + r.width / 2) - (curRect.left + curRect.width / 2));
+        if (score < bestNavScore) {
+          bestNavScore = score;
+          bestNavIdx = els.indexOf(navEl);
+        }
+      });
+      if (bestNavIdx >= 0) return focusElementAtIndex(bestNavIdx);
+    }
+  }
+
+  if (inBottomNav) {
+    const navIdx = navEls.indexOf(current);
+    if ((dirCode === 21 || dirCode === 22) && navIdx >= 0 && navEls.length) {
+      const nextNav = navEls[(navIdx + (dirCode === 22 ? 1 : -1) + navEls.length) % navEls.length];
+      const idx = els.indexOf(nextNav);
+      if (idx >= 0) return focusElementAtIndex(idx);
+    }
+    if (dirCode === 19) {
+      const curRect = current.getBoundingClientRect();
+      let bestIdx = -1;
+      let bestScore = Infinity;
+      els.forEach((el, idx) => {
+        if (el === current || (el.closest && el.closest('#bnav'))) return;
+        const r = el.getBoundingClientRect();
+        const ex = r.left + r.width / 2;
+        const ey = r.top + r.height / 2;
+        const dx = ex - (curRect.left + curRect.width / 2);
+        const dy = ey - (curRect.top + curRect.height / 2);
+        if (dy >= -4) return;
+        const score = Math.abs(dy) * 100 + Math.abs(dx);
+        if (score < bestScore) {
+          bestScore = score;
+          bestIdx = idx;
+        }
+      });
+      if (bestIdx >= 0) return focusElementAtIndex(bestIdx);
+    }
+  }
+
   const curRect = current.getBoundingClientRect();
   const cx = curRect.left + curRect.width / 2;
   const cy = curRect.top + curRect.height / 2;
@@ -2479,7 +2529,8 @@ function moveTvFocusSpatial(dirCode) {
     if (!(right || left || down || up)) return;
     const primary = (dirCode === 21 || dirCode === 22) ? Math.abs(dx) : Math.abs(dy);
     const secondary = (dirCode === 21 || dirCode === 22) ? Math.abs(dy) : Math.abs(dx);
-    const score = primary * 100 + secondary;
+    const sameBottomBand = (el.closest && el.closest('#bnav')) === inBottomNav;
+    const score = primary * 100 + secondary + (sameBottomBand ? 0 : 15000);
     if (score < bestScore) {
       bestScore = score;
       bestIdx = idx;
