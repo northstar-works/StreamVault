@@ -35,6 +35,8 @@ import androidx.documentfile.provider.DocumentFile;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
+import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
 
 import org.json.JSONObject;
 import java.nio.charset.StandardCharsets;
@@ -50,6 +52,7 @@ public class MainActivity extends Activity {
     private static final int LOCAL_STREAM_FILE_REQUEST = 1002;
     private static final int RECORDING_DIR_REQUEST = 1003;
     private static final int BACKUP_DIR_REQUEST = 1004;
+    private static final int BACKUP_FILE_REQUEST = 1005;
     private WebView webView;
     private FrameLayout fullscreenContainer;
     private View customView;
@@ -249,6 +252,11 @@ public class MainActivity extends Activity {
         public void exportBackup(String backupJson, String filename, String targetDir) {
             runOnUiThread(() -> exportBackupToStorage(backupJson, filename, targetDir));
         }
+
+        @JavascriptInterface
+        public void pickBackupFile() {
+            runOnUiThread(() -> openBackupFilePicker());
+        }
     }
 
     private void openLocalFilePicker() {
@@ -266,6 +274,20 @@ public class MainActivity extends Activity {
         }
     }
 
+
+    private void openBackupFilePicker() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("application/json");
+            intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/json", "text/json", "text/plain"});
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            startActivityForResult(Intent.createChooser(intent, "Choose StreamVault backup"), BACKUP_FILE_REQUEST);
+        } catch (Exception e) {
+            toastNative("Backup picker unavailable: " + e.getMessage());
+        }
+    }
+
     private void openDirectoryPicker(int requestCode) {
         try {
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
@@ -273,7 +295,7 @@ public class MainActivity extends Activity {
                 | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
                 | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
-            startActivityForResult(intent, requestCode);
+            startActivityForResult(Intent.createChooser(intent, requestCode == RECORDING_DIR_REQUEST ? "Choose recording folder" : "Choose backup folder"), requestCode);
         } catch (Exception e) {
             toastNative("Folder picker unavailable: " + e.getMessage());
         }
@@ -371,6 +393,12 @@ public class MainActivity extends Activity {
         webView.evaluateJavascript(js, null);
     }
 
+
+    private void notifyJsBackupFilePicked(String jsonText, String label) {
+        String js = "window.onNativeBackupFilePicked && window.onNativeBackupFilePicked(" + quoteJs(jsonText) + "," + quoteJs(label) + ");";
+        webView.evaluateJavascript(js, null);
+    }
+
     private String quoteJs(String value) {
         if (value == null) return "null";
         return JSONObject.quote(value);
@@ -407,6 +435,30 @@ public class MainActivity extends Activity {
             }
             fileUploadCallback.onReceiveValue(results);
             fileUploadCallback = null;
+            return;
+        }
+
+        if (requestCode == BACKUP_FILE_REQUEST) {
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+                Uri uri = data.getData();
+                try {
+                    final int takeFlags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                    getContentResolver().takePersistableUriPermission(uri, takeFlags | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                } catch (Exception ignored) {}
+                try (InputStream is = getContentResolver().openInputStream(uri)) {
+                    if (is == null) throw new IllegalStateException("Could not open backup file");
+                    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                    byte[] buf = new byte[4096];
+                    int len;
+                    while ((len = is.read(buf)) != -1) { bos.write(buf, 0, len); }
+                    String jsonText = bos.toString(StandardCharsets.UTF_8.name());
+                    String label = uri.getLastPathSegment() != null ? uri.getLastPathSegment() : uri.toString();
+                    notifyJsBackupFilePicked(jsonText, label);
+                } catch (Exception e) {
+                    notifyJsBackupError(e.getMessage() != null ? e.getMessage() : String.valueOf(e));
+                    toastNative("Restore failed: " + e.getMessage());
+                }
+            }
             return;
         }
 

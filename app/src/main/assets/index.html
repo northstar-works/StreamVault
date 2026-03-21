@@ -218,9 +218,11 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
 .ld2{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:5}
 .spn{width:32px;height:32px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--ac);border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
-body.tv-mode .bnav .ni,body.tv-mode button,body.tv-mode input,body.tv-mode select,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode .epg-opt,body.tv-mode .lmb,body.tv-mode .tgl{outline:none}
-body.tv-mode .tv-f,body.tv-mode .ni:focus,body.tv-mode button:focus,body.tv-mode input:focus,body.tv-mode select:focus,body.tv-mode .itm:focus,body.tv-mode .rc:focus,body.tv-mode .ri:focus,body.tv-mode .epg-opt:focus,body.tv-mode .lmb:focus,body.tv-mode .tgl:focus,body.tv-mode .fab:focus,body.tv-mode .ib:focus{box-shadow:0 0 0 2px var(--ac),0 0 0 4px rgba(108,92,231,.25)!important;transform:none}
-body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .itm,body.tv-mode .rc{min-height:44px}
+body.tv-mode .bnav .ni,body.tv-mode button,body.tv-mode input,body.tv-mode select,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode .epg-opt,body.tv-mode .lmb,body.tv-mode .tgl,body.tv-mode .fab,body.tv-mode .ib{outline:none;transition:box-shadow .12s ease,transform .12s ease,background .12s ease}
+body.tv-mode .tv-f,body.tv-mode .ni:focus,body.tv-mode button:focus,body.tv-mode input:focus,body.tv-mode select:focus,body.tv-mode .itm:focus,body.tv-mode .rc:focus,body.tv-mode .ri:focus,body.tv-mode .epg-opt:focus,body.tv-mode .lmb:focus,body.tv-mode .tgl:focus,body.tv-mode .fab:focus,body.tv-mode .ib:focus{box-shadow:0 0 0 3px #fff,0 0 0 6px rgba(108,92,231,.95),0 0 18px rgba(108,92,231,.5)!important;transform:scale(1.015);background-image:linear-gradient(0deg,rgba(108,92,231,.14),rgba(108,92,231,.14))}
+body.tv-mode .tv-f::after,body.tv-mode .ni:focus::after,body.tv-mode button:focus::after,body.tv-mode input:focus::after,body.tv-mode select:focus::after,body.tv-mode .itm:focus::after,body.tv-mode .rc:focus::after,body.tv-mode .ri:focus::after,body.tv-mode .epg-opt:focus::after,body.tv-mode .lmb:focus::after,body.tv-mode .tgl:focus::after,body.tv-mode .fab:focus::after,body.tv-mode .ib:focus::after{content:'';position:absolute;left:-6px;top:50%;transform:translateY(-50%);width:4px;height:70%;border-radius:999px;background:#fff;pointer-events:none}
+body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode button,body.tv-mode .ib,body.tv-mode .fab{min-height:44px;position:relative}
+body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.tv-mode .px-grid{scroll-margin-top:70px}
 </style>
 </head>
 <body>
@@ -230,8 +232,7 @@ body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .itm,body.tv-mode .rc{min-
 
 <!-- ═══ LIBRARY ═══ -->
 <div id="lib-scr" class="scr on">
-  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b31</span>
-    <button class="ib" id="btn-imp" title="Import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b36</span>
     <button class="ib" id="btn-exp" title="Export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
   </div></div>
   <div class="libbar">
@@ -344,7 +345,7 @@ body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .itm,body.tv-mode .rc{min-
     <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.4.2 (Build 34)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.5.1 (Build 36)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
   </div>
 </div>
 
@@ -1091,6 +1092,7 @@ function showTab(id) {
   if (id !== 'lib-scr') plexAddMode = false;
   if (id === 'guide-scr') renderGuide();
   if (id === 'set-scr') renderSettings();
+  setTimeout(refreshTvFocus, 40);
 }
 
 document.querySelectorAll('.ni').forEach(n => {
@@ -1131,11 +1133,12 @@ function getTabOrder() {
 function getLibPageDefs() {
   const c = getLibPageCounts();
   const labels = { itv:'ITV', plex:'PlexStr', icam:'iCam' };
-  return getTabOrder().filter(id => c[id]).map(id => ({ id, label: labels[id], count: c[id] }));
+  const plexCfg = getPlexCfg();
+  return getTabOrder().filter(id => c[id] || (id === 'plex' && (plexAddMode || !!(plexCfg.server && plexCfg.token)))).map(id => ({ id, label: labels[id], count: c[id] }));
 }
 function ensureActiveLibPage() {
   const defs = getLibPageDefs().map(x => x.id);
-  if (plexAddMode && defs.includes('plex')) { activeLibPage = 'plex'; return; }
+  if (plexAddMode) { activeLibPage = 'plex'; return; }
   if (!defs.includes(activeLibPage)) activeLibPage = defs[0] || 'all';
 }
 function getItemsForLibPage() {
@@ -1373,33 +1376,21 @@ function renderLibExtra() {
   const cfg = getPlexCfg();
   const sectionOptions = '<option value="">All libraries</option>' + (cfg.sections || []).map(s => `<option value="${esc(s.key)}"${String(cfg.section||'')===String(s.key)?' selected':''}>${esc(s.title)}${s.type ? ' · ' + esc(s.type) : ''}</option>`).join('');
   const saved = items.filter(isPlexItem).length;
-  extra.innerHTML = `<div class="px-card"><div class="px-head"><div><div class="px-title">PlexStr</div><div class="px-sub">Search your Plex library and add titles directly into StreamVault.</div></div><span class="cnt">${saved}</span></div><div class="px-grid"><input id="plex-server" class="full" placeholder="http://192.168.1.10:32400" value="${esc(cfg.server || '')}"><input id="plex-token" class="full" placeholder="X-Plex-Token" value="${esc(cfg.token || '')}"><select id="plex-section">${sectionOptions}</select><input id="plex-query" placeholder="Search Plex library…"></div><div class="px-actions"><button class="bc" id="plex-connect">Connect</button><button class="bs" id="plex-search-btn">Search</button><button class="bc" id="plex-open-lib">Open PlexStr Library</button></div><div id="plex-status" class="px-sub" style="margin-top:8px">${cfg.sections && cfg.sections.length ? ('Connected · ' + cfg.sections.length + ' libraries') : 'Not connected yet'}</div><div class="px-results" id="plex-results"></div></div>`;
-  $('plex-server').onchange = e => { cfg.server = normalizePlexServer(e.target.value); saveSettings(); };
-  $('plex-token').onchange = e => { cfg.token = String(e.target.value || '').trim(); saveSettings(); };
+  const statusMsg = !cfg.server || !cfg.token ? 'Configure Plex in Settings first' : (cfg.sections && cfg.sections.length ? ('Connected · ' + cfg.sections.length + ' libraries') : 'Ready to load Plex libraries');
+  extra.innerHTML = `<div class="px-card"><div class="px-head"><div><div class="px-title">PlexStr</div><div class="px-sub">Browse and add items from your connected Plex server.</div></div><span class="cnt">${saved}</span></div><div class="px-grid"><select id="plex-section">${sectionOptions}</select><input id="plex-query" placeholder="Search Plex library…"></div><div class="px-actions"><button class="bs" id="plex-search-btn">Search</button><button class="bc" id="plex-open-lib">Open PlexStr Library</button></div><div id="plex-status" class="px-sub" style="margin-top:8px">${statusMsg}</div><div class="px-results" id="plex-results"></div></div>`;
   $('plex-section').onchange = e => { cfg.section = e.target.value; saveSettings(); };
-  $('plex-connect').onclick = async () => {
-    cfg.server = normalizePlexServer($('plex-server').value);
-    cfg.token = String($('plex-token').value || '').trim();
-    saveSettings();
-    try {
-      const sections = await plexConnect(true);
-      renderLibExtra();
-      $('plex-status').textContent = 'Connected · ' + sections.length + ' libraries';
-      toast('Plex connected');
-    } catch (e) {
-      $('plex-status').textContent = 'Connection failed · ' + e.message;
-      toast('Plex connect failed: ' + e.message);
-    }
+  const ensurePlexConnected = async () => {
+    if (!cfg.server || !cfg.token) throw new Error('Configure Plex in Settings first');
+    if (!cfg.sections || !cfg.sections.length) await plexConnect(false);
   };
   const runSearch = async () => {
-    cfg.server = normalizePlexServer($('plex-server').value);
-    cfg.token = String($('plex-token').value || '').trim();
     cfg.section = $('plex-section').value || '';
     saveSettings();
     const q = $('plex-query').value.trim();
     if (!q) { toast('Enter a Plex search'); return; }
     $('plex-results').innerHTML = '<div class="px-sub">Searching Plex…</div>';
     try {
+      await ensurePlexConnected();
       const results = await plexSearch(q);
       if (!results.length) { $('plex-results').innerHTML = '<div class="px-sub">No results found.</div>'; return; }
       $('plex-results').innerHTML = results.map(r => {
@@ -1408,20 +1399,22 @@ function renderLibExtra() {
         return `<div class="px-row"><div class="px-thumb">${thumb ? '<img src="' + esc(thumb) + '">' : ''}</div><div class="px-info"><div class="nm">${esc(r.type==='episode' && r.grandparentTitle ? (r.grandparentTitle + ' — ' + r.title) : r.title)}</div><div class="mt">${esc(meta)}</div></div><button data-rating="${esc(r.ratingKey)}">Add</button></div>`;
       }).join('');
       Array.from($('plex-results').querySelectorAll('button[data-rating]')).forEach((btn, idx) => btn.onclick = () => addPlexItem(results[idx]));
+      setTimeout(refreshTvFocus, 30);
     } catch (e) {
       $('plex-results').innerHTML = '<div class="px-sub">Search failed · ' + esc(e.message) + '</div>';
+      $('plex-status').textContent = e.message;
       toast('Plex search failed: ' + e.message);
     }
   };
   $('plex-search-btn').onclick = runSearch;
   $('plex-open-lib').onclick = async () => {
-    cfg.server = normalizePlexServer($('plex-server').value);
-    cfg.token = String($('plex-token').value || '').trim();
     cfg.section = $('plex-section').value || '';
     saveSettings();
     $('plex-results').innerHTML = '<div class="px-sub">Loading library…</div>';
     try {
-      if (!cfg.sections || !cfg.sections.length) await plexConnect(false);
+      await ensurePlexConnected();
+      renderLibExtra();
+      $('plex-results').innerHTML = '<div class="px-sub">Loading library…</div>';
       const target = cfg.section ? ('/library/sections/' + encodeURIComponent(cfg.section) + '/all') : '/library/recentlyAdded';
       const resp = await fetch(plexUrl(target));
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -1433,12 +1426,18 @@ function renderLibExtra() {
         return `<div class="px-row"><div class="px-thumb">${thumb ? '<img src="' + esc(thumb) + '">' : ''}</div><div class="px-info"><div class="nm">${esc(r.type==='episode' && r.grandparentTitle ? (r.grandparentTitle + ' — ' + r.title) : r.title)}</div><div class="mt">${esc(meta)}</div></div><button data-rating="${esc(r.ratingKey)}">Add</button></div>`;
       }).join('');
       Array.from($('plex-results').querySelectorAll('button[data-rating]')).forEach((btn, idx) => btn.onclick = () => addPlexItem(results[idx]));
+      setTimeout(refreshTvFocus, 30);
     } catch (e) {
       $('plex-results').innerHTML = '<div class="px-sub">Library open failed · ' + esc(e.message) + '</div>';
+      $('plex-status').textContent = e.message;
       toast('Plex library open failed: ' + e.message);
     }
   };
   $('plex-query').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); } };
+  if (cfg.server && cfg.token && (!cfg.sections || !cfg.sections.length)) {
+    ensurePlexConnected().then(() => { $('plex-status').textContent = 'Connected · ' + (cfg.sections || []).length + ' libraries'; renderLibExtra(); }).catch(() => {});
+  }
+  setTimeout(refreshTvFocus, 30);
 }
 // ─── Library Rendering ───
 
@@ -1474,7 +1473,7 @@ function renderLib() {
   renderLibExtra();
   const f = getFilteredItems();
   const emptyTitle = activeLibPage === 'itv' ? 'No ITV streams' : activeLibPage === 'icam' ? 'No iCam streams' : activeLibPage === 'plex' ? 'No PlexStr items' : 'No streams';
-  const emptyBody = activeLibPage === 'plex' ? 'Use the PlexStr panel above to open your Plex library or search and add titles.' : 'Tap + to add, import from the ↓ button, or browse Repos tab';
+  const emptyBody = activeLibPage === 'plex' ? 'Use the PlexStr panel above to open your Plex library or search and add titles.' : 'Tap + to add or browse Repos tab';
   if (!f.length) {
     $('lib-lst').innerHTML = '<div class="emp"><h3>' + emptyTitle + '</h3><p>' + emptyBody + '</p></div>';
     return;
@@ -1744,16 +1743,18 @@ $('co-yes').onclick = () => {
 };
 
 // ─── Import ───
-$('btn-imp').onclick = () => {
+window.openImportModal = () => {
   pendingImport = null;
   $('imp-txt').value = '';
   $('imp-pv').style.display = 'none';
   $('imp-st').style.display = 'none';
   $('imp-f').value = '';
   $('mo-imp').classList.add('on');
+  setTimeout(refreshTvFocus, 30);
 };
+if ($('btn-imp')) $('btn-imp').onclick = () => openImportModal();
 $('imp-no').onclick = () => $('mo-imp').classList.remove('on');
-$('mo-imp').onclick = (e) => { if (e.target === $('mo-imp')) $('mo-imp').classList.remove('on'); };
+$('mo-imp').onclick = (e) => { if (e.target === $('mo-imp')) { $('mo-imp').classList.remove('on'); setTimeout(refreshTvFocus, 30); } };
 
 // File picker
 $('iz').onclick = () => $('imp-f').click();
@@ -2144,6 +2145,7 @@ function renderBrowse() {
   }).join('');
   const activeEl = $('br-lst').querySelector('.ri.tv-f');
   if (activeEl) activeEl.scrollIntoView({ block: 'nearest' });
+  if (isTvDevice) setTimeout(refreshTvFocus, 30);
 }
 
 function moveBrowseSelection(dir) {
@@ -2382,6 +2384,17 @@ window.onNativeBackupSaved = function(savedPath) {
 window.onNativeBackupError = function(message) {
   toast('Backup failed: ' + message);
 };
+window.onNativeBackupFilePicked = function(rawText, label) {
+  try {
+    const data = JSON.parse(rawText);
+    restoreBackupPayload(data);
+    toast('Backup restored' + (label ? ' from ' + label : ''));
+    saveSettings();
+    renderAll();
+  } catch (err) {
+    toast('Restore failed: ' + err.message);
+  }
+};
 
 
 
@@ -2401,52 +2414,99 @@ function applyTvMode() {
 }
 function getTvFocusableElements() {
   if (!isTvDevice) return [];
-  const q = $('br-scr') && $('br-scr').classList.contains('on')
-    ? 'button, input, select, .ni, .itm, .rc, .epg-opt, .lmb, .tgl, .fab, .ib'
-    : 'button, input, select, .ni, .itm, .rc, .ri, .epg-opt, .lmb, .tgl, .fab, .ib';
+  const q = 'button, input, select, .ni, .itm, .rc, .ri, .epg-opt, .lmb, .tgl, .fab, .ib, [tabindex]';
   return Array.from(document.querySelectorAll(q))
     .filter(el => {
       if (!el || el.disabled || el.classList.contains('hide')) return false;
+      if (el.closest('.hide,[aria-hidden="true"]')) return false;
       const cs = getComputedStyle(el);
       if (cs.display === 'none' || cs.visibility === 'hidden' || cs.pointerEvents === 'none') return false;
+      if (el.id === 'btn-imp') return false;
+      if (!el.closest('.scr.on') && !el.closest('.mo.on,.cod.on')) return false;
       return !!(el.getClientRects && el.getClientRects().length);
     });
+}
+function focusElementAtIndex(idx) {
+  const els = getTvFocusableElements();
+  if (!els.length) return false;
+  tvFocusIndex = Math.max(0, Math.min(idx, els.length - 1));
+  els.forEach((el, i) => {
+    el.tabIndex = i === tvFocusIndex ? 0 : -1;
+    el.classList.toggle('tv-f', i === tvFocusIndex);
+  });
+  const cur = els[tvFocusIndex];
+  if (cur && document.activeElement !== cur) cur.focus({ preventScroll: false });
+  if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  return true;
 }
 function refreshTvFocus() {
   if (!isTvDevice) return;
   const els = getTvFocusableElements();
   if (!els.length) return;
-  if (tvFocusIndex >= els.length) tvFocusIndex = 0;
-  els.forEach((el, idx) => {
-    el.tabIndex = idx === tvFocusIndex ? 0 : -1;
-    el.classList.toggle('tv-f', idx === tvFocusIndex);
-  });
-  const cur = els[tvFocusIndex];
-  if (cur && document.activeElement !== cur) cur.focus({ preventScroll: false });
+  if (document.activeElement) {
+    const idx = els.indexOf(document.activeElement);
+    if (idx >= 0) tvFocusIndex = idx;
+    else if (tvFocusIndex >= els.length) tvFocusIndex = 0;
+  } else if (tvFocusIndex >= els.length) tvFocusIndex = 0;
+  focusElementAtIndex(tvFocusIndex);
 }
-function moveTvFocus(dir) {
+function moveTvFocusLinear(dir) {
   const els = getTvFocusableElements();
-  if (!els.length) return;
+  if (!els.length) return false;
   tvFocusIndex = (tvFocusIndex + dir + els.length) % els.length;
-  refreshTvFocus();
+  return focusElementAtIndex(tvFocusIndex);
+}
+function moveTvFocusSpatial(dirCode) {
+  const els = getTvFocusableElements();
+  if (!els.length) return false;
+  const current = els[tvFocusIndex] || document.activeElement || els[0];
+  const curRect = current.getBoundingClientRect();
+  const cx = curRect.left + curRect.width / 2;
+  const cy = curRect.top + curRect.height / 2;
+  let bestIdx = -1;
+  let bestScore = Infinity;
+  els.forEach((el, idx) => {
+    if (el === current) return;
+    const r = el.getBoundingClientRect();
+    const ex = r.left + r.width / 2;
+    const ey = r.top + r.height / 2;
+    const dx = ex - cx;
+    const dy = ey - cy;
+    const right = dirCode === 22 && dx > 4;
+    const left = dirCode === 21 && dx < -4;
+    const down = dirCode === 20 && dy > 4;
+    const up = dirCode === 19 && dy < -4;
+    if (!(right || left || down || up)) return;
+    const primary = (dirCode === 21 || dirCode === 22) ? Math.abs(dx) : Math.abs(dy);
+    const secondary = (dirCode === 21 || dirCode === 22) ? Math.abs(dy) : Math.abs(dx);
+    const score = primary * 100 + secondary;
+    if (score < bestScore) {
+      bestScore = score;
+      bestIdx = idx;
+    }
+  });
+  if (bestIdx >= 0) return focusElementAtIndex(bestIdx);
+  if (dirCode === 19 || dirCode === 21) return moveTvFocusLinear(-1);
+  return moveTvFocusLinear(1);
 }
 window.__svHandleTvKey = function(code) {
   if (!isTvDevice) return false;
-  if ($('br-scr').classList.contains('on')) {
-    if (code === 19) return moveBrowseSelection(-1);
-    if (code === 20) return moveBrowseSelection(1);
-    if ([23,66,160].includes(code)) return activateBrowseSelection();
-  }
-  if ([19,21].includes(code)) { moveTvFocus(-1); return true; }
-  if ([20,22].includes(code)) { moveTvFocus(1); return true; }
+  if ([19,20,21,22].includes(code)) return moveTvFocusSpatial(code);
   if ([23,66,160].includes(code)) {
-    const el = getTvFocusableElements()[tvFocusIndex];
-    if (el) { el.click(); return true; }
+    const el = getTvFocusableElements()[tvFocusIndex] || document.activeElement;
+    if (el) {
+      if (el.classList.contains('ri')) { toggleBrSel(el); return true; }
+      el.click();
+      setTimeout(refreshTvFocus, 30);
+      return true;
+    }
     return false;
   }
   if (code === 4) {
     if ($('player-scr').classList.contains('on')) { destroyPlayer(); showTab('lib-scr'); refreshTvFocus(); return true; }
     if ($('br-scr').classList.contains('on')) { showTab('repo-scr'); refreshTvFocus(); return true; }
+    const openModal = document.querySelector('.mo.on,.cod.on');
+    if (openModal) { openModal.classList.remove('on'); refreshTvFocus(); return true; }
   }
   return false;
 };
@@ -2550,7 +2610,7 @@ function renderSettings() {
   // Save path
   $('s-save-path').value = getDisplayDir('recording');
   $('s-save-pick').onclick = () => {
-    if (window.NativePlayer && typeof window.NativePlayer.pickRecordingDirectory === 'function') window.NativePlayer.pickRecordingDirectory();
+    if (window.NativePlayer && typeof window.NativePlayer.pickRecordingDirectory === 'function') { if (isTvDevice) toast('Use the TV file browser to choose a folder, then press Select.'); window.NativePlayer.pickRecordingDirectory(); }
     else toast('Folder picker is available in the Android app build');
   };
   $('s-save-default').onclick = () => {
@@ -2569,7 +2629,7 @@ function renderSettings() {
   // Backup / Restore
   $('s-backup-path').value = getDisplayDir('backup');
   $('s-backup-pick').onclick = () => {
-    if (window.NativePlayer && typeof window.NativePlayer.pickBackupDirectory === 'function') window.NativePlayer.pickBackupDirectory();
+    if (window.NativePlayer && typeof window.NativePlayer.pickBackupDirectory === 'function') { if (isTvDevice) toast('Use the TV file browser to choose a backup folder, then press Select.'); window.NativePlayer.pickBackupDirectory(); }
     else toast('Folder picker is available in the Android app build');
   };
   $('s-backup-default').onclick = () => {
@@ -2589,7 +2649,10 @@ function renderSettings() {
       toast('Backup exported');
     }
   };
-  $('bk-imp-btn').onclick = () => $('bk-imp').click();
+  $('bk-imp-btn').onclick = () => {
+    if (isTvDevice && window.NativePlayer && typeof window.NativePlayer.pickBackupFile === 'function') window.NativePlayer.pickBackupFile();
+    else $('bk-imp').click();
+  };
   $('bk-imp').onchange = async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -2635,6 +2698,7 @@ function renderSettings() {
   renderLocalities();
   // Schedules
   renderSchedules();
+  setTimeout(refreshTvFocus, 40);
 }
 
 function renderSchedules() {
