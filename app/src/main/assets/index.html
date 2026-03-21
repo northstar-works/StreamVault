@@ -94,7 +94,7 @@ body.tv-mode .hd{padding-top:10px}
 .flbl{font-size:7px;color:var(--t3);font-weight:600;text-transform:uppercase;flex-shrink:0}
 .slb{display:none;padding:6px 12px;background:var(--ac);align-items:center;justify-content:space-between;flex-shrink:0}
 .slb.on{display:flex}.slb span{font-size:10px;font-weight:600;color:#fff}
-.slb button{padding:3px 9px;border-radius:10px;border:none;font-size:8px;font-weight:600;cursor:pointer;margin-left:4px}
+.slb button{padding:3px 9px;border-radius:10px;border:1px solid rgba(255,255,255,.28);font-size:8px;font-weight:600;cursor:pointer;margin-left:4px}
 .slb .sba{background:#fff;color:var(--ac)}.slb .sbc{background:rgba(255,255,255,.2);color:#fff}
 .ri{display:flex;align-items:center;gap:6px;padding:6px;margin-bottom:2px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);cursor:pointer}
 .ri.sel{border-color:var(--ac);background:rgba(108,92,231,.08)}
@@ -238,9 +238,13 @@ body.tv-mode .hd{padding-top:10px}
 .spn{width:32px;height:32px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--ac);border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 body.tv-mode .bnav .ni,body.tv-mode button,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode .epg-opt,body.tv-mode .lmb,body.tv-mode .pl,body.tv-mode .tgl,body.tv-mode .ib,body.tv-mode .gch,body.tv-mode .gpr,[role="button"]{outline:none;transition:box-shadow .12s ease,transform .12s ease,background .12s ease,border-color .12s ease}
-body.tv-mode .tv-f,body.tv-mode .ni:focus,body.tv-mode button:focus,body.tv-mode input:focus,body.tv-mode textarea:focus,body.tv-mode select:focus,body.tv-mode .itm:focus,body.tv-mode .rc:focus,body.tv-mode .ri:focus,body.tv-mode .epg-opt:focus,body.tv-mode .lmb:focus,body.tv-mode .pl:focus,body.tv-mode .tgl:focus,body.tv-mode .ib:focus,body.tv-mode .gch:focus,body.tv-mode .gpr:focus,[role="button"]:focus{box-shadow:0 0 0 2px rgba(108,92,231,.98),0 0 0 3px rgba(108,92,231,.45),0 0 12px rgba(108,92,231,.26)!important;transform:scale(1.008);background-image:linear-gradient(0deg,rgba(108,92,231,.10),rgba(108,92,231,.10));border-color:rgba(108,92,231,.98)!important}
+body.tv-mode .tv-f,body.tv-mode .ni:focus,body.tv-mode button:focus,body.tv-mode input:focus,body.tv-mode textarea:focus,body.tv-mode select:focus,body.tv-mode .itm:focus,body.tv-mode .rc:focus,body.tv-mode .ri:focus,body.tv-mode .epg-opt:focus,body.tv-mode .lmb:focus,body.tv-mode .pl:focus,body.tv-mode .tgl:focus,body.tv-mode .ib:focus,body.tv-mode .gch:focus,body.tv-mode .gpr:focus,[role="button"]:focus{box-shadow:0 0 0 2px rgba(108,92,231,.98),0 0 0 4px rgba(108,92,231,.28),0 0 12px rgba(108,92,231,.22)!important;transform:scale(1.008);background-image:linear-gradient(0deg,rgba(108,92,231,.10),rgba(108,92,231,.10));border-color:rgba(108,92,231,.98)!important}
 body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .pl,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode button,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .ib,body.tv-mode .gch,body.tv-mode .gpr,[role="button"]{min-height:44px;position:relative}
 body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.tv-mode .px-grid{scroll-margin-top:70px}
+body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 0 4px rgba(108,92,231,.55)!important;border-color:#fff!important}
+.itm .ab{display:none}
+.lib-edit-on .itm .ab{display:flex}
+.ib.on{background:rgba(108,92,231,.16);border-color:rgba(108,92,231,.5);color:var(--ac)}
 </style>
 </head>
 <body>
@@ -250,15 +254,16 @@ body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.
 
 <!-- ═══ LIBRARY ═══ -->
 <div id="lib-scr" class="scr on">
-  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b39</span>
+  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b40</span>
+    <button class="ib" id="btn-lib-edit" title="Toggle edit controls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
     <button class="ib" id="btn-add-top" title="Add stream"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
     <button class="ib" id="btn-exp" title="Export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
   </div></div>
   <div class="libbar">
     <div class="libmodes" id="lib-modes"></div>
-    <button class="ib" id="lib-search-tog" title="Search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
+    <button class="ib" id="lib-search-tog" data-tv-zone="group-search" title="Search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
   </div>
-  <div class="sb hide" id="lib-sb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="lib-q" placeholder="Search current page…"></div>
+  <div class="sb hide" id="lib-sb" data-tv-zone="group-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="lib-q" placeholder="Search current page…"></div>
   <div id="lib-extra"></div>
   <div class="pls" id="lib-pls"></div>
   <div class="lst" id="lib-lst"></div>
@@ -361,7 +366,7 @@ body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.
     <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.5.4 (Build 39)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.5.5 (Build 40)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
   </div>
 </div>
 
@@ -370,7 +375,7 @@ body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.
   <div class="hd"><button class="ib" id="br-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button><h1 id="br-title" style="flex:1;margin-left:6px;font-size:14px">Repo</h1><span class="cnt" id="br-cnt">0</span></div>
   <div class="sb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="br-q" placeholder="Search…"></div>
   <div class="fbar"><span class="flbl">Region:</span><select class="fsel" id="f-reg"><option>All</option></select><span class="flbl">Genre:</span><select class="fsel" id="f-gen"><option>All</option></select></div>
-  <div class="slb" id="slb"><span id="slcnt">0 selected</span><div><button class="sbc" id="sl-all">All</button><button class="sbc" id="sl-clr">Clear</button><button class="sbc" id="sl-epg">Bulk EPG</button><button class="sba" id="sl-add">Add to Playlist</button></div></div>
+  <div class="slb" id="slb"><span id="slcnt">0 selected</span><div><button class="sbc" id="sl-all" data-tv-zone="repo-select-bar">All</button><button class="sbc" id="sl-clr" data-tv-zone="repo-select-bar">Clear</button><button class="sbc" id="sl-epg" data-tv-zone="repo-select-bar">Bulk EPG</button><button class="sba" id="sl-add" data-tv-zone="repo-select-bar">Add to Playlist</button></div></div>
   <div class="lst" id="br-lst"></div>
 </div>
 
@@ -544,7 +549,7 @@ http://stream.example.com/cnn
 "use strict";
 
 // ─── Constants & State ───
-const VERSION = '4.5.4', BUILD = 39;
+const VERSION = '4.5.5', BUILD = 40;
 const KEYS = { items: 'sv_items_v3', repos: 'sv_repos_v2', epgSrc: 'sv_epg_src', epgData: 'sv_epg_data', settings: 'sv_settings_v2' };
 const TAG_PRI = ['', 'F', 'H', 'A', 'S'];
 
@@ -556,6 +561,7 @@ let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTim
 let plexAddMode = false;
 
 let editId = null;
+let libEditMode = false;
 let delId = null;
 let delType = null;
 let curIdx = -1;
@@ -1533,7 +1539,7 @@ function renderCats() {
   const cats = getCats();
   $('lib-pls').style.display = activeLibPage === 'plex' ? 'none' : 'flex';
   $('lib-pls').innerHTML = cats.length <= 1 ? '' : cats.map(c =>
-    `<div class="pl${c === activeCat ? ' on' : ''}" data-c="${esc(c)}">${esc(c)}</div>`
+    `<div class="pl${c === activeCat ? ' on' : ''}" data-tv-zone="group-bar" data-c="${esc(c)}">${esc(c)}</div>`
   ).join('');
   $('lib-pls').querySelectorAll('.pl').forEach(p => {
     p.onclick = () => { activeCat = p.dataset.c; renderCats(); renderLib(); };
@@ -1571,14 +1577,14 @@ function renderLib() {
       epgNow = `<div class="en">▶ Plex library item</div>`;
     }
 
-    return `<div class="itm" style="animation-delay:${i * 0.01}s" onclick="playItem('${m.id}')">
+    return `<div class="itm" data-tv-zone="channel-list" data-tv-col="1" style="animation-delay:${i * 0.01}s" onclick="playItem('${m.id}')">
       <div class="th">${thumb}</div>
       <div class="nf">
         <div class="nm">${esc(m.title)}</div>
         <div class="mt">${regBadge}${catBadge}${srcBadge}${altBadge}</div>
         ${epgNow}
       </div>
-      <div class="ab">
+      <div class="ab${libEditMode ? '' : ' hide'}" data-tv-zone="channel-actions" data-tv-col="2">
         <button onclick="event.stopPropagation();openEdit('${m.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
         <button onclick="event.stopPropagation();confirmDel('${m.id}','item')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button>
       </div>
@@ -1587,6 +1593,16 @@ function renderLib() {
 }
 
 $('lib-q').addEventListener('input', renderLib);
+$('btn-lib-edit').onclick = () => {
+  libEditMode = !libEditMode;
+  document.body.classList.toggle('lib-edit-on', libEditMode);
+  $('btn-lib-edit').classList.toggle('on', libEditMode);
+  $('btn-lib-edit').title = libEditMode ? 'Hide edit controls' : 'Show edit controls';
+  renderLib();
+  setTimeout(refreshTvFocus, 30);
+};
+document.body.classList.toggle('lib-edit-on', libEditMode);
+
 $('lib-search-tog').onclick = () => {
   libSearchOpen = !libSearchOpen;
   if (!libSearchOpen) $('lib-q').value = '';
@@ -2570,6 +2586,48 @@ function moveTvFocusLinear(dir) {
   tvFocusIndex = (tvFocusIndex + dir + els.length) % els.length;
   return focusElementAtIndex(tvFocusIndex);
 }
+
+function getTvZone(el) {
+  if (!el || !el.closest) return '';
+  const own = el.getAttribute && el.getAttribute('data-tv-zone');
+  if (own) return own;
+  const hit = el.closest('[data-tv-zone]');
+  return hit ? (hit.getAttribute('data-tv-zone') || '') : '';
+}
+function focusBySelector(selector) {
+  const els = getTvFocusableElements();
+  const idx = els.findIndex(el => el.matches && el.matches(selector));
+  return idx >= 0 ? focusElementAtIndex(idx) : false;
+}
+function focusNearestInSelector(selector, current, preferLeftMost) {
+  const els = getTvFocusableElements();
+  const cur = current || els[tvFocusIndex] || document.querySelector('.tv-f');
+  if (!cur) return false;
+  const c = cur.getBoundingClientRect();
+  const cx = c.left + c.width / 2;
+  const cy = c.top + c.height / 2;
+  const candidates = els.map((el, idx) => ({el, idx, rect: el.getBoundingClientRect()})).filter(x => x.el.matches && x.el.matches(selector));
+  if (!candidates.length) return false;
+  candidates.sort((a,b) => {
+    const ay = Math.abs((a.rect.top + a.rect.height/2) - cy);
+    const by = Math.abs((b.rect.top + b.rect.height/2) - cy);
+    if (ay !== by) return ay - by;
+    if (preferLeftMost) return a.rect.left - b.rect.left;
+    return Math.abs((a.rect.left + a.rect.width/2) - cx) - Math.abs((b.rect.left + b.rect.width/2) - cx);
+  });
+  return focusElementAtIndex(candidates[0].idx);
+}
+function focusWithinGroupRow(current, dirCode) {
+  const row = current && current.closest && current.closest('.tv-row');
+  if (!row) return false;
+  const els = getTvFocusableElements().filter(el => row.contains(el));
+  if (!els.length) return false;
+  const idx = els.indexOf(current);
+  if (idx < 0) return false;
+  if (dirCode === 21 && idx > 0) return focusElementAtIndex(getTvFocusableElements().indexOf(els[idx-1]));
+  if (dirCode === 22 && idx < els.length - 1) return focusElementAtIndex(getTvFocusableElements().indexOf(els[idx+1]));
+  return false;
+}
 function moveTvFocusSpatial(dirCode) {
   const els = getTvFocusableElements();
   if (!els.length) return false;
@@ -2580,6 +2638,32 @@ function moveTvFocusSpatial(dirCode) {
 
   const cx = currentRect.left + currentRect.width / 2;
   const cy = currentRect.top + currentRect.height / 2;
+  const currentZone = getTvZone(current);
+
+  if ((dirCode === 21 || dirCode === 22) && focusWithinGroupRow(current, dirCode)) return true;
+
+  if (currentZone === 'group-bar') {
+    if (dirCode === 22) {
+      const next = current.nextElementSibling;
+      if (next && next.matches('.pl')) { const idx = els.indexOf(next); if (idx >= 0) return focusElementAtIndex(idx); }
+      return focusBySelector('#lib-search-tog');
+    }
+    if (dirCode === 21) {
+      const prev = current.previousElementSibling;
+      if (prev && prev.matches('.pl')) { const idx = els.indexOf(prev); if (idx >= 0) return focusElementAtIndex(idx); }
+      return false;
+    }
+    if (dirCode === 20) return focusNearestInSelector('.itm[data-tv-zone=\"channel-list\"]', current, true);
+  }
+  if (currentZone === 'channel-list') {
+    if (dirCode === 22) {
+      if (libEditMode) return focusNearestInSelector('.itm .ab button', current, true);
+      return false;
+    }
+  }
+  if (current && current.closest && current.closest('.ab')) {
+    if (dirCode === 21) return focusNearestInSelector('.itm[data-tv-zone=\"channel-list\"]', current, true);
+  }
 
   const pickClosestNav = () => {
     if (!navEls.length) return false;
