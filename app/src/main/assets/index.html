@@ -218,10 +218,10 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
 .ld2{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:5}
 .spn{width:32px;height:32px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--ac);border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
-body.tv-mode .bnav .ni,body.tv-mode button,body.tv-mode input,body.tv-mode select,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode .epg-opt,body.tv-mode .lmb,body.tv-mode .tgl,body.tv-mode .fab,body.tv-mode .ib{outline:none;transition:box-shadow .12s ease,transform .12s ease,background .12s ease}
-body.tv-mode .tv-f,body.tv-mode .ni:focus,body.tv-mode button:focus,body.tv-mode input:focus,body.tv-mode select:focus,body.tv-mode .itm:focus,body.tv-mode .rc:focus,body.tv-mode .ri:focus,body.tv-mode .epg-opt:focus,body.tv-mode .lmb:focus,body.tv-mode .tgl:focus,body.tv-mode .fab:focus,body.tv-mode .ib:focus{box-shadow:0 0 0 3px #fff,0 0 0 6px rgba(108,92,231,.95),0 0 18px rgba(108,92,231,.5)!important;transform:scale(1.015);background-image:linear-gradient(0deg,rgba(108,92,231,.14),rgba(108,92,231,.14))}
-body.tv-mode .tv-f::after,body.tv-mode .ni:focus::after,body.tv-mode button:focus::after,body.tv-mode input:focus::after,body.tv-mode select:focus::after,body.tv-mode .itm:focus::after,body.tv-mode .rc:focus::after,body.tv-mode .ri:focus::after,body.tv-mode .epg-opt:focus::after,body.tv-mode .lmb:focus::after,body.tv-mode .tgl:focus::after,body.tv-mode .fab:focus::after,body.tv-mode .ib:focus::after{content:'';position:absolute;left:-6px;top:50%;transform:translateY(-50%);width:4px;height:70%;border-radius:999px;background:#fff;pointer-events:none}
-body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode button,body.tv-mode .ib,body.tv-mode .fab{min-height:44px;position:relative}
+body.tv-mode .bnav .ni,body.tv-mode button,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode .epg-opt,body.tv-mode .lmb,body.tv-mode .tgl,body.tv-mode .fab,body.tv-mode .ib,[role="button"]{outline:none;transition:box-shadow .12s ease,transform .12s ease,background .12s ease}
+body.tv-mode .tv-f,body.tv-mode .ni:focus,body.tv-mode button:focus,body.tv-mode input:focus,body.tv-mode textarea:focus,body.tv-mode select:focus,body.tv-mode .itm:focus,body.tv-mode .rc:focus,body.tv-mode .ri:focus,body.tv-mode .epg-opt:focus,body.tv-mode .lmb:focus,body.tv-mode .tgl:focus,body.tv-mode .fab:focus,body.tv-mode .ib:focus,[role="button"]:focus{box-shadow:0 0 0 3px #fff,0 0 0 6px rgba(108,92,231,.95),0 0 18px rgba(108,92,231,.5)!important;transform:scale(1.015);background-image:linear-gradient(0deg,rgba(108,92,231,.14),rgba(108,92,231,.14))}
+body.tv-mode .tv-f::after,body.tv-mode .ni:focus::after,body.tv-mode button:focus::after,body.tv-mode input:focus::after,body.tv-mode textarea:focus::after,body.tv-mode select:focus::after,body.tv-mode .itm:focus::after,body.tv-mode .rc:focus::after,body.tv-mode .ri:focus::after,body.tv-mode .epg-opt:focus::after,body.tv-mode .lmb:focus::after,body.tv-mode .tgl:focus::after,body.tv-mode .fab:focus::after,body.tv-mode .ib:focus::after,[role="button"]:focus::after{content:'';position:absolute;left:-6px;top:50%;transform:translateY(-50%);width:4px;height:70%;border-radius:999px;background:#fff;pointer-events:none}
+body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode button,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .ib,body.tv-mode .fab,[role="button"]{min-height:44px;position:relative}
 body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.tv-mode .px-grid{scroll-margin-top:70px}
 </style>
 </head>
@@ -2422,16 +2422,39 @@ function applyTvMode() {
   document.body.classList.toggle('tv-mode', isTvDevice);
   refreshTvFocus();
 }
+function normalizeTvFocusable(el) {
+  if (!el) return el;
+  const tag = (el.tagName || '').toLowerCase();
+  const customFocusable = el.matches && el.matches('.ni, .itm, .rc, .ri, .epg-opt, .lmb, .tgl, .fab, .ib, [role="button"]');
+  if (customFocusable && !el.hasAttribute('tabindex')) el.tabIndex = 0;
+  if (tag === 'input' && (el.type || '').toLowerCase() === 'hidden') return null;
+  return el;
+}
 function getTvFocusableElements() {
   if (!isTvDevice) return [];
-  const q = 'button, input, select, .ni, .itm, .rc, .ri, .epg-opt, .lmb, .tgl, .fab, .ib, [tabindex]';
+  const q = [
+    'button', 'input', 'textarea', 'select', 'a[href]',
+    '.ni', '.itm', '.rc', '.ri', '.epg-opt', '.lmb', '.tgl', '.fab', '.ib',
+    '[role="button"]', '[tabindex]', '[contenteditable="true"]'
+  ].join(', ');
+  const seen = new Set();
   return Array.from(document.querySelectorAll(q))
+    .map(normalizeTvFocusable)
     .filter(el => {
-      if (!el || el.disabled || el.classList.contains('hide')) return false;
+      if (!el || !el.isConnected || seen.has(el)) return false;
+      seen.add(el);
+      if (el.disabled || el.classList.contains('hide')) return false;
       if (el.closest('.hide,[aria-hidden="true"]')) return false;
+      if (el.id === 'btn-imp') return false;
+      const tabindexAttr = el.getAttribute && el.getAttribute('tabindex');
+      if (tabindexAttr !== null && Number(tabindexAttr) < -1) return false;
       const cs = getComputedStyle(el);
       if (cs.display === 'none' || cs.visibility === 'hidden' || cs.pointerEvents === 'none') return false;
+<<<<<<< Updated upstream
       if (el.id === 'btn-imp') return false;
+=======
+      if (!el.getClientRects || !el.getClientRects().length) return false;
+>>>>>>> Stashed changes
 
       const inBottomNav = !!(el.closest && el.closest('#bnav'));
       const inActiveScreen = !!(el.closest && el.closest('.scr.on'));
@@ -2444,27 +2467,34 @@ function getTvFocusableElements() {
         const bnavStyle = getComputedStyle(bnav);
         if (bnavStyle.display === 'none' || bnavStyle.visibility === 'hidden') return false;
       }
+<<<<<<< Updated upstream
 
       return !!(el.getClientRects && el.getClientRects().length);
+=======
+      return true;
+>>>>>>> Stashed changes
     });
+}
+function setTvFocusClass(target) {
+  document.querySelectorAll('.tv-f').forEach(el => el.classList.remove('tv-f'));
+  if (target) target.classList.add('tv-f');
 }
 function focusElementAtIndex(idx) {
   const els = getTvFocusableElements();
   if (!els.length) return false;
   tvFocusIndex = Math.max(0, Math.min(idx, els.length - 1));
-  els.forEach((el, i) => {
-    el.tabIndex = i === tvFocusIndex ? 0 : -1;
-    el.classList.toggle('tv-f', i === tvFocusIndex);
-  });
-  const cur = els[tvFocusIndex];
-  if (cur && document.activeElement !== cur) cur.focus({ preventScroll: false });
-  if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  const cur = normalizeTvFocusable(els[tvFocusIndex]);
+  if (!cur) return false;
+  setTvFocusClass(cur);
+  if (document.activeElement !== cur && cur.focus) cur.focus({ preventScroll: false });
+  if (cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   return true;
 }
 function refreshTvFocus() {
   if (!isTvDevice) return;
   const els = getTvFocusableElements();
   if (!els.length) return;
+<<<<<<< Updated upstream
   if (document.activeElement) {
     const idx = els.indexOf(document.activeElement);
     if (idx >= 0) tvFocusIndex = idx;
@@ -2478,6 +2508,21 @@ function refreshTvFocus() {
     if (fallbackIdx >= 0) tvFocusIndex = fallbackIdx;
     else tvFocusIndex = 0;
   }
+=======
+
+  const active = document.activeElement;
+  let idx = active ? els.indexOf(active) : -1;
+  if (idx < 0) {
+    const currentTv = document.querySelector('.tv-f');
+    idx = currentTv ? els.indexOf(currentTv) : -1;
+  }
+  if (idx < 0) {
+    const activeNav = document.querySelector('#bnav .ni.on') || document.querySelector('#bnav .ni');
+    idx = activeNav ? els.indexOf(activeNav) : -1;
+  }
+  if (idx < 0) idx = Math.min(tvFocusIndex || 0, els.length - 1);
+  tvFocusIndex = idx;
+>>>>>>> Stashed changes
   focusElementAtIndex(tvFocusIndex);
 }
 function moveTvFocusLinear(dir) {
@@ -2489,67 +2534,39 @@ function moveTvFocusLinear(dir) {
 function moveTvFocusSpatial(dirCode) {
   const els = getTvFocusableElements();
   if (!els.length) return false;
-  const current = els[tvFocusIndex] || document.activeElement || els[0];
+  const current = els[tvFocusIndex] || document.activeElement || document.querySelector('.tv-f') || els[0];
+  const currentRect = current.getBoundingClientRect();
   const inBottomNav = !!(current && current.closest && current.closest('#bnav'));
   const navEls = els.filter(el => el.closest && el.closest('#bnav'));
 
-  if (!inBottomNav && dirCode === 20 && navEls.length) {
-    const curRect = current.getBoundingClientRect();
-    let bestNavIdx = els.indexOf(navEls[0]);
+  const pickClosestNav = () => {
+    if (!navEls.length) return false;
+    let bestNavIdx = -1;
     let bestNavScore = Infinity;
     navEls.forEach(navEl => {
       const r = navEl.getBoundingClientRect();
-      const score = Math.abs((r.left + r.width / 2) - (curRect.left + curRect.width / 2));
+      const score = Math.abs((r.left + r.width / 2) - (currentRect.left + currentRect.width / 2));
       if (score < bestNavScore) {
         bestNavScore = score;
         bestNavIdx = els.indexOf(navEl);
       }
     });
-    const hasNonNavBelow = els.some(el => {
-      if (el === current || (el.closest && el.closest('#bnav'))) return false;
-      const r = el.getBoundingClientRect();
-      return (r.top + 4) > curRect.bottom;
-    });
-    const nearBottom = curRect.bottom >= (window.innerHeight - 170);
-    if (!hasNonNavBelow || nearBottom) {
-      if (bestNavIdx >= 0) return focusElementAtIndex(bestNavIdx);
-    }
-  }
+    return bestNavIdx >= 0 ? focusElementAtIndex(bestNavIdx) : false;
+  };
 
   if (inBottomNav) {
     const navIdx = navEls.indexOf(current);
-    if ((dirCode === 21 || dirCode === 22) && navIdx >= 0 && navEls.length) {
+    if ((dirCode === 21 || dirCode === 22) && navIdx >= 0) {
       const nextNav = navEls[(navIdx + (dirCode === 22 ? 1 : -1) + navEls.length) % navEls.length];
       const idx = els.indexOf(nextNav);
       if (idx >= 0) return focusElementAtIndex(idx);
     }
-    if (dirCode === 19) {
-      const curRect = current.getBoundingClientRect();
-      let bestIdx = -1;
-      let bestScore = Infinity;
-      els.forEach((el, idx) => {
-        if (el === current || (el.closest && el.closest('#bnav'))) return;
-        const r = el.getBoundingClientRect();
-        const ex = r.left + r.width / 2;
-        const ey = r.top + r.height / 2;
-        const dx = ex - (curRect.left + curRect.width / 2);
-        const dy = ey - (curRect.top + curRect.height / 2);
-        if (dy >= -4) return;
-        const score = Math.abs(dy) * 100 + Math.abs(dx);
-        if (score < bestScore) {
-          bestScore = score;
-          bestIdx = idx;
-        }
-      });
-      if (bestIdx >= 0) return focusElementAtIndex(bestIdx);
-    }
   }
 
-  const curRect = current.getBoundingClientRect();
-  const cx = curRect.left + curRect.width / 2;
-  const cy = curRect.top + curRect.height / 2;
   let bestIdx = -1;
   let bestScore = Infinity;
+  const cx = currentRect.left + currentRect.width / 2;
+  const cy = currentRect.top + currentRect.height / 2;
   els.forEach((el, idx) => {
     if (el === current) return;
     const r = el.getBoundingClientRect();
@@ -2557,50 +2574,67 @@ function moveTvFocusSpatial(dirCode) {
     const ey = r.top + r.height / 2;
     const dx = ex - cx;
     const dy = ey - cy;
-    const right = dirCode === 22 && dx > 4;
-    const left = dirCode === 21 && dx < -4;
-    const down = dirCode === 20 && dy > 4;
-    const up = dirCode === 19 && dy < -4;
-    if (!(right || left || down || up)) return;
+    const isRight = dirCode === 22 && dx > 6;
+    const isLeft = dirCode === 21 && dx < -6;
+    const isDown = dirCode === 20 && dy > 6;
+    const isUp = dirCode === 19 && dy < -6;
+    if (!(isRight || isLeft || isDown || isUp)) return;
+
     const primary = (dirCode === 21 || dirCode === 22) ? Math.abs(dx) : Math.abs(dy);
     const secondary = (dirCode === 21 || dirCode === 22) ? Math.abs(dy) : Math.abs(dx);
-    const sameBottomBand = (el.closest && el.closest('#bnav')) === inBottomNav;
-    const score = primary * 100 + secondary + (sameBottomBand ? 0 : 15000);
+    const sameZone = (!!(el.closest && el.closest('#bnav'))) === inBottomNav;
+    const score = primary * 100 + secondary + (sameZone ? 0 : 12000);
     if (score < bestScore) {
       bestScore = score;
       bestIdx = idx;
     }
   });
+
   if (bestIdx >= 0) return focusElementAtIndex(bestIdx);
-  if (!inBottomNav && dirCode === 20 && navEls.length) {
-    const curRect = current.getBoundingClientRect();
-    let bestNavIdx = -1;
-    let bestNavScore = Infinity;
-    navEls.forEach(navEl => {
-      const r = navEl.getBoundingClientRect();
-      const score = Math.abs((r.left + r.width / 2) - (curRect.left + curRect.width / 2));
-      if (score < bestNavScore) {
-        bestNavScore = score;
-        bestNavIdx = els.indexOf(navEl);
+  if (!inBottomNav && dirCode === 20 && navEls.length) return pickClosestNav();
+  if (inBottomNav && dirCode === 19) {
+    let aboveIdx = -1;
+    let aboveScore = Infinity;
+    els.forEach((el, idx) => {
+      if (el === current || (el.closest && el.closest('#bnav'))) return;
+      const r = el.getBoundingClientRect();
+      const ex = r.left + r.width / 2;
+      const ey = r.top + r.height / 2;
+      const dx = Math.abs(ex - cx);
+      const dy = cy - ey;
+      if (dy <= 6) return;
+      const score = dy * 100 + dx;
+      if (score < aboveScore) {
+        aboveScore = score;
+        aboveIdx = idx;
       }
     });
-    if (bestNavIdx >= 0) return focusElementAtIndex(bestNavIdx);
+    if (aboveIdx >= 0) return focusElementAtIndex(aboveIdx);
   }
-  if (dirCode === 19 || dirCode === 21) return moveTvFocusLinear(-1);
-  return moveTvFocusLinear(1);
+  return (dirCode === 19 || dirCode === 21) ? moveTvFocusLinear(-1) : moveTvFocusLinear(1);
 }
 window.__svHandleTvKey = function(code) {
   if (!isTvDevice) return false;
   if ([19,20,21,22].includes(code)) return moveTvFocusSpatial(code);
   if ([23,66,160].includes(code)) {
-    const el = getTvFocusableElements()[tvFocusIndex] || document.activeElement;
-    if (el) {
-      if (el.classList.contains('ri')) { toggleBrSel(el); return true; }
-      if (el.classList.contains('ni')) {
-        activateBottomNavItem(el);
-        setTimeout(refreshTvFocus, 30);
-        return true;
-      }
+    const el = getTvFocusableElements()[tvFocusIndex] || document.activeElement || document.querySelector('.tv-f');
+    if (!el) return false;
+    const tag = (el.tagName || '').toLowerCase();
+    if (el.classList.contains('ri')) { toggleBrSel(el); return true; }
+    if (el.classList.contains('ni')) {
+      activateBottomNavItem(el);
+      setTimeout(refreshTvFocus, 30);
+      return true;
+    }
+    if (tag === 'select') { el.focus(); el.click && el.click(); return true; }
+    if (tag === 'textarea') { el.focus(); return true; }
+    if (tag === 'input') {
+      const type = (el.type || '').toLowerCase();
+      el.focus();
+      if (['checkbox','radio','range','file','date','time','datetime-local','color'].includes(type)) el.click();
+      return true;
+    }
+    if (typeof el.click === 'function') {
       el.click();
       setTimeout(refreshTvFocus, 30);
       return true;
@@ -2621,7 +2655,7 @@ document.addEventListener('focusin', e => {
   const idx = els.indexOf(e.target);
   if (idx >= 0) {
     tvFocusIndex = idx;
-    els.forEach((el, i) => el.classList.toggle('tv-f', i === idx));
+    setTvFocusClass(e.target);
   }
 });
 
