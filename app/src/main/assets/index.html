@@ -2450,11 +2450,7 @@ function getTvFocusableElements() {
       if (tabindexAttr !== null && Number(tabindexAttr) < -1) return false;
       const cs = getComputedStyle(el);
       if (cs.display === 'none' || cs.visibility === 'hidden' || cs.pointerEvents === 'none') return false;
-<<<<<<< Updated upstream
-      if (el.id === 'btn-imp') return false;
-=======
       if (!el.getClientRects || !el.getClientRects().length) return false;
->>>>>>> Stashed changes
 
       const inBottomNav = !!(el.closest && el.closest('#bnav'));
       const inActiveScreen = !!(el.closest && el.closest('.scr.on'));
@@ -2467,12 +2463,7 @@ function getTvFocusableElements() {
         const bnavStyle = getComputedStyle(bnav);
         if (bnavStyle.display === 'none' || bnavStyle.visibility === 'hidden') return false;
       }
-<<<<<<< Updated upstream
-
-      return !!(el.getClientRects && el.getClientRects().length);
-=======
       return true;
->>>>>>> Stashed changes
     });
 }
 function setTvFocusClass(target) {
@@ -2494,21 +2485,6 @@ function refreshTvFocus() {
   if (!isTvDevice) return;
   const els = getTvFocusableElements();
   if (!els.length) return;
-<<<<<<< Updated upstream
-  if (document.activeElement) {
-    const idx = els.indexOf(document.activeElement);
-    if (idx >= 0) tvFocusIndex = idx;
-    else if (tvFocusIndex >= els.length) tvFocusIndex = 0;
-  } else if (tvFocusIndex >= els.length) tvFocusIndex = 0;
-
-  const current = els[tvFocusIndex];
-  if (!current) {
-    const activeNav = document.querySelector('#bnav .ni.on') || document.querySelector('#bnav .ni');
-    const fallbackIdx = activeNav ? els.indexOf(activeNav) : -1;
-    if (fallbackIdx >= 0) tvFocusIndex = fallbackIdx;
-    else tvFocusIndex = 0;
-  }
-=======
 
   const active = document.activeElement;
   let idx = active ? els.indexOf(active) : -1;
@@ -2522,7 +2498,6 @@ function refreshTvFocus() {
   }
   if (idx < 0) idx = Math.min(tvFocusIndex || 0, els.length - 1);
   tvFocusIndex = idx;
->>>>>>> Stashed changes
   focusElementAtIndex(tvFocusIndex);
 }
 function moveTvFocusLinear(dir) {
