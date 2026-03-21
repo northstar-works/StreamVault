@@ -149,18 +149,18 @@ body.tv-mode .hd{padding-top:10px}
 
 /* Guide */
 .gw{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}.gw::-webkit-scrollbar{display:none}
-.grow{display:flex;height:32px;min-height:32px;border-bottom:1px solid rgba(255,255,255,.18)}
-.gch{width:112px;min-width:112px;padding:4px 6px;display:flex;align-items:center;gap:5px;background:linear-gradient(90deg,var(--c1),var(--c1));position:sticky;left:0;z-index:8;border-right:1px solid rgba(255,255,255,.22);cursor:pointer;font-size:8px;font-weight:600;height:32px;overflow:hidden}
+.grow{display:grid;grid-template-columns:128px 1fr;height:40px;min-height:40px;border-bottom:1px solid rgba(255,255,255,.18);align-items:stretch}
+.gch{width:128px;min-width:128px;padding:6px 8px;display:flex;align-items:center;gap:6px;background:linear-gradient(90deg,var(--c1),var(--c1));position:sticky;left:0;z-index:8;border-right:1px solid rgba(255,255,255,.22);cursor:pointer;font-size:8px;font-weight:600;height:40px;overflow:hidden}
 .gch:active{background:var(--c2)}
-.gch img{width:18px;height:18px;border-radius:3px;flex-shrink:0;object-fit:cover}
-.gpr{position:absolute;top:0;bottom:0;padding:3px 5px;border-right:1px solid rgba(255,255,255,.12);overflow:hidden;display:flex;flex-direction:column;justify-content:center;font-size:7px;background:rgba(255,255,255,.02)}
+.gch img{width:20px;height:20px;border-radius:3px;flex-shrink:0;object-fit:cover}
+.gpr{position:absolute;top:1px;bottom:1px;padding:4px 6px;border-right:1px solid rgba(255,255,255,.12);overflow:hidden;display:flex;flex-direction:column;justify-content:center;font-size:7px;background:rgba(255,255,255,.02)}
 .gpr .gt{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.05}
 .gpr .gti{font-size:5px;color:var(--t3);line-height:1}
 .gpr.now{background:rgba(108,92,231,.1);border-left:2px solid var(--ac)}
 .gpr.past{opacity:.4}
 .gnl{position:absolute;top:0;bottom:0;width:2px;background:var(--rd);z-index:4;pointer-events:none}
 
-.guide-strip{position:relative;flex:1;min-width:2240px;background:linear-gradient(180deg,rgba(255,255,255,.01),rgba(255,255,255,0));height:32px}
+.guide-strip{position:relative;flex:1;min-width:2240px;background:linear-gradient(180deg,rgba(255,255,255,.01),rgba(255,255,255,0));height:40px;overflow:hidden}
 .px-note{font-size:8px;color:var(--t2);margin-top:6px;line-height:1.4}
 
 /* EPG Cards */
@@ -367,7 +367,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.5.7 (Build 42)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.5.8 (Build 43)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
   </div>
 </div>
 
@@ -2387,7 +2387,7 @@ function renderGuide() {
   }
 
   const now = Date.now();
-  const slotW = 160, chW = 112, guideRowH = 32;
+  const slotW = 160, chW = 128, guideRowH = 40;
   const startTime = new Date(now);
   startTime.setMinutes(startTime.getMinutes() < 30 ? 0 : 30, 0, 0);
   startTime.setHours(startTime.getHours() - 1);
@@ -2400,10 +2400,10 @@ function renderGuide() {
 
   // Time header
   html += '<div style="display:flex;position:sticky;top:0;z-index:5;background:var(--bg)">';
-  html += `<div style="width:${chW}px;min-width:${chW}px;height:${guideRowH}px;padding:3px 6px;font-size:7px;color:var(--t3);border-bottom:1px solid var(--bd);position:sticky;left:0;z-index:6;background:var(--bg);display:flex;align-items:center">Channel</div>`;
+  html += `<div style="width:${chW}px;min-width:${chW}px;height:${guideRowH}px;padding:5px 8px;font-size:8px;color:var(--t3);border-bottom:1px solid var(--bd);position:sticky;left:0;z-index:6;background:var(--bg);display:flex;align-items:center">Channel</div>`;
   slots.forEach(s => {
     const h = s.getHours(), m = s.getMinutes();
-    html += `<div style="min-width:${slotW}px;width:${slotW}px;height:${guideRowH}px;padding:3px;font-size:7px;font-weight:600;color:var(--t3);text-align:center;border-bottom:1px solid var(--bd);border-left:1px solid var(--bd);display:flex;align-items:center;justify-content:center">${h % 12 || 12}:${m.toString().padStart(2,'0')}${h >= 12 ? 'p' : 'a'}</div>`;
+    html += `<div style="min-width:${slotW}px;width:${slotW}px;height:${guideRowH}px;padding:5px;font-size:8px;font-weight:600;color:var(--t3);text-align:center;border-bottom:1px solid var(--bd);border-left:1px solid var(--bd);display:flex;align-items:center;justify-content:center">${h % 12 || 12}:${m.toString().padStart(2,'0')}${h >= 12 ? 'p' : 'a'}</div>`;
   });
   html += '</div>';
 
