@@ -1,0 +1,14 @@
+StreamVault v4.6.3 (Build 50)
+
+Guide — rebuilt from scratch using div-flex (no HTML tables):
+- Root cause of program cascade fixed: position:absolute inside <td> does not create a reliable positioning context in Android WebView. Replaced with position:relative on a plain <div> (.gstrip) — this always works.
+- Channel column sticky-left: works because .gch is a flex child of .grow2 inside an inline-block wrapper inside .gw (overflow:auto). Sticky works relative to .gw correctly.
+- Header row sticky-top: .ghdr is position:sticky;top:0 inside .gw.
+- Corner cell sticky both axes: the corner is sticky:left:0 inside .ghdr which is already sticky:top:0.
+- Programs now absolutely positioned relative to their own .gstrip div — no cascade possible.
+
+Settings — Local / Network / iCam now use modal dialogs:
+- Three settings rows: "Configure Local", "Configure SMB", "Configure FTP", "Configure iCam"
+- Pressing any button opens a proper bottom-sheet modal with the form fields
+- DPad glides straight through Settings page without entering any text fields
+- Modal closes on Cancel; Browse & Add closes modal then opens Add Stream with pre-filled URL

@@ -147,32 +147,33 @@ body.tv-mode .hd{padding-top:10px}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .cnt{font-size:8px;color:var(--t3);background:var(--c1);padding:2px 6px;border-radius:8px;border:1px solid var(--bd);font-family:monospace}
 
-/* Guide — single overflow:auto container; channel cell sticky-left, header row sticky-top */
-.gw{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;position:relative}
+/* Guide — div-flex, single overflow:auto; position:relative on div strip (not td) */
+.gw{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}
 .gw::-webkit-scrollbar{display:none}
-.guide-table{display:inline-table;border-collapse:collapse;min-width:max-content}
-.guide-table tr{display:flex}
-/* Header row sticks to top */
-.guide-hdr-row{position:sticky;top:0;z-index:12;display:flex;background:var(--bg)}
-.guide-hdr-ch{flex-shrink:0;display:flex;align-items:center;padding:0 10px;background:var(--bg);color:var(--t3);font-size:8px;font-weight:700;position:sticky;left:0;z-index:13;border-right:1px solid rgba(255,255,255,.2);border-bottom:1px solid var(--bd)}
-.guide-hdr-times{display:flex;background:var(--bg);border-bottom:1px solid var(--bd)}
-.guide-time-slot{display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:8px;font-weight:700;color:var(--t3);border-left:1px solid rgba(255,255,255,.1)}
-/* Channel rows */
-.guide-ch-row{display:flex;border-bottom:1px solid rgba(255,255,255,.06)}
-/* Channel cell — sticky left */
-.gch{flex-shrink:0;padding:7px 10px;display:flex;align-items:center;gap:8px;background:var(--c1);position:sticky;left:0;z-index:8;cursor:pointer;font-size:8px;font-weight:600;overflow:hidden;border-right:1px solid rgba(255,255,255,.18)}
-.gch:hover,.gch:active{background:var(--c2)}
+.gwrap{display:inline-block}
+.ghdr{display:flex;position:sticky;top:0;z-index:12;background:var(--bg);border-bottom:1px solid var(--bd)}
+.gcorner{flex-shrink:0;display:flex;align-items:center;padding:0 10px;background:var(--bg);color:var(--t3);font-weight:700;position:sticky;left:0;z-index:13;border-right:1px solid rgba(255,255,255,.2)}
+.gslots{display:flex}
+.gslot{flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--t3);border-left:1px solid rgba(255,255,255,.1);font-size:8px}
+.grow2{display:flex;border-bottom:1px solid rgba(255,255,255,.07)}
+.gch{flex-shrink:0;display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--c1);position:sticky;left:0;z-index:8;cursor:pointer;overflow:hidden;border-right:1px solid rgba(255,255,255,.18);box-sizing:border-box}
+.gch:hover,.gch:active,.gch:focus{background:var(--c2);outline:none}
 .gch img{width:20px;height:20px;border-radius:3px;flex-shrink:0;object-fit:cover}
-.gch-nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-/* Program strip — position:relative so .gpr anchors here */
-.guide-strip{position:relative;flex-shrink:0;overflow:hidden}
-.gpr{position:absolute;padding:4px 6px;border:1px solid rgba(255,255,255,.10);overflow:hidden;display:flex;flex-direction:column;justify-content:center;font-size:8px;background:rgba(255,255,255,.03);z-index:2;border-radius:4px;cursor:pointer;box-sizing:border-box}
+.gch-nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:8px;font-weight:600}
+.gstrip{position:relative;flex-shrink:0;overflow:hidden}
+.gpr{position:absolute;border:1px solid rgba(255,255,255,.10);overflow:hidden;display:flex;flex-direction:column;justify-content:center;padding:4px 6px;font-size:8px;background:rgba(255,255,255,.03);z-index:2;border-radius:4px;cursor:pointer;box-sizing:border-box}
 .gpr .gt{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.1}
-.gpr .gti{font-size:6px;color:var(--t3);line-height:1.05;margin-top:2px;white-space:nowrap;overflow:hidden}
+.gpr .gti{font-size:6px;color:var(--t3);line-height:1.1;margin-top:2px;white-space:nowrap;overflow:hidden}
 .gpr.now{background:rgba(108,92,231,.18);border-left:3px solid var(--ac)}
-.gpr.past{opacity:.42}
-.gpr:hover,.gpr:active,.gpr:focus{background:rgba(255,255,255,.09)!important;outline:none}
+.gpr.past{opacity:.4}
+.gpr:hover,.gpr:active,.gpr:focus{background:rgba(255,255,255,.1)!important;outline:none}
 .gnl{position:absolute;top:0;bottom:0;width:2px;background:var(--rd);z-index:4;pointer-events:none}
+.acc-hdr{width:100%;display:flex;align-items:center;justify-content:space-between;background:none;border:none;color:var(--ac);font-size:11px;font-weight:600;padding:4px 0 6px;cursor:pointer;text-align:left;font-family:inherit}
+.acc-chev{font-size:14px;color:var(--t3);transition:transform .2s;flex-shrink:0;margin-left:8px}
+.acc.open>.acc-hdr>.acc-chev{transform:rotate(90deg)}
+.acc-body{display:none;padding-top:4px}
+.acc.open>.acc-body{display:block}
+body.tv-mode .acc-hdr{min-height:44px}
 .px-note{font-size:8px;color:var(--t2);margin-top:6px;line-height:1.4}
 
 /* EPG Cards */
@@ -267,7 +268,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
 
 <!-- ═══ LIBRARY ═══ -->
 <div id="lib-scr" class="scr on">
-  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b49</span>
+  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b50</span>
     <button class="ib" id="btn-lib-edit" title="Toggle edit controls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
     <button class="ib" id="btn-add-top" title="Add stream"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
     <button class="ib" id="btn-exp" title="Export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
@@ -352,89 +353,28 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
       </div>
     </div>
   </div>
-  <div class="ss acc" id="acc-local">
-    <button class="acc-hdr" onclick="toggleAcc('acc-local')">📁 Local Videos<span class="acc-chev">›</span></button>
-    <div class="acc-body">
-      <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Configure on-device video sources. Added files appear in the Local tab.</p>
-      <div class="sr"><div><div class="sl">Enable local file browsing</div><div class="sd">Browse device storage for video files</div></div><div class="tgl on" id="s-local-enable"></div></div>
-      <div class="sr" style="margin-top:4px"><div><div class="sl">Default local folder</div><div class="sd">Starting folder for file browser</div></div><input id="s-local-path" placeholder="Movies, Downloads…" style="max-width:150px;font-size:9px" readonly></div>
-      <div class="tv-row" data-tv-group="local-folder" style="margin-top:8px">
-        <button class="bc" id="s-local-pick" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Choose Folder</button>
-        <button class="bs" id="s-local-scan" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Scan for Videos</button>
-      </div>
-      <p style="font-size:9px;color:var(--t2);margin-top:6px">Supports MP4, MKV, AVI, MOV, TS.</p>
+  <div class="ss">
+    <h3>Local Videos</h3>
+    <p style="font-size:9px;color:var(--t2);margin-bottom:8px">Add on-device video files to your Local tab.</p>
+    <div class="tv-row" data-tv-group="local-cfg">
+      <button class="bc" id="s-local-pick" style="padding:9px 16px;font-size:10px;border-radius:var(--rs)">⚙ Configure Local</button>
     </div>
   </div>
 
-  <div class="ss acc" id="acc-network">
-    <button class="acc-hdr" onclick="toggleAcc('acc-network')">🌐 Network Sources<span class="acc-chev">›</span></button>
-    <div class="acc-body">
-      <p style="font-size:9px;color:var(--t2);margin-bottom:8px">LAN shares, Samba/SMB, and FTP. Added sources appear in the Network tab.</p>
-      <div style="font-size:9px;color:var(--ac);font-weight:700;margin-bottom:6px">LAN Discovery</div>
-      <div class="sr"><div><div class="sl">Auto-scan local network</div><div class="sd">Discover media servers at startup</div></div><div class="tgl" id="s-net-scan-auto"></div></div>
-      <div class="tv-row" data-tv-group="lan-scan" style="margin-top:6px">
-        <button class="bc" id="s-net-scan-now" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Scan Now</button>
-        <input id="s-net-scan-status" placeholder="Not scanned" style="max-width:150px;font-size:9px" readonly>
-      </div>
-      <div style="font-size:9px;color:var(--ac);font-weight:700;margin:12px 0 6px">Samba / SMB</div>
-      <div class="rw">
-        <div><label>Host / IP</label><input id="s-smb-host" placeholder="192.168.1.10"></div>
-        <div><label>Share name</label><input id="s-smb-share" placeholder="Media"></div>
-      </div>
-      <div class="rw">
-        <div><label>Username</label><input id="s-smb-user" placeholder="Optional" autocomplete="username"></div>
-        <div><label>Password</label><input id="s-smb-pass" type="password" placeholder="Optional" autocomplete="current-password"></div>
-      </div>
-      <div class="tv-row" data-tv-group="smb-actions">
-        <button class="bc" id="s-smb-test" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Test SMB</button>
-        <button class="bs" id="s-smb-add" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Browse &amp; Add</button>
-      </div>
-      <div style="font-size:9px;color:var(--ac);font-weight:700;margin:12px 0 6px">FTP</div>
-      <div class="rw">
-        <div><label>FTP Host / URL</label><input id="s-ftp-host" placeholder="ftp://192.168.1.10"></div>
-        <div><label>Port</label><input id="s-ftp-port" placeholder="21" type="number" style="max-width:80px"></div>
-      </div>
-      <div class="rw">
-        <div><label>Username</label><input id="s-ftp-user" placeholder="anonymous" autocomplete="username"></div>
-        <div><label>Password</label><input id="s-ftp-pass" type="password" placeholder="Optional" autocomplete="current-password"></div>
-      </div>
-      <div class="tv-row" data-tv-group="ftp-actions">
-        <button class="bc" id="s-ftp-test" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Test FTP</button>
-        <button class="bs" id="s-ftp-add" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Browse &amp; Add</button>
-      </div>
+  <div class="ss">
+    <h3>Network Sources</h3>
+    <p style="font-size:9px;color:var(--t2);margin-bottom:8px">Add Samba/SMB or FTP network sources to your Network tab.</p>
+    <div class="tv-row" data-tv-group="net-cfg">
+      <button class="bc" id="s-smb-open" style="padding:9px 16px;font-size:10px;border-radius:var(--rs)">⚙ Configure SMB</button>
+      <button class="bc" id="s-ftp-open" style="padding:9px 16px;font-size:10px;border-radius:var(--rs)">⚙ Configure FTP</button>
     </div>
   </div>
 
-  <div class="ss acc" id="acc-icam">
-    <button class="acc-hdr" onclick="toggleAcc('acc-icam')">📷 iCam — IP Cameras<span class="acc-chev">›</span></button>
-    <div class="acc-body">
-      <p style="font-size:9px;color:var(--t2);margin-bottom:6px">RTSP, ONVIF, RTMP, or SRT cameras. Added cameras appear in the iCam tab.</p>
-      <div class="sr"><div><div class="sl">Protocol</div><div class="sd">Connection method</div></div>
-        <select id="s-icam-proto">
-          <option value="rtsp">RTSP</option>
-          <option value="onvif">ONVIF</option>
-          <option value="rtmp">RTMP</option>
-          <option value="srt">SRT</option>
-        </select>
-      </div>
-      <div class="rw" style="margin-top:6px">
-        <div style="flex:2"><label>Camera Host / URL</label><input id="s-icam-host" placeholder="192.168.1.50 or rtsp://…/stream"></div>
-        <div><label>Port</label><input id="s-icam-port" placeholder="554" type="number" style="max-width:80px"></div>
-      </div>
-      <div class="rw">
-        <div><label>Username</label><input id="s-icam-user" placeholder="admin" autocomplete="username"></div>
-        <div><label>Password</label><input id="s-icam-pass" type="password" placeholder="••••••" autocomplete="current-password"></div>
-      </div>
-      <div><label>Camera Name</label><input id="s-icam-name" placeholder="Front Door, Driveway…"></div>
-      <div id="s-icam-onvif-panel" style="display:none;margin-top:8px;padding:8px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs)">
-        <div style="font-size:9px;color:var(--t2);margin-bottom:6px">ONVIF: discover stream profiles</div>
-        <button class="bc" id="s-icam-discover" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Discover Profiles</button>
-        <div id="s-icam-profiles" style="margin-top:6px;font-size:9px;color:var(--t3)"></div>
-      </div>
-      <div class="tv-row" data-tv-group="icam-actions" style="margin-top:8px">
-        <button class="bc" id="s-icam-test" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Test Stream</button>
-        <button class="bs" id="s-icam-add" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Add Camera</button>
-      </div>
+  <div class="ss">
+    <h3>iCam — IP Cameras</h3>
+    <p style="font-size:9px;color:var(--t2);margin-bottom:8px">Add RTSP, ONVIF, RTMP, or SRT cameras to your iCam tab.</p>
+    <div class="tv-row" data-tv-group="icam-cfg">
+      <button class="bc" id="s-icam-open" style="padding:9px 16px;font-size:10px;border-radius:var(--rs)">⚙ Configure iCam</button>
     </div>
   </div>
 
@@ -465,7 +405,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.6.2 (Build 49)<br>IPTV · Plex · iCam · Local · Network · EPG Guide · DPad TV Navigation · HLS Recording · Failover · Scheduled Recording.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.6.3 (Build 50)<br>IPTV · Plex · iCam · Local · Network · EPG Guide · DPad TV Navigation · HLS Recording · Failover · Scheduled Recording.</p>
   </div>
 </div>
 
@@ -640,6 +580,114 @@ http://stream.example.com/cnn
 </div>
 
 <div class="toast" id="toast"></div>
+<!-- Local Videos Config -->
+<div class="mo" id="mo-local-cfg">
+<div class="mc">
+  <h2>Local Videos</h2>
+  <p style="font-size:9px;color:var(--t2);margin-bottom:10px">Configure on-device video browsing. Added files appear in the Local tab.</p>
+  <label>Enable local file browsing</label>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+    <div class="tgl on" id="s-local-enable"></div>
+    <span style="font-size:9px;color:var(--t2)">Browse device storage for video files</span>
+  </div>
+  <label>Default folder</label>
+  <div style="display:flex;gap:6px;margin-bottom:10px">
+    <input id="s-local-path" placeholder="Movies, Downloads…" style="flex:1;margin-bottom:0" readonly>
+    <button class="bc" id="s-local-pick" style="padding:8px 12px;font-size:9px;border-radius:var(--rs);white-space:nowrap">Choose</button>
+  </div>
+  <button class="bs" id="s-local-scan" style="width:100%;padding:10px;font-size:10px;border-radius:var(--rs);margin-bottom:10px">Scan for Videos Now</button>
+  <p style="font-size:9px;color:var(--t3)">Supports MP4, MKV, AVI, MOV, TS.</p>
+  <div class="mab"><button class="bc" onclick="$('mo-local-cfg').classList.remove('on');refreshTvFocus()">Done</button></div>
+</div>
+</div>
+
+<!-- SMB Config -->
+<div class="mo" id="mo-smb-cfg">
+<div class="mc">
+  <h2>Samba / SMB</h2>
+  <div style="font-size:9px;color:var(--ac);font-weight:700;margin-bottom:8px">LAN Discovery</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <div>
+      <div style="font-size:10px">Auto-scan local network</div>
+      <div style="font-size:8px;color:var(--t3)">Discover media servers at startup</div>
+    </div>
+    <div class="tgl" id="s-net-scan-auto"></div>
+  </div>
+  <div style="display:flex;gap:6px;margin-bottom:12px">
+    <button class="bc" id="s-net-scan-now" style="padding:8px 12px;font-size:9px;border-radius:var(--rs)">Scan Now</button>
+    <input id="s-net-scan-status" placeholder="Not scanned" style="flex:1;font-size:9px;margin-bottom:0" readonly>
+  </div>
+  <div style="font-size:9px;color:var(--ac);font-weight:700;margin-bottom:8px">Samba / SMB Share</div>
+  <div class="rw">
+    <div><label>Host / IP</label><input id="s-smb-host" placeholder="192.168.1.10"></div>
+    <div><label>Share name</label><input id="s-smb-share" placeholder="Media"></div>
+  </div>
+  <div class="rw">
+    <div><label>Username</label><input id="s-smb-user" placeholder="Optional" autocomplete="username"></div>
+    <div><label>Password</label><input id="s-smb-pass" type="password" placeholder="Optional" autocomplete="current-password"></div>
+  </div>
+  <div class="mab">
+    <button class="bc" onclick="$('mo-smb-cfg').classList.remove('on');refreshTvFocus()">Cancel</button>
+    <button class="bc" id="s-smb-test" style="background:var(--c2)">Test SMB</button>
+    <button class="bs" id="s-smb-add">Browse &amp; Add</button>
+  </div>
+</div>
+</div>
+
+<!-- FTP Config -->
+<div class="mo" id="mo-ftp-cfg">
+<div class="mc">
+  <h2>FTP Source</h2>
+  <div class="rw">
+    <div><label>FTP Host / URL</label><input id="s-ftp-host" placeholder="ftp://192.168.1.10"></div>
+    <div><label>Port</label><input id="s-ftp-port" placeholder="21" type="number" style="max-width:80px"></div>
+  </div>
+  <div class="rw">
+    <div><label>Username</label><input id="s-ftp-user" placeholder="anonymous" autocomplete="username"></div>
+    <div><label>Password</label><input id="s-ftp-pass" type="password" placeholder="Optional" autocomplete="current-password"></div>
+  </div>
+  <div class="mab">
+    <button class="bc" onclick="$('mo-ftp-cfg').classList.remove('on');refreshTvFocus()">Cancel</button>
+    <button class="bc" id="s-ftp-test" style="background:var(--c2)">Test FTP</button>
+    <button class="bs" id="s-ftp-add">Browse &amp; Add</button>
+  </div>
+</div>
+</div>
+
+<!-- iCam Config -->
+<div class="mo" id="mo-icam-cfg">
+<div class="mc">
+  <h2>iCam — IP Camera</h2>
+  <label>Protocol</label>
+  <select id="s-icam-proto" style="margin-bottom:10px">
+    <option value="rtsp">RTSP (port 554)</option>
+    <option value="onvif">ONVIF (port 80)</option>
+    <option value="rtmp">RTMP (port 1935)</option>
+    <option value="srt">SRT (port 8554)</option>
+  </select>
+  <div class="rw">
+    <div style="flex:2"><label>Host / Stream URL</label><input id="s-icam-host" placeholder="192.168.1.50 or rtsp://…/stream"></div>
+    <div><label>Port</label><input id="s-icam-port" placeholder="554" type="number" style="max-width:80px"></div>
+  </div>
+  <div class="rw">
+    <div><label>Username</label><input id="s-icam-user" placeholder="admin" autocomplete="username"></div>
+    <div><label>Password</label><input id="s-icam-pass" type="password" placeholder="••••••" autocomplete="current-password"></div>
+  </div>
+  <label>Camera Name</label>
+  <input id="s-icam-name" placeholder="Front Door, Driveway…">
+  <div id="s-icam-onvif-panel" style="display:none;margin-bottom:10px;padding:8px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs)">
+    <div style="font-size:9px;color:var(--t2);margin-bottom:6px">Discover stream profiles from the camera</div>
+    <button class="bc" id="s-icam-discover" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Discover ONVIF Profiles</button>
+    <div id="s-icam-profiles" style="margin-top:6px;font-size:9px;color:var(--t3)"></div>
+  </div>
+  <div class="mab">
+    <button class="bc" onclick="$('mo-icam-cfg').classList.remove('on');refreshTvFocus()">Cancel</button>
+    <button class="bc" id="s-icam-test" style="background:var(--c2)">Test Stream</button>
+    <button class="bs" id="s-icam-add">Add Camera</button>
+  </div>
+</div>
+</div>
+
 
 <!-- ═════════════════════════════════════════════ -->
 <!--  JAVASCRIPT — Clean rebuild, all features   -->
@@ -648,7 +696,7 @@ http://stream.example.com/cnn
 "use strict";
 
 // ─── Constants & State ───
-const VERSION = '4.6.2', BUILD = 49;
+const VERSION = '4.6.3', BUILD = 50;
 const KEYS = { items: 'sv_items_v3', repos: 'sv_repos_v2', epgSrc: 'sv_epg_src', epgData: 'sv_epg_data', settings: 'sv_settings_v2' };
 const TAG_PRI = ['', 'F', 'H', 'A', 'S'];
 
@@ -2501,61 +2549,70 @@ function renderEpgList() {
 // ═══ GUIDE ═══
 function renderGuide() {
   const wrap = $('gw');
-  const matched = localitySort(items.filter(m => m.epgTitle && epgData.programs && epgData.programs[m.epgTitle])).slice(0, 80);
+  const matched = localitySort(
+    items.filter(m => m.epgTitle && epgData.programs && epgData.programs[m.epgTitle])
+  ).slice(0, 80);
 
   if (!matched.length) {
-    wrap.innerHTML = `<div class="emp" style="min-height:200px"><h3>No guide data</h3><p>${!epgSrc.length ? 'Add an EPG source via the ⚙ button' : 'Tap refresh or set EPG IDs on your streams'}</p></div>`;
+    wrap.innerHTML = `<div class="emp" style="min-height:200px"><h3>No guide data</h3><p>${!epgSrc.length?'Add an EPG source via the ⚙ button':'Tap refresh or set EPG IDs on your streams'}</p></div>`;
     return;
   }
 
-  const now   = Date.now();
-  const isTv  = !!isTvDevice;
-  const slotW = isTv ? 180 : 160;   // px per 30-min slot
-  const chW   = isTv ? 160 : 140;   // channel column width
-  const rowH  = isTv ? 56  : 50;    // row height for every row including header
-  const gapV  = 4;                  // vertical inset for program blocks
-  const fs    = isTv ? 9 : 8;
+  const now    = Date.now();
+  const isTv   = !!isTvDevice;
+  const slotW  = isTv ? 180 : 160;  // px per 30-min slot
+  const chW    = isTv ? 160 : 140;  // channel column width (px)
+  const rowH   = isTv ? 56  : 50;   // row height — EVERY row same height
+  const gapV   = 4;                  // top/bottom inset for program blocks
+  const fs     = isTv ? '9px' : '8px';
 
-  // Build 14-slot window starting 1 hour before now
-  const startTime = new Date(now);
-  startTime.setMinutes(startTime.getMinutes() < 30 ? 0 : 30, 0, 0);
-  startTime.setHours(startTime.getHours() - 1);
-  const startMs = startTime.getTime();
+  // 14-slot window starting 1 hour before now
+  const t0 = new Date(now);
+  t0.setMinutes(t0.getMinutes() < 30 ? 0 : 30, 0, 0);
+  t0.setHours(t0.getHours() - 1);
+  const startMs = t0.getTime();
   const slots   = Array.from({length: 14}, (_, i) => new Date(startMs + i * 1800000));
-  const endMs   = slots[13].getTime() + 1800000;
+  const endMs   = slots[slots.length - 1].getTime() + 1800000;
   const stripW  = slotW * slots.length;
-  const minW    = isTv ? 36 : 48;
-  const numSlots = slots.length;
+  const minW    = isTv ? 36 : 44;
+  const totalW  = chW + stripW;
 
-  // Build HTML table — thead sticky-top, first col sticky-left
-  let html = `<table class="guide-tbl">`;
+  // ── Outer column-flex wrapper (inline-block so gw scrolls both axes) ──────
+  // CRITICAL: .gwrap must be inline-block, NOT inline-flex, so width resolves
+  // correctly and position:sticky left works in Android WebView
+  let html = `<div class="gwrap" style="min-width:${totalW}px">`;
 
-  // ── Sticky header row ──────────────────────────────────────────────────────
-  html += `<thead><tr>`;
-  html += `<th class="g-corner" style="width:${chW}px;min-width:${chW}px;height:${rowH}px;font-size:${fs}px">Channel</th>`;
+  // ── Sticky header row ────────────────────────────────────────────────────
+  html += `<div class="ghdr" style="height:${rowH}px">`;
+  // Corner cell — sticky both top (via parent) and left
+  html += `<div class="gcorner" style="width:${chW}px;min-width:${chW}px;height:${rowH}px;font-size:${fs}">Channel</div>`;
+  // Time slots
+  html += `<div class="gslots" style="height:${rowH}px">`;
   slots.forEach(s => {
-    const h2 = s.getHours(), m2 = s.getMinutes();
-    html += `<th class="g-slot" style="width:${slotW}px;min-width:${slotW}px;height:${rowH}px;font-size:${fs}px">${h2%12||12}:${m2.toString().padStart(2,'0')}${h2>=12?'p':'a'}</th>`;
+    const hh = s.getHours(), mm = s.getMinutes();
+    html += `<div class="gslot" style="width:${slotW}px;min-width:${slotW}px;height:${rowH}px;font-size:${fs}">${hh%12||12}:${mm.toString().padStart(2,'0')}${hh>=12?'p':'a'}</div>`;
   });
-  html += `</tr></thead>`;
+  html += `</div></div>`;
 
-  // ── One <tr> per channel ────────────────────────────────────────────────────
-  html += `<tbody>`;
+  // ── One row per channel ──────────────────────────────────────────────────
   matched.forEach((m, chIdx) => {
     const ch    = epgData.channels[m.epgTitle];
     const progs = getGuidePrograms(m.epgTitle, startMs, endMs);
 
-    html += `<tr>`;
+    html += `<div class="grow2" style="height:${rowH}px">`;
 
-    // Sticky left channel cell
-    html += `<td class="gch" role="button" tabindex="0" data-item-id="${m.id}" data-ch-idx="${chIdx}" onclick="playItem('${m.id}')" style="width:${chW}px;min-width:${chW}px;height:${rowH}px">`;
-    html += `<div class="gch-inner">`;
-    if (m.icon || (ch && ch.icon)) html += `<img src="${esc(m.icon || ch.icon)}" onerror="this.style.display='none'">`;
-    html += `<span class="gch-nm">${esc(m.title)}</span></div></td>`;
+    // Channel cell — sticky left
+    html += `<div class="gch" role="button" tabindex="0" data-item-id="${m.id}" data-ch-idx="${chIdx}" onclick="playItem('${m.id}')" style="width:${chW}px;min-width:${chW}px;height:${rowH}px">`;
+    if (m.icon || (ch && ch.icon)) {
+      html += `<img src="${esc(m.icon || ch.icon)}" onerror="this.style.display='none'" style="flex-shrink:0">`;
+    }
+    html += `<span class="gch-nm">${esc(m.title)}</span></div>`;
 
-    // Program strip cell — spans all slot columns, position:relative for absolute blocks
-    html += `<td class="g-prog-cell" colspan="${numSlots}" style="width:${stripW}px;min-width:${stripW}px;height:${rowH}px">`;
+    // Program strip — position:relative DIV. Height and width must be EXPLICIT.
+    // Programs (gpr) use position:absolute and anchor to THIS div, not any ancestor.
+    html += `<div class="gstrip" style="width:${stripW}px;min-width:${stripW}px;height:${rowH}px">`;
 
+    // Render programs
     progs.forEach((p, progIdx) => {
       const pStart = Math.max(p.start, startMs);
       const pStop  = Math.min(p.stop,  endMs);
@@ -2568,22 +2625,24 @@ function renderGuide() {
       const isPast = p.stop  <= now;
       const pH     = rowH - gapV * 2;
       html += `<div class="gpr${isNow?' now':''}${isPast?' past':''}" role="button" tabindex="${isTv?'0':'-1'}" data-ch-idx="${chIdx}" data-prog-idx="${progIdx}" aria-label="${esc(p.title)}" onclick="playItem('${m.id}')" style="left:${left}px;top:${gapV}px;width:${width}px;height:${pH}px">`;
-      html += `<div class="gt">${esc(p.title)}</div>`;
+      html += `<div class="gt" style="font-size:${fs}">${esc(p.title)}</div>`;
       if (width > 72) html += `<div class="gti">${fmtTime(p.start)}–${fmtTime(p.stop)}</div>`;
       html += `</div>`;
     });
 
-    // "Now" line
+    // "Now" red line
     const nowLeft = ((now - startMs) / 1800000) * slotW;
-    if (nowLeft >= 0 && nowLeft <= stripW) html += `<div class="gnl" style="left:${nowLeft}px"></div>`;
+    if (nowLeft >= 0 && nowLeft <= stripW) {
+      html += `<div class="gnl" style="left:${nowLeft}px"></div>`;
+    }
 
-    html += `</td></tr>`;
+    html += `</div></div>`; // .gstrip, .grow2
   });
 
-  html += `</tbody></table>`;
+  html += `</div>`; // .gwrap
   wrap.innerHTML = html;
 
-  // Scroll to "now"
+  // Scroll to "now minus a little padding"
   setTimeout(() => {
     const nowOff = Math.max(0, ((now - startMs) / 1800000) * slotW - (isTv ? 150 : 110));
     wrap.scrollLeft = nowOff;
@@ -2593,15 +2652,8 @@ function renderGuide() {
     }
   }, 80);
 }
-// ═══ ACCORDION ═══
-window.toggleAcc = (id) => {
-  const el = $(id);
-  if (!el) return;
-  el.classList.toggle('open');
-  setTimeout(refreshTvFocus, 50);
-};
-
 // ═══ SETTINGS ═══
+window.toggleAcc=(id)=>{const el=$(id);if(el){el.classList.toggle('open');setTimeout(refreshTvFocus,50);};};
 function getDisplayDir(kind) {
   if (kind === 'recording') return settings.savePathLabel || settings.savePath || 'Downloads';
   if (kind === 'backup') return settings.backupPathLabel || settings.backupPath || 'Downloads/StreamVault';
@@ -2899,8 +2951,7 @@ function scrollGuideToRow(chIdx) {
   const gw = $('gw');
   if (!gw) return;
   const rowH   = isTvDevice ? 56 : 50;
-  // chIdx 0 = first channel row (below sticky header). Header is rowH, then chIdx*rowH
-  const rowTop = rowH + chIdx * rowH;
+  const rowTop = rowH + chIdx * rowH; // +rowH for sticky header row
   const center = rowTop - Math.floor(gw.clientHeight / 2) + Math.floor(rowH / 2);
   gw.scrollTop = Math.max(0, center);
 }
@@ -3429,86 +3480,82 @@ function renderSettings() {
     toast('Plex settings cleared');
   };
 
-  // ─── Local Videos ───
-  const localEnableTgl = $('s-local-enable');
-  if (localEnableTgl) {
-    if (settings.localEnable === undefined) settings.localEnable = true;
-    localEnableTgl.className = 'tgl' + (settings.localEnable ? ' on' : '');
-    localEnableTgl.onclick = () => { settings.localEnable = !settings.localEnable; localEnableTgl.className = 'tgl' + (settings.localEnable ? ' on' : ''); saveSettings(); };
-  }
-  const localPathEl = $('s-local-path');
-  if (localPathEl) localPathEl.value = (settings.localPath || '');
-  const localPickBtn = $('s-local-pick');
-  if (localPickBtn) localPickBtn.onclick = () => {
-    if (window.NativePlayer && typeof window.NativePlayer.pickLocalDirectory === 'function') window.NativePlayer.pickLocalDirectory();
-    else toast('Folder picker available in Android app build');
-  };
-  const localScanBtn = $('s-local-scan');
-  if (localScanBtn) localScanBtn.onclick = () => toast('Video scan initiated — results appear in Local tab');
+  // ─── Local / Network / iCam — open modal buttons ───
+  function wireConfigModals() {
+    // Local Videos modal
+    const openLocal = () => {
+      if (!settings.localEnable === undefined) settings.localEnable = true;
+      const tgl = $('s-local-enable');
+      if (tgl) { tgl.className = 'tgl' + (settings.localEnable !== false ? ' on' : ''); tgl.onclick = () => { settings.localEnable = !settings.localEnable; tgl.className = 'tgl'+(settings.localEnable?' on':''); saveSettings(); }; }
+      const lp = $('s-local-path'); if (lp) lp.value = settings.localPath || '';
+      const lpb = $('s-local-pick'); if (lpb) lpb.onclick = () => { if (window.NativePlayer&&typeof window.NativePlayer.pickLocalDirectory==='function') window.NativePlayer.pickLocalDirectory(); else toast('Folder picker available in Android app build'); };
+      const lsb = $('s-local-scan'); if (lsb) lsb.onclick = () => toast('Video scan initiated — results appear in Local tab');
+      $('mo-local-cfg').classList.add('on'); setTimeout(refreshTvFocus, 30);
+    };
+    if ($('s-local-pick')) $('s-local-pick').onclick = openLocal; // button in settings page
+    const lbtn = document.getElementById('s-local-pick'); // already handled above
 
-  // ─── Network (SMB / FTP) ───
-  const netScanAutoTgl = $('s-net-scan-auto');
-  if (netScanAutoTgl) {
-    if (!settings.networkCfg) settings.networkCfg = {};
-    netScanAutoTgl.className = 'tgl' + (settings.networkCfg.lanScanAuto ? ' on' : '');
-    netScanAutoTgl.onclick = () => { settings.networkCfg.lanScanAuto = !settings.networkCfg.lanScanAuto; netScanAutoTgl.className = 'tgl' + (settings.networkCfg.lanScanAuto ? ' on' : ''); saveSettings(); };
-  }
-  if ($('s-net-scan-now')) $('s-net-scan-now').onclick = () => { const st = $('s-net-scan-status'); if (st) { st.value = 'Scanning…'; setTimeout(() => { st.value = 'Done — use Network tab to browse'; }, 2000); } };
-  ['s-smb-host','s-smb-share','s-smb-user','s-smb-pass','s-ftp-host','s-ftp-port','s-ftp-user','s-ftp-pass'].forEach(id => {
-    const el = $(id);
-    if (!el) return;
-    if (!settings.networkCfg) settings.networkCfg = {};
-    el.value = settings.networkCfg[id] || '';
-    el.onchange = () => { settings.networkCfg[id] = el.value; saveSettings(); };
-  });
-  if ($('s-smb-test')) $('s-smb-test').onclick = () => toast('SMB connection test available in Android app build');
-  if ($('s-smb-add')) $('s-smb-add').onclick = () => {
-    const host = ($('s-smb-host') && $('s-smb-host').value) || 'host';
-    const share = ($('s-smb-share') && $('s-smb-share').value) || 'share';
-    openAddStreamPreset({ name: host + '/' + share, url: 'smb://' + host + '/' + share, category: 'Network' });
-  };
-  if ($('s-ftp-test')) $('s-ftp-test').onclick = () => toast('FTP connection test available in Android app build');
-  if ($('s-ftp-add')) $('s-ftp-add').onclick = () => {
-    let host = ($('s-ftp-host') && $('s-ftp-host').value) || '';
-    if (host && !host.startsWith('ftp')) host = 'ftp://' + host;
-    openAddStreamPreset({ name: host || 'FTP Source', url: host || 'ftp://', category: 'Network' });
-  };
+    // SMB modal
+    const openSmb = () => {
+      if (!settings.networkCfg) settings.networkCfg = {};
+      const scanTgl = $('s-net-scan-auto');
+      if (scanTgl) { scanTgl.className='tgl'+(settings.networkCfg.lanScanAuto?' on':''); scanTgl.onclick=()=>{settings.networkCfg.lanScanAuto=!settings.networkCfg.lanScanAuto;scanTgl.className='tgl'+(settings.networkCfg.lanScanAuto?' on':'');saveSettings();}; }
+      const snb=$('s-net-scan-now'); if(snb) snb.onclick=()=>{const st=$('s-net-scan-status');if(st){st.value='Scanning…';setTimeout(()=>{st.value='Done — use Network tab to browse';},2000);}};
+      ['s-smb-host','s-smb-share','s-smb-user','s-smb-pass'].forEach(id=>{const el=$(id);if(!el)return;el.value=settings.networkCfg[id]||'';el.onchange=()=>{settings.networkCfg[id]=el.value;saveSettings();};});
+      const stb=$('s-smb-test'); if(stb) stb.onclick=()=>toast('SMB connection test available in Android app build');
+      const sab=$('s-smb-add'); if(sab) sab.onclick=()=>{
+        const host=($('s-smb-host')&&$('s-smb-host').value)||'host';
+        const share=($('s-smb-share')&&$('s-smb-share').value)||'share';
+        $('mo-smb-cfg').classList.remove('on');
+        setTimeout(()=>openAddStreamPreset({name:host+'/'+share,url:'smb://'+host+'/'+share,category:'Network'}),50);
+      };
+      $('mo-smb-cfg').classList.add('on'); setTimeout(refreshTvFocus, 30);
+    };
 
-  // ─── iCam ───
-  if (!settings.icamCfg) settings.icamCfg = {};
-  const icamProto = $('s-icam-proto');
-  if (icamProto) {
-    icamProto.value = settings.icamCfg.proto || 'rtsp';
-    const onvifPanel = $('s-icam-onvif-panel');
-    const syncOnvif = () => { if (onvifPanel) onvifPanel.style.display = icamProto.value === 'onvif' ? 'block' : 'none'; };
-    syncOnvif();
-    icamProto.onchange = () => { settings.icamCfg.proto = icamProto.value; saveSettings(); syncOnvif(); };
+    // FTP modal
+    const openFtp = () => {
+      if (!settings.networkCfg) settings.networkCfg = {};
+      ['s-ftp-host','s-ftp-port','s-ftp-user','s-ftp-pass'].forEach(id=>{const el=$(id);if(!el)return;el.value=settings.networkCfg[id]||'';el.onchange=()=>{settings.networkCfg[id]=el.value;saveSettings();};});
+      const ftb=$('s-ftp-test'); if(ftb) ftb.onclick=()=>toast('FTP connection test available in Android app build');
+      const fab=$('s-ftp-add'); if(fab) fab.onclick=()=>{
+        let host=($('s-ftp-host')&&$('s-ftp-host').value)||'';
+        if(host&&!host.startsWith('ftp')) host='ftp://'+host;
+        $('mo-ftp-cfg').classList.remove('on');
+        setTimeout(()=>openAddStreamPreset({name:host||'FTP Source',url:host||'ftp://',category:'Network'}),50);
+      };
+      $('mo-ftp-cfg').classList.add('on'); setTimeout(refreshTvFocus, 30);
+    };
+
+    // iCam modal
+    const openIcam = () => {
+      if (!settings.icamCfg) settings.icamCfg = {};
+      const ip=$('s-icam-proto');
+      if(ip){ip.value=settings.icamCfg.proto||'rtsp';const op=$('s-icam-onvif-panel');const sync=()=>{if(op)op.style.display=ip.value==='onvif'?'block':'none';};sync();ip.onchange=()=>{settings.icamCfg.proto=ip.value;saveSettings();sync();};}
+      ['s-icam-host','s-icam-port','s-icam-user','s-icam-pass','s-icam-name'].forEach(id=>{const el=$(id);if(!el)return;el.value=settings.icamCfg[id]||'';el.onchange=()=>{settings.icamCfg[id]=el.value;saveSettings();};});
+      const idb=$('s-icam-discover'); if(idb) idb.onclick=()=>{$('s-icam-profiles').textContent='ONVIF discovery available in Android app build';};
+      const itb=$('s-icam-test'); if(itb) itb.onclick=()=>toast('Stream test available in Android app build');
+      const iab=$('s-icam-add'); if(iab) iab.onclick=()=>{
+        const proto=($('s-icam-proto')&&$('s-icam-proto').value)||'rtsp';
+        const host=($('s-icam-host')&&$('s-icam-host').value)||'';
+        const port=($('s-icam-port')&&$('s-icam-port').value)||(proto==='rtsp'?'554':proto==='rtmp'?'1935':'8554');
+        const user=($('s-icam-user')&&$('s-icam-user').value)||'';
+        const pass=($('s-icam-pass')&&$('s-icam-pass').value)||'';
+        const name=($('s-icam-name')&&$('s-icam-name').value)||'IP Camera';
+        if(!host){toast('Enter a camera host or URL');return;}
+        let url=host.includes('://')?host:((proto+'://')+(user?(encodeURIComponent(user)+(pass?':'+encodeURIComponent(pass):'')+('@')):'')+(host+':'+port+'/stream'));
+        $('mo-icam-cfg').classList.remove('on');
+        setTimeout(()=>openAddStreamPreset({name,url,category:'iCam'}),50);
+      };
+      $('mo-icam-cfg').classList.add('on'); setTimeout(refreshTvFocus, 30);
+    };
+
+    // Wire settings page buttons
+    const so = $('s-smb-open'); if(so) so.onclick = openSmb;
+    const fo = $('s-ftp-open'); if(fo) fo.onclick = openFtp;
+    const io = $('s-icam-open'); if(io) io.onclick = openIcam;
+    const lo = $('s-local-pick'); if(lo) lo.onclick = openLocal;
   }
-  ['s-icam-host','s-icam-port','s-icam-user','s-icam-pass','s-icam-name'].forEach(id => {
-    const el = $(id);
-    if (!el) return;
-    el.value = settings.icamCfg[id] || '';
-    el.onchange = () => { settings.icamCfg[id] = el.value; saveSettings(); };
-  });
-  if ($('s-icam-discover')) $('s-icam-discover').onclick = () => { $('s-icam-profiles').textContent = 'ONVIF discovery available in Android app build'; };
-  if ($('s-icam-test')) $('s-icam-test').onclick = () => toast('Open stream test available in Android app build');
-  if ($('s-icam-add')) $('s-icam-add').onclick = () => {
-    const proto = ($('s-icam-proto') && $('s-icam-proto').value) || 'rtsp';
-    const host  = ($('s-icam-host') && $('s-icam-host').value) || '';
-    const port  = ($('s-icam-port') && $('s-icam-port').value) || (proto === 'rtsp' ? '554' : proto === 'rtmp' ? '1935' : '8554');
-    const user  = ($('s-icam-user') && $('s-icam-user').value) || '';
-    const pass  = ($('s-icam-pass') && $('s-icam-pass').value) || '';
-    const name  = ($('s-icam-name') && $('s-icam-name').value) || 'IP Camera';
-    if (!host) { toast('Enter a camera host or URL'); return; }
-    let url;
-    if (host.includes('://')) {
-      url = host;
-    } else {
-      const auth = user ? (encodeURIComponent(user) + (pass ? ':' + encodeURIComponent(pass) : '') + '@') : '';
-      url = proto + '://' + auth + host + ':' + port + '/stream';
-    }
-    openAddStreamPreset({ name, url, category: 'iCam' });
-  };
+  wireConfigModals();
 
   // Localities & Schedules
   renderLocalities();
