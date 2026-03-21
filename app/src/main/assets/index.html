@@ -25,8 +25,9 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
 .bnav .ni svg{width:18px;height:18px}
 
 /* Header */
-.hd{padding:40px 16px 6px;display:flex;align-items:center;justify-content:space-between}
-.hd h1{font-size:18px;font-weight:700;color:var(--t1)}
+.hd{padding:18px 16px 6px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.hd h1{font-size:17px;font-weight:700;color:var(--t1)}
+body.tv-mode .hd{padding-top:14px}
 .hd-r{display:flex;gap:4px;align-items:center}
 .tg{font-size:8px;color:var(--t3);background:var(--c1);padding:2px 6px;border-radius:8px;border:1px solid var(--bd);font-family:monospace}
 .ib{width:28px;height:28px;border-radius:var(--rs);background:var(--c1);border:1px solid var(--bd);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--t2)}
@@ -41,7 +42,7 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
 
 .libbar{display:flex;gap:6px;align-items:center;padding:4px 16px 2px}
 .libmodes{display:flex;gap:5px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex:1}.libmodes::-webkit-scrollbar{display:none}
-.lmb{padding:6px 10px;border-radius:11px;font-size:9px;font-weight:700;white-space:nowrap;cursor:pointer;background:var(--c1);border:1px solid var(--bd);color:var(--t2);flex-shrink:0}
+.lmb{padding:5px 9px;border-radius:7px;font-size:8px;font-weight:700;white-space:nowrap;cursor:pointer;background:var(--c1);border:1px solid var(--bd);color:var(--t2);flex-shrink:0;min-height:0}
 .lmb.on{background:var(--ac);border-color:var(--ac);color:#fff}
 .lmb small{opacity:.8;font-size:8px;margin-left:4px}
 .sb.hide{display:none}
@@ -63,7 +64,7 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
 
 /* Pills */
 .pls{display:flex;gap:3px;padding:3px 16px 5px;overflow-x:auto;-webkit-overflow-scrolling:touch}.pls::-webkit-scrollbar{display:none}
-.pl{padding:3px 8px;border-radius:10px;font-size:8px;font-weight:500;white-space:nowrap;cursor:pointer;background:var(--c1);border:1px solid var(--bd);color:var(--t2);flex-shrink:0}
+.pl{padding:4px 8px;border-radius:8px;font-size:8px;font-weight:600;white-space:nowrap;cursor:pointer;background:var(--c1);border:1px solid var(--bd);color:var(--t2);flex-shrink:0}
 .pl.on{background:var(--ac);color:#fff;border-color:var(--ac)}
 
 /* Lists & Items */
@@ -84,8 +85,7 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
 .itm .ab button svg{width:11px;height:11px}
 
 /* FAB */
-.fab{position:fixed;bottom:56px;right:14px;width:44px;height:44px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;background:var(--ac);box-shadow:0 3px 12px var(--acg);z-index:50}
-.fab:active{transform:scale(.92)}.fab svg{width:18px;height:18px;color:#fff}
+.fab{display:none!important}
 
 /* Repo Browser */
 .fbar{display:flex;gap:4px;padding:2px 16px 4px;align-items:center;overflow-x:auto;-webkit-overflow-scrolling:touch}.fbar::-webkit-scrollbar{display:none}
@@ -149,8 +149,8 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
 
 /* Guide */
 .gw{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}.gw::-webkit-scrollbar{display:none}
-.grow{display:flex;min-height:38px;border-bottom:1px solid var(--bd)}
-.gch{width:100px;min-width:100px;padding:4px 6px;display:flex;align-items:center;gap:4px;background:var(--c1);position:sticky;left:0;z-index:3;border-right:1px solid var(--bd);cursor:pointer;font-size:8px;font-weight:500}
+.grow{display:flex;min-height:34px;border-bottom:1px solid var(--bd)}
+.gch{width:108px;min-width:108px;padding:4px 6px;display:flex;align-items:center;gap:4px;background:var(--c1);position:sticky;left:0;z-index:3;border-right:1px solid var(--bd);cursor:pointer;font-size:8px;font-weight:600}
 .gch:active{background:var(--c2)}
 .gch img{width:20px;height:20px;border-radius:3px;flex-shrink:0;object-fit:cover}
 .gpr{position:absolute;top:0;bottom:0;padding:3px 5px;border-right:1px solid var(--bd);overflow:hidden;display:flex;flex-direction:column;justify-content:center;font-size:8px}
@@ -186,6 +186,22 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
 .la input{flex:1;padding:6px 8px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:10px;outline:none}
 .la button{padding:6px 12px;background:var(--ac);color:#fff;border:none;border-radius:var(--rs);font-size:10px;font-weight:600;cursor:pointer}
 
+
+.lr{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 8px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);margin-bottom:4px}
+.lr .ln{font-size:10px;font-weight:600}
+.lr .lra{display:flex;align-items:center;gap:4px;margin-left:auto}
+.lr .lra button{width:22px;height:22px;border-radius:4px;border:none;background:transparent;color:var(--t2);cursor:pointer;font-size:12px}
+.tv-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.tv-row button,.tv-row .bc,.tv-row .bs{flex:0 0 auto}
+#lib-lst.home-grid{display:grid;grid-template-columns:1fr;gap:6px;align-content:start}
+#lib-lst.home-grid .itm{margin-bottom:0}
+@media (orientation:landscape){
+  #lib-lst.home-grid{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+  #lib-lst.home-grid .itm{padding:7px}
+  #lib-lst.home-grid .itm .th{width:28px;height:28px}
+  #lib-lst.home-grid .itm .nf .nm{font-size:10px}
+}
+
 /* Player (web fallback) */
 /* EPG searchable dropdown */
 .epg-opt{padding:10px 12px;font-size:11px;cursor:pointer;border-bottom:1px solid var(--bd)}
@@ -218,10 +234,9 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
 .ld2{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:5}
 .spn{width:32px;height:32px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--ac);border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
-body.tv-mode .bnav .ni,body.tv-mode button,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode .epg-opt,body.tv-mode .lmb,body.tv-mode .tgl,body.tv-mode .fab,body.tv-mode .ib,[role="button"]{outline:none;transition:box-shadow .12s ease,transform .12s ease,background .12s ease}
-body.tv-mode .tv-f,body.tv-mode .ni:focus,body.tv-mode button:focus,body.tv-mode input:focus,body.tv-mode textarea:focus,body.tv-mode select:focus,body.tv-mode .itm:focus,body.tv-mode .rc:focus,body.tv-mode .ri:focus,body.tv-mode .epg-opt:focus,body.tv-mode .lmb:focus,body.tv-mode .tgl:focus,body.tv-mode .fab:focus,body.tv-mode .ib:focus,[role="button"]:focus{box-shadow:0 0 0 3px #fff,0 0 0 6px rgba(108,92,231,.95),0 0 18px rgba(108,92,231,.5)!important;transform:scale(1.015);background-image:linear-gradient(0deg,rgba(108,92,231,.14),rgba(108,92,231,.14))}
-body.tv-mode .tv-f::after,body.tv-mode .ni:focus::after,body.tv-mode button:focus::after,body.tv-mode input:focus::after,body.tv-mode textarea:focus::after,body.tv-mode select:focus::after,body.tv-mode .itm:focus::after,body.tv-mode .rc:focus::after,body.tv-mode .ri:focus::after,body.tv-mode .epg-opt:focus::after,body.tv-mode .lmb:focus::after,body.tv-mode .tgl:focus::after,body.tv-mode .fab:focus::after,body.tv-mode .ib:focus::after,[role="button"]:focus::after{content:'';position:absolute;left:-6px;top:50%;transform:translateY(-50%);width:4px;height:70%;border-radius:999px;background:#fff;pointer-events:none}
-body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode button,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .ib,body.tv-mode .fab,[role="button"]{min-height:44px;position:relative}
+body.tv-mode .bnav .ni,body.tv-mode button,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode .epg-opt,body.tv-mode .lmb,body.tv-mode .pl,body.tv-mode .tgl,body.tv-mode .ib,body.tv-mode .gch,[role="button"]{outline:none;transition:box-shadow .12s ease,transform .12s ease,background .12s ease,border-color .12s ease}
+body.tv-mode .tv-f,body.tv-mode .ni:focus,body.tv-mode button:focus,body.tv-mode input:focus,body.tv-mode textarea:focus,body.tv-mode select:focus,body.tv-mode .itm:focus,body.tv-mode .rc:focus,body.tv-mode .ri:focus,body.tv-mode .epg-opt:focus,body.tv-mode .lmb:focus,body.tv-mode .pl:focus,body.tv-mode .tgl:focus,body.tv-mode .ib:focus,body.tv-mode .gch:focus,[role="button"]:focus{box-shadow:0 0 0 3px rgba(108,92,231,.98),0 0 0 6px rgba(108,92,231,.22),0 0 18px rgba(108,92,231,.35)!important;transform:scale(1.012);background-image:linear-gradient(0deg,rgba(108,92,231,.12),rgba(108,92,231,.12));border-color:rgba(108,92,231,.98)!important}
+body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .pl,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode button,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .ib,body.tv-mode .gch,[role="button"]{min-height:44px;position:relative}
 body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.tv-mode .px-grid{scroll-margin-top:70px}
 </style>
 </head>
@@ -232,7 +247,8 @@ body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.
 
 <!-- ═══ LIBRARY ═══ -->
 <div id="lib-scr" class="scr on">
-  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b36</span>
+  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b38</span>
+    <button class="ib" id="btn-add-top" title="Add stream"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
     <button class="ib" id="btn-exp" title="Export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
   </div></div>
   <div class="libbar">
@@ -243,7 +259,6 @@ body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.
   <div id="lib-extra"></div>
   <div class="pls" id="lib-pls"></div>
   <div class="lst" id="lib-lst"></div>
-  <button class="fab" id="fab-add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
 </div>
 
 <!-- ═══ GUIDE ═══ -->
@@ -258,9 +273,8 @@ body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.
 
 <!-- ═══ REPOS ═══ -->
 <div id="repo-scr" class="scr">
-  <div class="hd"><h1>Repos</h1><div class="hd-r"><span class="cnt" id="rcnt">0</span></div></div>
+  <div class="hd"><h1>Repos</h1><div class="hd-r"><span class="cnt" id="rcnt">0</span><button class="ib" id="btn-repo-top" title="Add repo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button></div></div>
   <div class="lst" id="repo-lst" style="padding-top:4px"></div>
-  <button class="fab" id="fab-repo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
 </div>
 
 <!-- ═══ SETTINGS ═══ -->
@@ -272,7 +286,6 @@ body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.
   </div>
 
   <div class="ss"><h3>Home Tabs</h3>
-    <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Choose the order of source tabs shown on the home screen. The generic Library tab has been removed.</p>
     <div id="tab-order-lst"></div>
   </div>
   <div class="ss"><h3>TV / Fire TV</h3>
@@ -294,7 +307,7 @@ body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.
   </div>
   <div class="ss"><h3>Recording</h3>
     <div class="sr"><div><div class="sl">Save location</div><div class="sd">Folder for recorded files</div></div><input id="s-save-path" placeholder="Downloads/" style="max-width:180px;font-size:9px" readonly></div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+    <div class="tv-row" data-tv-group="save-location">
       <button class="bc" id="s-save-pick" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Choose Folder</button>
       <button class="bs" id="s-save-default" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Use Default Downloads</button>
     </div>
@@ -321,11 +334,11 @@ body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.
   <div class="ss"><h3>Backup & Restore</h3>
     <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Backup or restore your library, EPG sources/data, repositories, and settings in one file.</p>
     <div class="sr"><div><div class="sl">Backup location</div><div class="sd">Folder for backup exports</div></div><input id="s-backup-path" placeholder="Downloads/StreamVault" style="max-width:180px;font-size:9px" readonly></div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+    <div class="tv-row" data-tv-group="backup-location">
       <button class="bc" id="s-backup-pick" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Choose Folder</button>
       <button class="bs" id="s-backup-default" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Use Default Downloads</button>
     </div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+    <div class="tv-row" data-tv-group="backup-actions">
       <button class="bs" id="bk-exp" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Backup All</button>
       <button class="bc" id="bk-imp-btn" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Restore Backup</button>
       <input type="file" id="bk-imp" accept=".json,application/json" style="display:none">
@@ -337,7 +350,7 @@ body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.
       <input id="s-plex-server" placeholder="Plex server URL · http://192.168.1.10:32400" style="padding:7px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px">
       <input id="s-plex-token" placeholder="Plex token" style="padding:7px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px">
     </div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+    <div class="tv-row" data-tv-group="plex-actions">
       <button class="bc" id="s-plex-test" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Connect / Test</button>
       <button class="bs" id="s-plex-open" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Add Plex Stream</button>
       <button class="bc" id="s-plex-clear" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Clear Plex</button>
@@ -345,7 +358,7 @@ body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.
     <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.5.1 (Build 36)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.5.3 (Build 38)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
   </div>
 </div>
 
@@ -528,7 +541,7 @@ http://stream.example.com/cnn
 "use strict";
 
 // ─── Constants & State ───
-const VERSION = '4.3.10', BUILD = 31;
+const VERSION = '4.5.3', BUILD = 38;
 const KEYS = { items: 'sv_items_v3', repos: 'sv_repos_v2', epgSrc: 'sv_epg_src', epgData: 'sv_epg_data', settings: 'sv_settings_v2' };
 const TAG_PRI = ['', 'F', 'H', 'A', 'S'];
 
@@ -1481,6 +1494,7 @@ function renderCats() {
 function renderLib() {
   renderLibModes();
   renderLibExtra();
+  $('lib-lst').classList.toggle('home-grid', window.matchMedia && window.matchMedia('(orientation: landscape)').matches);
   const f = getFilteredItems();
   const emptyTitle = activeLibPage === 'itv' ? 'No ITV streams' : activeLibPage === 'icam' ? 'No iCam streams' : activeLibPage === 'plex' ? 'No PlexStr items' : 'No streams';
   const emptyBody = activeLibPage === 'plex' ? 'Use the PlexStr panel above to open your Plex library or search and add titles.' : 'Tap + to add or browse Repos tab';
@@ -1535,7 +1549,7 @@ updateSearchToggleUi();
 
 
 // ─── Add / Edit Stream ───
-$('fab-add').onclick = () => {
+$('btn-add-top').onclick = () => {
   if (activeLibPage === 'plex') activeLibPage = (getLibPageDefs()[0] || {}).id || 'all';
 
   editId = null;
@@ -1885,7 +1899,7 @@ function downloadFile(content, type, filename) {
 function dateStr() { return new Date().toISOString().slice(0, 10); }
 
 // ═══ REPOSITORIES ═══
-$('fab-repo').onclick = () => {
+$('btn-repo-top').onclick = () => {
   $('rp-name').value = '';
   $('rp-url').value = '';
   $('rp-txt').value = '';
@@ -2103,7 +2117,7 @@ function getBrowseFiltered() {
            (brGen === 'All' || s.category === brGen) &&
            (!q || s._svSearch.includes(q));
   });
-  filtered = localitySort(filtered);
+  if (brGen !== 'All') filtered = localitySort(filtered);
   brFilteredCache = { key, items: filtered };
   return filtered;
 }
@@ -2333,7 +2347,7 @@ function renderGuide() {
     const ch = epgData.channels[m.epgTitle];
 
     html += '<div class="grow">';
-    html += `<div class="gch" onclick="playItem('${m.id}')">`;
+    html += `<div class="gch" role="button" tabindex="-1" onclick="playItem('${m.id}')">`;
     if (m.icon || (ch && ch.icon)) html += `<img src="${esc(m.icon || ch.icon)}" onerror="this.style.display='none'">`;
     html += `<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.title)}</span></div>`;
     html += '<div style="position:relative;flex:1">';
@@ -2364,6 +2378,7 @@ function renderGuide() {
   setTimeout(() => {
     const nowOff = (now - startTime.getTime()) / 1800000 * slotW - 80;
     wrap.scrollLeft = Math.max(0, nowOff);
+    if (isTvDevice) refreshTvFocus();
   }, 100);
 }
 
@@ -2425,7 +2440,7 @@ function applyTvMode() {
 function normalizeTvFocusable(el) {
   if (!el) return el;
   const tag = (el.tagName || '').toLowerCase();
-  const customFocusable = el.matches && el.matches('.ni, .itm, .rc, .ri, .epg-opt, .lmb, .tgl, .fab, .ib, [role="button"]');
+  const customFocusable = el.matches && el.matches('.ni, .itm, .rc, .ri, .epg-opt, .lmb, .pl, .tgl, .ib, .gch, [role="button"]');
   if (customFocusable && !el.hasAttribute('tabindex')) el.tabIndex = 0;
   if (tag === 'input' && (el.type || '').toLowerCase() === 'hidden') return null;
   return el;
@@ -2434,7 +2449,7 @@ function getTvFocusableElements() {
   if (!isTvDevice) return [];
   const q = [
     'button', 'input', 'textarea', 'select', 'a[href]',
-    '.ni', '.itm', '.rc', '.ri', '.epg-opt', '.lmb', '.tgl', '.fab', '.ib',
+    '.ni', '.itm', '.rc', '.ri', '.epg-opt', '.lmb', '.pl', '.tgl', '.ib', '.gch',
     '[role="button"]', '[tabindex]', '[contenteditable="true"]'
   ].join(', ');
   const seen = new Set();
@@ -2514,13 +2529,16 @@ function moveTvFocusSpatial(dirCode) {
   const inBottomNav = !!(current && current.closest && current.closest('#bnav'));
   const navEls = els.filter(el => el.closest && el.closest('#bnav'));
 
+  const cx = currentRect.left + currentRect.width / 2;
+  const cy = currentRect.top + currentRect.height / 2;
+
   const pickClosestNav = () => {
     if (!navEls.length) return false;
     let bestNavIdx = -1;
     let bestNavScore = Infinity;
     navEls.forEach(navEl => {
       const r = navEl.getBoundingClientRect();
-      const score = Math.abs((r.left + r.width / 2) - (currentRect.left + currentRect.width / 2));
+      const score = Math.abs((r.left + r.width / 2) - cx);
       if (score < bestNavScore) {
         bestNavScore = score;
         bestNavIdx = els.indexOf(navEl);
@@ -2538,27 +2556,68 @@ function moveTvFocusSpatial(dirCode) {
     }
   }
 
-  let bestIdx = -1;
-  let bestScore = Infinity;
-  const cx = currentRect.left + currentRect.width / 2;
-  const cy = currentRect.top + currentRect.height / 2;
-  els.forEach((el, idx) => {
-    if (el === current) return;
-    const r = el.getBoundingClientRect();
-    const ex = r.left + r.width / 2;
-    const ey = r.top + r.height / 2;
+  const candidates = els.map((el, idx) => ({ el, idx, rect: el.getBoundingClientRect() })).filter(({ el, rect }) => {
+    if (el === current) return false;
+    const ex = rect.left + rect.width / 2;
+    const ey = rect.top + rect.height / 2;
     const dx = ex - cx;
     const dy = ey - cy;
-    const isRight = dirCode === 22 && dx > 6;
-    const isLeft = dirCode === 21 && dx < -6;
-    const isDown = dirCode === 20 && dy > 6;
-    const isUp = dirCode === 19 && dy < -6;
-    if (!(isRight || isLeft || isDown || isUp)) return;
+    if (dirCode === 22) return dx > 6;
+    if (dirCode === 21) return dx < -6;
+    if (dirCode === 20) return dy > 6;
+    if (dirCode === 19) return dy < -6;
+    return false;
+  });
 
+  const sameZoneCandidates = candidates.filter(({ el }) => (!!(el.closest && el.closest('#bnav'))) === inBottomNav);
+  const pool = sameZoneCandidates.length ? sameZoneCandidates : candidates;
+
+  const chooseFromNearestRow = (rowCandidates, verticalDir) => {
+    if (!rowCandidates.length) return -1;
+    const curTag = (current.tagName || '').toLowerCase();
+    const currentIsField = ['input', 'textarea', 'select'].includes(curTag);
+    const avgWidth = rowCandidates.reduce((sum, c) => sum + c.rect.width, 0) / rowCandidates.length;
+    const currentIsWide = currentRect.width > avgWidth * 1.35;
+    const currentLeft = currentRect.left;
+    const currentRight = currentRect.right;
+
+    const withScore = rowCandidates.map(c => {
+      const r = c.rect;
+      const overlap = Math.max(0, Math.min(currentRight, r.right) - Math.max(currentLeft, r.left));
+      const dx = Math.abs((r.left + r.width / 2) - cx);
+      const biasLeft = verticalDir ? r.left : 0;
+      let score = dx * 10 - overlap * 4 + biasLeft * 0.01;
+      if ((currentIsField || currentIsWide) && verticalDir) score = r.left * 10 - overlap * 2 + dx;
+      return { idx: c.idx, score };
+    }).sort((a, b) => a.score - b.score);
+    return withScore.length ? withScore[0].idx : -1;
+  };
+
+  if (dirCode === 20 || dirCode === 19) {
+    let nearestOffset = Infinity;
+    pool.forEach(({ rect }) => {
+      const offset = Math.abs((rect.top + rect.height / 2) - cy);
+      if (offset < nearestOffset) nearestOffset = offset;
+    });
+    const rowThreshold = Math.max(28, Math.min(60, nearestOffset + 10));
+    const nearestRow = pool.filter(({ rect }) => Math.abs((rect.top + rect.height / 2) - cy) <= rowThreshold);
+    const rowPick = chooseFromNearestRow(nearestRow, true);
+    if (rowPick >= 0) return focusElementAtIndex(rowPick);
+  }
+
+  let bestIdx = -1;
+  let bestScore = Infinity;
+  pool.forEach(({ idx, rect }) => {
+    const ex = rect.left + rect.width / 2;
+    const ey = rect.top + rect.height / 2;
+    const dx = ex - cx;
+    const dy = ey - cy;
     const primary = (dirCode === 21 || dirCode === 22) ? Math.abs(dx) : Math.abs(dy);
     const secondary = (dirCode === 21 || dirCode === 22) ? Math.abs(dy) : Math.abs(dx);
-    const sameZone = (!!(el.closest && el.closest('#bnav'))) === inBottomNav;
-    const score = primary * 100 + secondary + (sameZone ? 0 : 12000);
+    const overlap = (dirCode === 21 || dirCode === 22)
+      ? Math.max(0, Math.min(currentRect.bottom, rect.bottom) - Math.max(currentRect.top, rect.top))
+      : Math.max(0, Math.min(currentRect.right, rect.right) - Math.max(currentRect.left, rect.left));
+    const score = primary * 100 + secondary - overlap * 3;
     if (score < bestScore) {
       bestScore = score;
       bestIdx = idx;
@@ -2568,23 +2627,10 @@ function moveTvFocusSpatial(dirCode) {
   if (bestIdx >= 0) return focusElementAtIndex(bestIdx);
   if (!inBottomNav && dirCode === 20 && navEls.length) return pickClosestNav();
   if (inBottomNav && dirCode === 19) {
-    let aboveIdx = -1;
-    let aboveScore = Infinity;
-    els.forEach((el, idx) => {
-      if (el === current || (el.closest && el.closest('#bnav'))) return;
-      const r = el.getBoundingClientRect();
-      const ex = r.left + r.width / 2;
-      const ey = r.top + r.height / 2;
-      const dx = Math.abs(ex - cx);
-      const dy = cy - ey;
-      if (dy <= 6) return;
-      const score = dy * 100 + dx;
-      if (score < aboveScore) {
-        aboveScore = score;
-        aboveIdx = idx;
-      }
-    });
-    if (aboveIdx >= 0) return focusElementAtIndex(aboveIdx);
+    const above = els.map((el, idx) => ({ el, idx, rect: el.getBoundingClientRect() }))
+      .filter(({ el, rect }) => !(el.closest && el.closest('#bnav')) && (cy - (rect.top + rect.height / 2)) > 6);
+    const pick = chooseFromNearestRow(above, true);
+    if (pick >= 0) return focusElementAtIndex(pick);
   }
   return (dirCode === 19 || dirCode === 21) ? moveTvFocusLinear(-1) : moveTvFocusLinear(1);
 }
