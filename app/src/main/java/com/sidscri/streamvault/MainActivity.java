@@ -54,6 +54,8 @@ public class MainActivity extends Activity {
     private static final int BACKUP_DIR_REQUEST = 1004;
     private static final int BACKUP_FILE_REQUEST = 1005;
     private WebView webView;
+    // Static ref for PlayerActivity to call back into JS
+    public static WebView webViewRef;
     private FrameLayout fullscreenContainer;
     private View customView;
     private WebChromeClient.CustomViewCallback customViewCallback;
