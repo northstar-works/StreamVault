@@ -2432,7 +2432,19 @@ function getTvFocusableElements() {
       const cs = getComputedStyle(el);
       if (cs.display === 'none' || cs.visibility === 'hidden' || cs.pointerEvents === 'none') return false;
       if (el.id === 'btn-imp') return false;
-      if (!el.closest('.scr.on') && !el.closest('.mo.on,.cod.on')) return false;
+
+      const inBottomNav = !!(el.closest && el.closest('#bnav'));
+      const inActiveScreen = !!(el.closest && el.closest('.scr.on'));
+      const inOpenModal = !!(el.closest && el.closest('.mo.on,.cod.on'));
+      if (!inBottomNav && !inActiveScreen && !inOpenModal) return false;
+
+      if (inBottomNav) {
+        const bnav = $('bnav');
+        if (!bnav) return false;
+        const bnavStyle = getComputedStyle(bnav);
+        if (bnavStyle.display === 'none' || bnavStyle.visibility === 'hidden') return false;
+      }
+
       return !!(el.getClientRects && el.getClientRects().length);
     });
 }
@@ -2458,6 +2470,14 @@ function refreshTvFocus() {
     if (idx >= 0) tvFocusIndex = idx;
     else if (tvFocusIndex >= els.length) tvFocusIndex = 0;
   } else if (tvFocusIndex >= els.length) tvFocusIndex = 0;
+
+  const current = els[tvFocusIndex];
+  if (!current) {
+    const activeNav = document.querySelector('#bnav .ni.on') || document.querySelector('#bnav .ni');
+    const fallbackIdx = activeNav ? els.indexOf(activeNav) : -1;
+    if (fallbackIdx >= 0) tvFocusIndex = fallbackIdx;
+    else tvFocusIndex = 0;
+  }
   focusElementAtIndex(tvFocusIndex);
 }
 function moveTvFocusLinear(dir) {
