@@ -1,0 +1,16 @@
+StreamVault v4.6.1 (Build 48)
+
+Guide fixes:
+- Channel column now truly sticky-left using a single overflow:auto container — never scrolls sideways
+- EPG program cascade fixed: programs no longer bleed into wrong channel rows; each channel row is self-contained with position:relative strip
+- Time slots header sticky at top, scrolls with content
+- Program width clamped correctly to strip boundary
+
+TV DPad fixes:
+- CRITICAL: Fixed landscape home grid — was checking wrong screen ID so DPad-right always jumped to edit buttons instead of adjacent channel
+- Edit button wraparound fixed: DPad-right from last edit/delete button no longer loops back to next item's edit button; stops at row boundary
+- DPad-left from edit button goes back to the channel item, not previous row
+- Modal focus trap: while any modal/dialog is open, DPad cannot navigate background content
+- EPG dropdown in Edit Stream: options now DPad-focusable and selectable with Enter; selecting closes dropdown and returns focus to Save; Back button closes dropdown before closing modal
+- Back button order: EPG dropdown → modal → screen navigation
+

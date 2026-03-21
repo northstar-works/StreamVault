@@ -147,29 +147,31 @@ body.tv-mode .hd{padding-top:10px}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .cnt{font-size:8px;color:var(--t3);background:var(--c1);padding:2px 6px;border-radius:8px;border:1px solid var(--bd);font-family:monospace}
 
-/* Guide — Two-panel EPG layout */
-.gw{flex:1;display:flex;flex-direction:row;overflow:hidden}
-.guide-container{display:flex;width:100%;height:100%;overflow:hidden}
-.guide-left{flex-shrink:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;background:var(--bg);border-right:1px solid rgba(255,255,255,.2);position:relative;z-index:5}
-.guide-left::-webkit-scrollbar{display:none}
-.guide-ch-header{display:flex;align-items:center;padding:6px 10px;background:var(--bg);position:sticky;top:0;z-index:6;color:var(--t3);font-weight:700;border-bottom:1px solid var(--bd)}
-.guide-right{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
-.guide-program-area{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;position:relative}
-.guide-program-area::-webkit-scrollbar{display:none}
-.guide-prog-wrap{position:relative}
-.guide-time-header{display:flex;position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:1px solid var(--bd)}
-.guide-time-slot{display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--t3);flex-shrink:0;border-left:1px solid rgba(255,255,255,.12)}
-.guide-prog-row{position:relative;border-bottom:1px solid rgba(255,255,255,.08)}
-.gch{width:100%;padding:7px 10px;display:flex;align-items:center;gap:8px;background:var(--c1);cursor:pointer;font-size:8px;font-weight:600;overflow:hidden;border-bottom:1px solid rgba(255,255,255,.06)}
-.gch:active,.gch:hover{background:var(--c2)}
+/* Guide — single overflow:auto container; channel cell sticky-left, header row sticky-top */
+.gw{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;position:relative}
+.gw::-webkit-scrollbar{display:none}
+.guide-table{display:inline-table;border-collapse:collapse;min-width:max-content}
+.guide-table tr{display:flex}
+/* Header row sticks to top */
+.guide-hdr-row{position:sticky;top:0;z-index:12;display:flex;background:var(--bg)}
+.guide-hdr-ch{flex-shrink:0;display:flex;align-items:center;padding:0 10px;background:var(--bg);color:var(--t3);font-size:8px;font-weight:700;position:sticky;left:0;z-index:13;border-right:1px solid rgba(255,255,255,.2);border-bottom:1px solid var(--bd)}
+.guide-hdr-times{display:flex;background:var(--bg);border-bottom:1px solid var(--bd)}
+.guide-time-slot{display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:8px;font-weight:700;color:var(--t3);border-left:1px solid rgba(255,255,255,.1)}
+/* Channel rows */
+.guide-ch-row{display:flex;border-bottom:1px solid rgba(255,255,255,.06)}
+/* Channel cell — sticky left */
+.gch{flex-shrink:0;padding:7px 10px;display:flex;align-items:center;gap:8px;background:var(--c1);position:sticky;left:0;z-index:8;cursor:pointer;font-size:8px;font-weight:600;overflow:hidden;border-right:1px solid rgba(255,255,255,.18)}
+.gch:hover,.gch:active{background:var(--c2)}
 .gch img{width:20px;height:20px;border-radius:3px;flex-shrink:0;object-fit:cover}
-.gch span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.gpr{position:absolute;top:4px;bottom:4px;padding:5px 7px;border:1px solid rgba(255,255,255,.10);overflow:hidden;display:flex;flex-direction:column;justify-content:center;font-size:8px;background:rgba(255,255,255,.03);z-index:2;min-width:0;border-radius:4px;cursor:pointer}
-.gpr .gt{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.08}
-.gpr .gti{font-size:6px;color:var(--t3);line-height:1.05;margin-top:2px;white-space:nowrap}
-.gpr.now{background:rgba(108,92,231,.16);border-left:3px solid var(--ac)}
-.gpr.past{opacity:.45}
-.gpr:hover,.gpr:active{background:rgba(255,255,255,.07)}
+.gch-nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Program strip — position:relative so .gpr anchors here */
+.guide-strip{position:relative;flex-shrink:0;overflow:hidden}
+.gpr{position:absolute;padding:4px 6px;border:1px solid rgba(255,255,255,.10);overflow:hidden;display:flex;flex-direction:column;justify-content:center;font-size:8px;background:rgba(255,255,255,.03);z-index:2;border-radius:4px;cursor:pointer;box-sizing:border-box}
+.gpr .gt{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.1}
+.gpr .gti{font-size:6px;color:var(--t3);line-height:1.05;margin-top:2px;white-space:nowrap;overflow:hidden}
+.gpr.now{background:rgba(108,92,231,.18);border-left:3px solid var(--ac)}
+.gpr.past{opacity:.42}
+.gpr:hover,.gpr:active,.gpr:focus{background:rgba(255,255,255,.09)!important;outline:none}
 .gnl{position:absolute;top:0;bottom:0;width:2px;background:var(--rd);z-index:4;pointer-events:none}
 .px-note{font-size:8px;color:var(--t2);margin-top:6px;line-height:1.4}
 
@@ -265,7 +267,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
 
 <!-- ═══ LIBRARY ═══ -->
 <div id="lib-scr" class="scr on">
-  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b40</span>
+  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b48</span>
     <button class="ib" id="btn-lib-edit" title="Toggle edit controls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
     <button class="ib" id="btn-add-top" title="Add stream"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
     <button class="ib" id="btn-exp" title="Export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
@@ -454,7 +456,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.6.0 (Build 46)<br>IPTV · Plex · iCam · Local · Network · EPG Guide · DPad TV Navigation · HLS Recording · Failover · Scheduled Recording.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.6.1 (Build 48)<br>IPTV · Plex · iCam · Local · Network · EPG Guide · DPad TV Navigation · HLS Recording · Failover · Scheduled Recording.</p>
   </div>
 </div>
 
@@ -637,7 +639,7 @@ http://stream.example.com/cnn
 "use strict";
 
 // ─── Constants & State ───
-const VERSION = '4.6.0', BUILD = 46;
+const VERSION = '4.6.1', BUILD = 48;
 const KEYS = { items: 'sv_items_v3', repos: 'sv_repos_v2', epgSrc: 'sv_epg_src', epgData: 'sv_epg_data', settings: 'sv_settings_v2' };
 const TAG_PRI = ['', 'F', 'H', 'A', 'S'];
 
@@ -1809,7 +1811,7 @@ function populateEpgDropdown(selected) {
       html += '</div>';
 
       // "None" option
-      html += '<div class="epg-opt" data-id="" onclick="selectEpg(this)"><div class="eo-name" style="color:var(--t3)">✕ None — Clear EPG</div></div>';
+      html += '<div class="epg-opt" tabindex="0" data-id="" onclick="selectEpg(this)"><div class="eo-name" style="color:var(--t3)">✕ None — Clear EPG</div></div>';
 
       if (filtered.length === 0 && q) {
         html += '<div style="padding:12px;font-size:9px;color:var(--t3);text-align:center">No matches for "' + esc(q) + '"</div>';
@@ -1819,7 +1821,7 @@ function populateEpgDropdown(selected) {
         const ch = epgData.channels[id];
         const name = ch ? ch.name : id;
         const isSelected = id === hiddenVal.value;
-        return '<div class="epg-opt' + (isSelected ? ' hl' : '') + '" data-id="' + esc(id) + '" onclick="selectEpg(this)">' +
+        return '<div class="epg-opt' + (isSelected ? ' hl' : '') + '" tabindex="0" data-id="' + esc(id) + '" onclick="selectEpg(this)">' +
           '<div class="eo-name">' + esc(name) + '</div>' +
           '<div class="eo-id">' + esc(id) + '</div></div>';
       }).join('');
@@ -1869,6 +1871,11 @@ window.selectEpg = (el) => {
     searchInput.style.color = '';
   }
   $('in-epg-list').style.display = 'none';
+  // After selection, move focus back to search input or save button
+  setTimeout(() => {
+    const saveBtn = $('ed-ok');
+    if (isTvDevice && saveBtn) { const els = getTvFocusableElements(); const idx = els.indexOf(saveBtn); if (idx >= 0) focusElementAtIndex(idx); }
+  }, 30);
 };
 
 $('in-epgl-sel').onchange = (e) => {
@@ -2488,113 +2495,92 @@ function renderGuide() {
   const matched = localitySort(items.filter(m => m.epgTitle && epgData.programs && epgData.programs[m.epgTitle])).slice(0, 80);
 
   if (!matched.length) {
-    wrap.innerHTML = `<div class="emp" style="height:100%;flex:1"><h3>No guide data</h3><p>${!epgSrc.length ? 'Add an EPG source via the ⚙ button' : 'Tap refresh or set EPG IDs on your streams'}</p></div>`;
+    wrap.innerHTML = `<div class="emp" style="min-height:200px"><h3>No guide data</h3><p>${!epgSrc.length ? 'Add an EPG source via the ⚙ button' : 'Tap refresh or set EPG IDs on your streams'}</p></div>`;
     return;
   }
 
-  const now = Date.now();
-  const isTv = !!isTvDevice;
-  const slotW = isTv ? 180 : 160;
-  const chW = isTv ? 160 : 140;
-  const guideRowH = isTv ? 56 : 50;
-  const headerH = guideRowH;
+  const now   = Date.now();
+  const isTv  = !!isTvDevice;
+  const slotW = isTv ? 180 : 160;   // px per 30-min slot
+  const chW   = isTv ? 160 : 140;   // channel column width
+  const rowH  = isTv ? 56  : 50;    // row height (header + every channel row)
+  const gapV  = 4;                  // top/bottom inset for .gpr blocks
 
+  // 14-slot window starting 1 hour before now
   const startTime = new Date(now);
   startTime.setMinutes(startTime.getMinutes() < 30 ? 0 : 30, 0, 0);
   startTime.setHours(startTime.getHours() - 1);
   const startMs = startTime.getTime();
+  const slots   = Array.from({length: 14}, (_, i) => new Date(startMs + i * 1800000));
+  const endMs   = slots[13].getTime() + 1800000;
+  const stripW  = slotW * slots.length;
+  const minW    = isTv ? 36 : 48;
+  const fs      = isTv ? 9 : 8;
 
-  const slots = [];
-  for (let i = 0; i < 14; i++) slots.push(new Date(startMs + i * 1800000));
-  const endTime = slots[13].getTime() + 1800000;
-  const stripW = slotW * slots.length;
-  const minProgW = isTv ? 36 : 48;
+  // One outer wrapper that is inline-flex column — width is content width so outer .gw scrolls both axes
+  let html = `<div style="display:inline-flex;flex-direction:column;min-width:${chW + stripW}px">`;
 
-  // ── Left panel: channel column ──
-  let leftHtml = `<div class="guide-container"><div class="guide-left" id="guide-left" style="width:${chW}px">`;
-  leftHtml += `<div class="guide-ch-header" style="height:${headerH}px;font-size:${isTv ? 9 : 8}px">Channel</div>`;
-  matched.forEach((m, chIdx) => {
-    const ch = epgData.channels[m.epgTitle];
-    leftHtml += `<div class="gch" role="button" tabindex="0" data-item-id="${m.id}" data-ch-idx="${chIdx}" onclick="playItem('${m.id}')" style="height:${guideRowH}px">`;
-    if (m.icon || (ch && ch.icon)) leftHtml += `<img src="${esc(m.icon || ch.icon)}" onerror="this.style.display='none'">`;
-    leftHtml += `<span>${esc(m.title)}</span></div>`;
-  });
-  leftHtml += `</div>`;
-
-  // ── Right panel: time header + programs ──
-  leftHtml += `<div class="guide-right"><div class="guide-program-area" id="guide-program-area">`;
-  leftHtml += `<div class="guide-prog-wrap" style="width:${stripW}px">`;
-
-  // Sticky time header inside program area
-  leftHtml += `<div class="guide-time-header" style="height:${headerH}px">`;
+  // ── Sticky header row ──────────────────────────────────────────────────────
+  html += `<div class="guide-hdr-row" style="height:${rowH}px">`;
+  html += `<div class="guide-hdr-ch" style="width:${chW}px;min-width:${chW}px;height:${rowH}px;font-size:${fs}px">Channel</div>`;
+  html += `<div class="guide-hdr-times" style="height:${rowH}px">`;
   slots.forEach(s => {
-    const h = s.getHours(), mm = s.getMinutes();
-    leftHtml += `<div class="guide-time-slot" style="min-width:${slotW}px;width:${slotW}px;height:${headerH}px;font-size:${isTv ? 9 : 8}px">${h % 12 || 12}:${mm.toString().padStart(2,'0')}${h >= 12 ? 'p' : 'a'}</div>`;
+    const h = s.getHours(), m = s.getMinutes();
+    html += `<div class="guide-time-slot" style="min-width:${slotW}px;width:${slotW}px;height:${rowH}px;font-size:${fs}px">${h%12||12}:${m.toString().padStart(2,'0')}${h>=12?'p':'a'}</div>`;
   });
-  leftHtml += `</div>`;
+  html += `</div></div>`;
 
-  // Program rows — one per channel
+  // ── One row per channel ────────────────────────────────────────────────────
   matched.forEach((m, chIdx) => {
-    const progs = getGuidePrograms(m.epgTitle, startMs, endTime);
-    leftHtml += `<div class="guide-prog-row" data-ch-idx="${chIdx}" style="height:${guideRowH}px;width:${stripW}px">`;
+    const ch    = epgData.channels[m.epgTitle];
+    const progs = getGuidePrograms(m.epgTitle, startMs, endMs);
+
+    html += `<div class="guide-ch-row" style="height:${rowH}px">`;
+
+    // Channel cell — sticky left
+    html += `<div class="gch" role="button" tabindex="0" data-item-id="${m.id}" data-ch-idx="${chIdx}" onclick="playItem('${m.id}')" style="width:${chW}px;min-width:${chW}px;height:${rowH}px">`;
+    if (m.icon || (ch && ch.icon)) html += `<img src="${esc(m.icon || ch.icon)}" onerror="this.style.display='none'">`;
+    html += `<span class="gch-nm">${esc(m.title)}</span></div>`;
+
+    // Program strip — position:relative, programs absolutely placed inside
+    html += `<div class="guide-strip" style="width:${stripW}px;height:${rowH}px">`;
 
     progs.forEach((p, progIdx) => {
       const pStart = Math.max(p.start, startMs);
-      const pStop  = Math.min(p.stop,  endTime);
+      const pStop  = Math.min(p.stop,  endMs);
       if (pStop <= pStart) return;
-      const left     = Math.max(0, ((pStart - startMs) / 1800000) * slotW);
-      const rawWidth = ((pStop - pStart) / 1800000) * slotW;
-      const width    = Math.max(minProgW, Math.min(rawWidth, stripW - left));
-      if (width < 4) return;
+      const left  = ((pStart - startMs) / 1800000) * slotW;
+      const rawW  = ((pStop  - pStart)  / 1800000) * slotW;
+      const width = Math.max(minW, Math.min(rawW, stripW - left));
+      if (width < 4 || left >= stripW) return;
       const isNow  = p.start <= now && p.stop > now;
       const isPast = p.stop  <= now;
-      leftHtml += `<div class="gpr${isNow ? ' now' : ''}${isPast ? ' past' : ''}" role="button" tabindex="${isTv ? '0' : '-1'}" data-ch-idx="${chIdx}" data-prog-idx="${progIdx}" aria-label="${esc(p.title)}" onclick="playItem('${m.id}')" style="left:${left}px;width:${width}px">`;
-      leftHtml += `<div class="gt">${esc(p.title)}</div>`;
-      if (width > 64) leftHtml += `<div class="gti">${fmtTime(p.start)}–${fmtTime(p.stop)}</div>`;
-      leftHtml += `</div>`;
+      html += `<div class="gpr${isNow?' now':''}${isPast?' past':''}" role="button" tabindex="${isTv?'0':'-1'}" data-ch-idx="${chIdx}" data-prog-idx="${progIdx}" aria-label="${esc(p.title)}" onclick="playItem('${m.id}')" style="left:${left}px;top:${gapV}px;width:${width}px;height:${rowH - gapV*2}px">`;
+      html += `<div class="gt">${esc(p.title)}</div>`;
+      if (width > 72) html += `<div class="gti">${fmtTime(p.start)}–${fmtTime(p.stop)}</div>`;
+      html += `</div>`;
     });
 
-    // "Now" marker line
+    // "Now" line
     const nowLeft = ((now - startMs) / 1800000) * slotW;
-    if (nowLeft >= 0 && nowLeft <= stripW) {
-      leftHtml += `<div class="gnl" style="left:${nowLeft}px"></div>`;
-    }
+    if (nowLeft >= 0 && nowLeft <= stripW) html += `<div class="gnl" style="left:${nowLeft}px"></div>`;
 
-    leftHtml += `</div>`;
+    html += `</div></div>`; // guide-strip, guide-ch-row
   });
 
-  leftHtml += `</div></div></div></div>`;
-  wrap.innerHTML = leftHtml;
+  html += `</div>`; // outer column wrapper
+  wrap.innerHTML = html;
 
-  // Sync vertical scroll: program area ↔ channel list
-  const guideLeft = $('guide-left');
-  const progArea  = $('guide-program-area');
-  let _guideSync = false;
-  progArea.addEventListener('scroll', () => {
-    if (_guideSync) return;
-    _guideSync = true;
-    guideLeft.scrollTop = progArea.scrollTop;
-    requestAnimationFrame(() => { _guideSync = false; });
-  }, { passive: true });
-  guideLeft.addEventListener('scroll', () => {
-    if (_guideSync) return;
-    _guideSync = true;
-    progArea.scrollTop = guideLeft.scrollTop;
-    requestAnimationFrame(() => { _guideSync = false; });
-  }, { passive: true });
-
-  // Scroll to "now" on load
+  // Scroll to "now"
   setTimeout(() => {
-    const nowOff = Math.max(0, ((now - startMs) / 1800000) * slotW - (isTv ? 140 : 100));
-    if (progArea) progArea.scrollLeft = nowOff;
+    const nowOff = Math.max(0, ((now - startMs) / 1800000) * slotW - (isTv ? 150 : 110));
+    wrap.scrollLeft = nowOff;
     if (isTvDevice) {
-      // Focus first channel cell
       const firstCh = wrap.querySelector('.gch');
       if (firstCh) focusGuideElement(firstCh);
     }
   }, 80);
 }
-
 // ═══ SETTINGS ═══
 function getDisplayDir(kind) {
   if (kind === 'recording') return settings.savePathLabel || settings.savePath || 'Downloads';
@@ -2684,6 +2670,13 @@ function getTvFocusableElements() {
       const inActiveScreen = !!(el.closest && el.closest('.scr.on'));
       const inOpenModal = !!(el.closest && el.closest('.mo.on,.cod.on'));
       if (!inBottomNav && !inActiveScreen && !inOpenModal) return false;
+
+      // MODAL FOCUS TRAP: when a modal is open, ONLY allow focus inside that modal
+      // Also allow focus in the EPG dropdown (position:fixed, visually part of the modal)
+      const anyOpenModal = document.querySelector('.mo.on, .cod.on');
+      const epgListOpen = $('in-epg-list') && $('in-epg-list').style.display !== 'none';
+      const inEpgList = epgListOpen && !!(el.closest && el.closest('#in-epg-list'));
+      if (anyOpenModal && !inOpenModal && !inEpgList) return false;
 
       if (inBottomNav) {
         const bnav = $('bnav');
@@ -2779,7 +2772,7 @@ function focusWithinGroupRow(current, dirCode) {
 
 function isLandscapeHomeGridActive() {
   try {
-    return $('home-scr') && $('home-scr').classList.contains('on') && $('lib-lst') && $('lib-lst').classList.contains('home-grid') && window.matchMedia && window.matchMedia('(orientation: landscape)').matches;
+    return $('lib-scr') && $('lib-scr').classList.contains('on') && $('lib-lst') && $('lib-lst').classList.contains('home-grid') && window.matchMedia && window.matchMedia('(orientation: landscape)').matches;
   } catch (e) { return false; }
 }
 function getChannelListSpatialCandidates() {
@@ -2883,11 +2876,12 @@ function focusGuideElement(el) {
 }
 
 function scrollGuideToRow(chIdx) {
-  const guideLeft = $('guide-left');
-  const progArea  = $('guide-program-area');
-  const rowH = isTvDevice ? 56 : 50;
-  if (guideLeft) guideLeft.scrollTop = chIdx * rowH;
-  if (progArea)  progArea.scrollTop  = chIdx * rowH;
+  const gw   = $('gw');
+  if (!gw) return;
+  const rowH   = isTvDevice ? 56 : 50;
+  const target = chIdx * rowH + rowH; // +rowH for sticky header
+  const center = target - Math.floor(gw.clientHeight / 2) + Math.floor(rowH / 2);
+  gw.scrollTop = Math.max(0, center);
 }
 
 function handleGuideDpad(current, dirCode) {
@@ -3021,17 +3015,34 @@ function moveTvFocusSpatial(dirCode) {
     if (dirCode === 20) return focusNearestInSelector('.itm[data-tv-zone=\"channel-list\"]', current, true);
   }
   if (currentZone === 'channel-list') {
+    if (isLandscapeHomeGridActive() && (dirCode === 21 || dirCode === 22)) {
+      // In landscape grid, strictly navigate between columns — never fall through to edit buttons
+      return focusHomeGridHorizontal(current, dirCode);
+    }
     if ((dirCode === 21 || dirCode === 22) && focusHomeGridHorizontal(current, dirCode)) return true;
     if (dirCode === 22) {
-      if (libEditMode) return focusNearestInSelector('.itm .ab button', current, true);
+      if (libEditMode) {
+        const firstBtn = current.querySelector && current.querySelector('.ab button');
+        if (firstBtn) { const els = getTvFocusableElements(); const idx = els.indexOf(firstBtn); if (idx >= 0) return focusElementAtIndex(idx); }
+      }
       return false;
-    }
-    if (dirCode === 21 && libEditMode && current && current.closest && current.closest('.ab')) {
-      return focusNearestInSelector('.itm[data-tv-zone="channel-list"]', current, true);
     }
   }
   if (current && current.closest && current.closest('.ab')) {
-    if (dirCode === 21) return focusNearestInSelector('.itm[data-tv-zone=\"channel-list\"]', current, true);
+    const ab = current.closest('.ab');
+    const itm = ab.closest('.itm');
+    const btns = Array.from(ab.querySelectorAll('button')).filter(b => getComputedStyle(b).display !== 'none');
+    const btnIdx = btns.indexOf(current);
+    const els2 = getTvFocusableElements();
+    if (dirCode === 22) {
+      if (btnIdx >= 0 && btnIdx < btns.length - 1) { const idx = els2.indexOf(btns[btnIdx + 1]); if (idx >= 0) return focusElementAtIndex(idx); }
+      return false; // Stop — don't wrap to next item's buttons
+    }
+    if (dirCode === 21) {
+      if (btnIdx > 0) { const idx = els2.indexOf(btns[btnIdx - 1]); if (idx >= 0) return focusElementAtIndex(idx); return false; }
+      if (itm) { const idx = els2.indexOf(itm); if (idx >= 0) return focusElementAtIndex(idx); }
+      return false;
+    }
   }
 
   const pickClosestNav = () => {
@@ -3168,6 +3179,9 @@ window.__svHandleTvKey = function(code) {
     if ($('player-scr').classList.contains('on')) { destroyPlayer(); showTab('lib-scr'); refreshTvFocus(); return true; }
     if ($('br-scr').classList.contains('on')) { showTab('repo-scr'); refreshTvFocus(); return true; }
     const openModal = document.querySelector('.mo.on,.cod.on');
+    // Close EPG dropdown first if open
+    const epgList = $('in-epg-list');
+    if (epgList && epgList.style.display !== 'none') { epgList.style.display = 'none'; refreshTvFocus(); return true; }
     if (openModal) { openModal.classList.remove('on'); refreshTvFocus(); return true; }
   }
   return false;
