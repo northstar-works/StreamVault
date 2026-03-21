@@ -380,10 +380,10 @@ body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.
 
 <!-- Bottom Nav -->
 <div class="bnav" id="bnav">
-  <div class="ni on" data-t="lib-scr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><span>Home</span></div>
-  <div class="ni" data-t="guide-scr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>Guide</span></div>
-  <div class="ni" data-t="repo-scr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg><span>Repos</span></div>
-  <div class="ni" data-t="set-scr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4"/></svg><span>Settings</span></div>
+  <div class="ni on" data-t="lib-scr" role="button" aria-label="Home" tabindex="0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><span>Home</span></div>
+  <div class="ni" data-t="guide-scr" role="button" aria-label="Guide" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>Guide</span></div>
+  <div class="ni" data-t="repo-scr" role="button" aria-label="Repos" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg><span>Repos</span></div>
+  <div class="ni" data-t="set-scr" role="button" aria-label="Settings" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4"/></svg><span>Settings</span></div>
 </div>
 </div><!-- app -->
 
@@ -1095,8 +1095,18 @@ function showTab(id) {
   setTimeout(refreshTvFocus, 40);
 }
 
+function activateBottomNavItem(el) {
+  if (!el || !el.dataset || !el.dataset.t) return;
+  showTab(el.dataset.t);
+}
 document.querySelectorAll('.ni').forEach(n => {
-  n.onclick = () => showTab(n.dataset.t);
+  n.onclick = () => activateBottomNavItem(n);
+  n.onkeydown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+      e.preventDefault();
+      activateBottomNavItem(n);
+    }
+  };
 });
 
 
@@ -2465,18 +2475,23 @@ function moveTvFocusSpatial(dirCode) {
 
   if (!inBottomNav && dirCode === 20 && navEls.length) {
     const curRect = current.getBoundingClientRect();
+    let bestNavIdx = els.indexOf(navEls[0]);
+    let bestNavScore = Infinity;
+    navEls.forEach(navEl => {
+      const r = navEl.getBoundingClientRect();
+      const score = Math.abs((r.left + r.width / 2) - (curRect.left + curRect.width / 2));
+      if (score < bestNavScore) {
+        bestNavScore = score;
+        bestNavIdx = els.indexOf(navEl);
+      }
+    });
+    const hasNonNavBelow = els.some(el => {
+      if (el === current || (el.closest && el.closest('#bnav'))) return false;
+      const r = el.getBoundingClientRect();
+      return (r.top + 4) > curRect.bottom;
+    });
     const nearBottom = curRect.bottom >= (window.innerHeight - 170);
-    if (nearBottom) {
-      let bestNavIdx = els.indexOf(navEls[0]);
-      let bestNavScore = Infinity;
-      navEls.forEach(navEl => {
-        const r = navEl.getBoundingClientRect();
-        const score = Math.abs((r.left + r.width / 2) - (curRect.left + curRect.width / 2));
-        if (score < bestNavScore) {
-          bestNavScore = score;
-          bestNavIdx = els.indexOf(navEl);
-        }
-      });
+    if (!hasNonNavBelow || nearBottom) {
       if (bestNavIdx >= 0) return focusElementAtIndex(bestNavIdx);
     }
   }
@@ -2537,6 +2552,20 @@ function moveTvFocusSpatial(dirCode) {
     }
   });
   if (bestIdx >= 0) return focusElementAtIndex(bestIdx);
+  if (!inBottomNav && dirCode === 20 && navEls.length) {
+    const curRect = current.getBoundingClientRect();
+    let bestNavIdx = -1;
+    let bestNavScore = Infinity;
+    navEls.forEach(navEl => {
+      const r = navEl.getBoundingClientRect();
+      const score = Math.abs((r.left + r.width / 2) - (curRect.left + curRect.width / 2));
+      if (score < bestNavScore) {
+        bestNavScore = score;
+        bestNavIdx = els.indexOf(navEl);
+      }
+    });
+    if (bestNavIdx >= 0) return focusElementAtIndex(bestNavIdx);
+  }
   if (dirCode === 19 || dirCode === 21) return moveTvFocusLinear(-1);
   return moveTvFocusLinear(1);
 }
@@ -2547,6 +2576,11 @@ window.__svHandleTvKey = function(code) {
     const el = getTvFocusableElements()[tvFocusIndex] || document.activeElement;
     if (el) {
       if (el.classList.contains('ri')) { toggleBrSel(el); return true; }
+      if (el.classList.contains('ni')) {
+        activateBottomNavItem(el);
+        setTimeout(refreshTvFocus, 30);
+        return true;
+      }
       el.click();
       setTimeout(refreshTvFocus, 30);
       return true;
