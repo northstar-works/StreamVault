@@ -25,9 +25,9 @@ html,body{height:100%;width:100%;font-family:-apple-system,system-ui,sans-serif;
 .bnav .ni svg{width:18px;height:18px}
 
 /* Header */
-.hd{padding:18px 16px 6px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.hd{padding:14px 16px 4px;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .hd h1{font-size:17px;font-weight:700;color:var(--t1)}
-body.tv-mode .hd{padding-top:14px}
+body.tv-mode .hd{padding-top:10px}
 .hd-r{display:flex;gap:4px;align-items:center}
 .tg{font-size:8px;color:var(--t3);background:var(--c1);padding:2px 6px;border-radius:8px;border:1px solid var(--bd);font-family:monospace}
 .ib{width:28px;height:28px;border-radius:var(--rs);background:var(--c1);border:1px solid var(--bd);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--t2)}
@@ -40,11 +40,11 @@ body.tv-mode .hd{padding-top:14px}
 .sb input::placeholder{color:var(--t3)}
 .sb svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:12px;height:12px;color:var(--t3)}
 
-.libbar{display:flex;gap:6px;align-items:center;padding:4px 16px 2px}
-.libmodes{display:flex;gap:5px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex:1}.libmodes::-webkit-scrollbar{display:none}
-.lmb{padding:5px 9px;border-radius:7px;font-size:8px;font-weight:700;white-space:nowrap;cursor:pointer;background:var(--c1);border:1px solid var(--bd);color:var(--t2);flex-shrink:0;min-height:0}
+.libbar{display:flex;gap:6px;align-items:center;padding:2px 16px 2px}
+.libmodes{display:flex;gap:5px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex:1;align-items:center}.libmodes::-webkit-scrollbar{display:none}
+.lmb{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:6px 12px;border-radius:8px;font-size:9px;font-weight:700;white-space:nowrap;cursor:pointer;background:var(--c1);border:1px solid var(--bd);color:var(--t2);flex:0 0 auto;min-width:86px;line-height:1;writing-mode:horizontal-tb}
 .lmb.on{background:var(--ac);border-color:var(--ac);color:#fff}
-.lmb small{opacity:.8;font-size:8px;margin-left:4px}
+.lmb small{opacity:.85;font-size:8px;margin-left:0}
 .sb.hide{display:none}
 .libx{padding:4px 16px 0}
 .px-card{margin:4px 16px 6px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--r);padding:10px}
@@ -149,16 +149,19 @@ body.tv-mode .hd{padding-top:14px}
 
 /* Guide */
 .gw{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}.gw::-webkit-scrollbar{display:none}
-.grow{display:flex;min-height:34px;border-bottom:1px solid var(--bd)}
-.gch{width:108px;min-width:108px;padding:4px 6px;display:flex;align-items:center;gap:4px;background:var(--c1);position:sticky;left:0;z-index:3;border-right:1px solid var(--bd);cursor:pointer;font-size:8px;font-weight:600}
+.grow{display:flex;min-height:36px;border-bottom:1px solid rgba(255,255,255,.12)}
+.gch{width:112px;min-width:112px;padding:4px 6px;display:flex;align-items:center;gap:4px;background:linear-gradient(90deg,var(--c1),var(--c1));position:sticky;left:0;z-index:8;border-right:1px solid rgba(255,255,255,.14);cursor:pointer;font-size:8px;font-weight:600}
 .gch:active{background:var(--c2)}
 .gch img{width:20px;height:20px;border-radius:3px;flex-shrink:0;object-fit:cover}
-.gpr{position:absolute;top:0;bottom:0;padding:3px 5px;border-right:1px solid var(--bd);overflow:hidden;display:flex;flex-direction:column;justify-content:center;font-size:8px}
+.gpr{position:absolute;top:0;bottom:0;padding:3px 5px;border-right:1px solid rgba(255,255,255,.09);overflow:hidden;display:flex;flex-direction:column;justify-content:center;font-size:8px;background:rgba(255,255,255,.015)}
 .gpr .gt{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gpr .gti{font-size:6px;color:var(--t3)}
 .gpr.now{background:rgba(108,92,231,.1);border-left:2px solid var(--ac)}
 .gpr.past{opacity:.4}
 .gnl{position:absolute;top:0;bottom:0;width:2px;background:var(--rd);z-index:4;pointer-events:none}
+
+.guide-strip{position:relative;flex:1;min-width:2240px;background:linear-gradient(180deg,rgba(255,255,255,.01),rgba(255,255,255,0))}
+.px-note{font-size:8px;color:var(--t2);margin-top:6px;line-height:1.4}
 
 /* EPG Cards */
 .ec{display:flex;align-items:center;gap:6px;padding:8px;margin-bottom:3px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs)}
@@ -234,9 +237,9 @@ body.tv-mode .hd{padding-top:14px}
 .ld2{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:5}
 .spn{width:32px;height:32px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--ac);border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
-body.tv-mode .bnav .ni,body.tv-mode button,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode .epg-opt,body.tv-mode .lmb,body.tv-mode .pl,body.tv-mode .tgl,body.tv-mode .ib,body.tv-mode .gch,[role="button"]{outline:none;transition:box-shadow .12s ease,transform .12s ease,background .12s ease,border-color .12s ease}
-body.tv-mode .tv-f,body.tv-mode .ni:focus,body.tv-mode button:focus,body.tv-mode input:focus,body.tv-mode textarea:focus,body.tv-mode select:focus,body.tv-mode .itm:focus,body.tv-mode .rc:focus,body.tv-mode .ri:focus,body.tv-mode .epg-opt:focus,body.tv-mode .lmb:focus,body.tv-mode .pl:focus,body.tv-mode .tgl:focus,body.tv-mode .ib:focus,body.tv-mode .gch:focus,[role="button"]:focus{box-shadow:0 0 0 3px rgba(108,92,231,.98),0 0 0 6px rgba(108,92,231,.22),0 0 18px rgba(108,92,231,.35)!important;transform:scale(1.012);background-image:linear-gradient(0deg,rgba(108,92,231,.12),rgba(108,92,231,.12));border-color:rgba(108,92,231,.98)!important}
-body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .pl,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode button,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .ib,body.tv-mode .gch,[role="button"]{min-height:44px;position:relative}
+body.tv-mode .bnav .ni,body.tv-mode button,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode .epg-opt,body.tv-mode .lmb,body.tv-mode .pl,body.tv-mode .tgl,body.tv-mode .ib,body.tv-mode .gch,body.tv-mode .gpr,[role="button"]{outline:none;transition:box-shadow .12s ease,transform .12s ease,background .12s ease,border-color .12s ease}
+body.tv-mode .tv-f,body.tv-mode .ni:focus,body.tv-mode button:focus,body.tv-mode input:focus,body.tv-mode textarea:focus,body.tv-mode select:focus,body.tv-mode .itm:focus,body.tv-mode .rc:focus,body.tv-mode .ri:focus,body.tv-mode .epg-opt:focus,body.tv-mode .lmb:focus,body.tv-mode .pl:focus,body.tv-mode .tgl:focus,body.tv-mode .ib:focus,body.tv-mode .gch:focus,body.tv-mode .gpr:focus,[role="button"]:focus{box-shadow:0 0 0 2px rgba(108,92,231,.98),0 0 0 3px rgba(108,92,231,.45),0 0 12px rgba(108,92,231,.26)!important;transform:scale(1.008);background-image:linear-gradient(0deg,rgba(108,92,231,.10),rgba(108,92,231,.10));border-color:rgba(108,92,231,.98)!important}
+body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .pl,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode button,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .ib,body.tv-mode .gch,body.tv-mode .gpr,[role="button"]{min-height:44px;position:relative}
 body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.tv-mode .px-grid{scroll-margin-top:70px}
 </style>
 </head>
@@ -247,7 +250,7 @@ body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.
 
 <!-- ═══ LIBRARY ═══ -->
 <div id="lib-scr" class="scr on">
-  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b38</span>
+  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b39</span>
     <button class="ib" id="btn-add-top" title="Add stream"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
     <button class="ib" id="btn-exp" title="Export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
   </div></div>
@@ -358,7 +361,7 @@ body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.
     <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.5.3 (Build 38)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.5.4 (Build 39)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
   </div>
 </div>
 
@@ -541,7 +544,7 @@ http://stream.example.com/cnn
 "use strict";
 
 // ─── Constants & State ───
-const VERSION = '4.5.3', BUILD = 38;
+const VERSION = '4.5.4', BUILD = 39;
 const KEYS = { items: 'sv_items_v3', repos: 'sv_repos_v2', epgSrc: 'sv_epg_src', epgData: 'sv_epg_data', settings: 'sv_settings_v2' };
 const TAG_PRI = ['', 'F', 'H', 'A', 'S'];
 
@@ -549,7 +552,7 @@ let items = [];
 let repos = [];
 let epgSrc = [];
 let epgData = { channels: {}, programs: {} };
-let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [], tabOrder: ['itv','plex','icam'], tvMode: 'auto', plex: { server: '', token: '', section: '', sections: [] } };
+let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [], tabOrder: ['itv','plex','icam','local','network'], tvMode: 'auto', plex: { server: '', token: '', section: '', sections: [] } };
 let plexAddMode = false;
 
 let editId = null;
@@ -790,7 +793,7 @@ function parseM3U(text) {
     } else if (line.startsWith('#')) {
       // Skip other directives
       continue;
-    } else if (line.match(/^(https?|rtmp|rtsp|rtsps|ftp|ftps|file|content|udp):\/\//i)) {
+    } else if (line.match(/^(https?|rtmp|rtsp|rtsps|ftp|ftps|file|content|udp|smb):\/\//i)) {
       // URL line
       if (cur) {
         cur.url = line;
@@ -1124,6 +1127,18 @@ document.querySelectorAll('.ni').forEach(n => {
 
 
 function isPlexItem(item) { return !!(item && (item.sourceKind === 'plex' || item.plexMeta)); }
+function isLocalItem(item) {
+  if (!item || isPlexItem(item)) return false;
+  const u = (item.url || '').trim();
+  const s = getUrlScheme(u);
+  return s === 'content' || s === 'file';
+}
+function isNetworkItem(item) {
+  if (!item || isPlexItem(item)) return false;
+  const u = (item.url || '').trim();
+  const s = getUrlScheme(u);
+  return ['ftp','ftps','smb'].includes(s) || u.startsWith('smb://') || u.startsWith('ftp://') || u.startsWith('ftps://');
+}
 function isCameraItem(item) {
   if (!item) return false;
   const u = item.url || (item.plexMeta && item.plexMeta.url) || '';
@@ -1132,7 +1147,7 @@ function isCameraItem(item) {
 function isIptvItem(item) {
   if (!item) return false;
   const u = (item.url || '').trim();
-  if (!u || isPlexItem(item) || isCameraItem(item)) return false;
+  if (!u || isPlexItem(item) || isCameraItem(item) || isLocalItem(item) || isNetworkItem(item)) return false;
   const s = getUrlScheme(u);
   return ['http','https','rtmp','mms','udp'].includes(s) || isLikelyHls(u) || /playlist|channel|live/i.test(u);
 }
@@ -1142,11 +1157,13 @@ function getLibPageCounts() {
     all: items.length,
     itv: items.filter(isIptvItem).length,
     icam: items.filter(isCameraItem).length,
-    plex: items.filter(isPlexItem).length
+    plex: items.filter(isPlexItem).length,
+    local: items.filter(isLocalItem).length,
+    network: items.filter(isNetworkItem).length
   };
 }
 function getTabOrder() {
-  const fallback = ['itv','plex','icam'];
+  const fallback = ['itv','plex','icam','local','network'];
   const raw = Array.isArray(settings.tabOrder) ? settings.tabOrder.slice() : fallback.slice();
   const clean = raw.filter(id => fallback.includes(id));
   fallback.forEach(id => { if (!clean.includes(id)) clean.push(id); });
@@ -1155,7 +1172,7 @@ function getTabOrder() {
 }
 function getLibPageDefs() {
   const c = getLibPageCounts();
-  const labels = { itv:'ITV', plex:'PlexStr', icam:'iCam' };
+  const labels = { itv:'ITV', plex:'PlexStr', icam:'iCam', local:'Local', network:'Network' };
   const plexCfg = getPlexCfg();
   return getTabOrder().filter(id => c[id] || (id === 'plex' && (plexAddMode || !!(plexCfg.server && plexCfg.token)))).map(id => ({ id, label: labels[id], count: c[id] }));
 }
@@ -1169,6 +1186,8 @@ function getItemsForLibPage() {
   if (activeLibPage === 'itv') return items.filter(isIptvItem);
   if (activeLibPage === 'icam') return items.filter(isCameraItem);
   if (activeLibPage === 'plex') return items.filter(isPlexItem);
+  if (activeLibPage === 'local') return items.filter(isLocalItem);
+  if (activeLibPage === 'network') return items.filter(isNetworkItem);
   return items;
 }
 function renderLibModes() {
@@ -1393,8 +1412,38 @@ function addPlexItem(meta) {
   renderLib();
   toast('Added to PlexStr: ' + title);
 }
+function openAddStreamPreset(preset) {
+  editId = null;
+  $('mo-ed-t').textContent = 'Add Stream';
+  $('in-name').value = (preset && preset.name) || '';
+  $('in-url').value = (preset && preset.url) || '';
+  $('in-cat').value = (preset && preset.category) || '';
+  $('in-icon').value = '';
+  $('in-epgl').value = '';
+  $('in-epgl-sel').value = '';
+  $('in-epg-val').value = '';
+  renderEpgPicker([]);
+  $('mo-ed').classList.add('on');
+  setTimeout(() => ((preset && preset.url) ? $('in-name') : $('in-url')).focus(), 30);
+}
 function renderLibExtra() {
   const extra = $('lib-extra');
+  if (activeLibPage === 'local') {
+    const localCount = items.filter(isLocalItem).length;
+    extra.innerHTML = `<div class="px-card"><div class="px-head"><div><div class="px-title">Local</div><div class="px-sub">On-device videos, audio, and local file streams.</div></div><span class="cnt">${localCount}</span></div><div class="px-actions"><button class="bs" id="local-pick-btn">Choose Local Video</button><button class="bc" id="local-add-btn">Add Local URL</button></div><div class="px-note">Supports content:// and file:// sources. Use the Android picker for device files.</div></div>`;
+    $('local-pick-btn').onclick = () => $('in-url-pick').click();
+    $('local-add-btn').onclick = () => openAddStreamPreset({ name:'', url:'file://', category:'Local' });
+    setTimeout(refreshTvFocus, 30);
+    return;
+  }
+  if (activeLibPage === 'network') {
+    const networkCount = items.filter(isNetworkItem).length;
+    extra.innerHTML = `<div class="px-card"><div class="px-head"><div><div class="px-title">Network</div><div class="px-sub">Network media from FTP, FTPS, or Samba paths.</div></div><span class="cnt">${networkCount}</span></div><div class="px-actions"><button class="bs" id="net-add-ftp">Add FTP</button><button class="bc" id="net-add-smb">Add Samba</button></div><div class="px-note">Examples: ftp://server/path/video.mp4 or smb://server/share/movie.mkv</div></div>`;
+    $('net-add-ftp').onclick = () => openAddStreamPreset({ name:'', url:'ftp://', category:'Network' });
+    $('net-add-smb').onclick = () => openAddStreamPreset({ name:'', url:'smb://', category:'Network' });
+    setTimeout(refreshTvFocus, 30);
+    return;
+  }
   if (activeLibPage !== 'plex' && !plexAddMode) { extra.innerHTML = ''; return; }
   const cfg = getPlexCfg();
   const sectionOptions = '<option value="">All libraries</option>' + (cfg.sections || []).map(s => `<option value="${esc(s.key)}"${String(cfg.section||'')===String(s.key)?' selected':''}>${esc(s.title)}${s.type ? ' · ' + esc(s.type) : ''}</option>`).join('');
@@ -1496,8 +1545,8 @@ function renderLib() {
   renderLibExtra();
   $('lib-lst').classList.toggle('home-grid', window.matchMedia && window.matchMedia('(orientation: landscape)').matches);
   const f = getFilteredItems();
-  const emptyTitle = activeLibPage === 'itv' ? 'No ITV streams' : activeLibPage === 'icam' ? 'No iCam streams' : activeLibPage === 'plex' ? 'No PlexStr items' : 'No streams';
-  const emptyBody = activeLibPage === 'plex' ? 'Use the PlexStr panel above to open your Plex library or search and add titles.' : 'Tap + to add or browse Repos tab';
+  const emptyTitle = activeLibPage === 'itv' ? 'No ITV streams' : activeLibPage === 'icam' ? 'No iCam streams' : activeLibPage === 'plex' ? 'No PlexStr items' : activeLibPage === 'local' ? 'No local media yet' : activeLibPage === 'network' ? 'No network sources yet' : 'No streams';
+  const emptyBody = activeLibPage === 'plex' ? 'Use the PlexStr panel above to open your Plex library or search and add titles.' : activeLibPage === 'local' ? 'Use the Local panel above to pick a device file or add a local path.' : activeLibPage === 'network' ? 'Use the Network panel above to add FTP or Samba paths.' : 'Tap + to add or browse Repos tab';
   if (!f.length) {
     $('lib-lst').innerHTML = '<div class="emp"><h3>' + emptyTitle + '</h3><p>' + emptyBody + '</p></div>';
     return;
@@ -2350,7 +2399,7 @@ function renderGuide() {
     html += `<div class="gch" role="button" tabindex="-1" onclick="playItem('${m.id}')">`;
     if (m.icon || (ch && ch.icon)) html += `<img src="${esc(m.icon || ch.icon)}" onerror="this.style.display='none'">`;
     html += `<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.title)}</span></div>`;
-    html += '<div style="position:relative;flex:1">';
+    html += '<div class="guide-strip">';
 
     progs.filter(p => p.stop > startTime.getTime() && p.start < endTime).forEach(p => {
       const pStart = Math.max(p.start, startTime.getTime());
@@ -2359,7 +2408,7 @@ function renderGuide() {
       const width = (pStop - pStart) / 1800000 * slotW;
       const isNow = p.start <= now && p.stop > now;
       const isPast = p.stop <= now;
-      html += `<div class="gpr${isNow ? ' now' : ''}${isPast ? ' past' : ''}" style="left:${left}px;width:${width}px"><div class="gt">${esc(p.title)}</div><div class="gti">${fmtTime(p.start)}-${fmtTime(p.stop)}</div></div>`;
+      html += `<div class="gpr${isNow ? ' now' : ''}${isPast ? ' past' : ''}" role="button" tabindex="-1" aria-label="${esc(m.title)} ${esc(p.title)}" onclick="playItem('${m.id}')" style="left:${left}px;width:${width}px"><div class="gt">${esc(p.title)}</div><div class="gti">${fmtTime(p.start)}-${fmtTime(p.stop)}</div></div>`;
     });
 
     // Now line
@@ -2440,7 +2489,7 @@ function applyTvMode() {
 function normalizeTvFocusable(el) {
   if (!el) return el;
   const tag = (el.tagName || '').toLowerCase();
-  const customFocusable = el.matches && el.matches('.ni, .itm, .rc, .ri, .epg-opt, .lmb, .pl, .tgl, .ib, .gch, [role="button"]');
+  const customFocusable = el.matches && el.matches('.ni, .itm, .rc, .ri, .epg-opt, .lmb, .pl, .tgl, .ib, .gch, .gpr, [role="button"]');
   if (customFocusable && !el.hasAttribute('tabindex')) el.tabIndex = 0;
   if (tag === 'input' && (el.type || '').toLowerCase() === 'hidden') return null;
   return el;
@@ -2449,7 +2498,7 @@ function getTvFocusableElements() {
   if (!isTvDevice) return [];
   const q = [
     'button', 'input', 'textarea', 'select', 'a[href]',
-    '.ni', '.itm', '.rc', '.ri', '.epg-opt', '.lmb', '.pl', '.tgl', '.ib', '.gch',
+    '.ni', '.itm', '.rc', '.ri', '.epg-opt', '.lmb', '.pl', '.tgl', '.ib', '.gch', '.gpr',
     '[role="button"]', '[tabindex]', '[contenteditable="true"]'
   ].join(', ');
   const seen = new Set();
@@ -2719,7 +2768,7 @@ function moveTabOrder(idx, dir) {
 function renderTabOrderSettings() {
   const host = $('tab-order-lst');
   if (!host) return;
-  const labels = { itv:'ITV', plex:'PlexStr', icam:'iCam' };
+  const labels = { itv:'ITV', plex:'PlexStr', icam:'iCam', local:'Local', network:'Network' };
   const order = getTabOrder();
   host.innerHTML = order.map((id, i) => `<div class="lr"><div><div class="ln">${labels[id]}</div><div class="lm">${id === 'itv' ? 'IPTV / stream URLs' : id === 'plex' ? 'Plex library streams' : 'RTSP / camera streams'}</div></div><div class="lra">${i > 0 ? '<button onclick="moveTabOrder(' + i + ',-1)">↑</button>' : ''}${i < order.length - 1 ? '<button onclick="moveTabOrder(' + i + ',1)">↓</button>' : ''}</div></div>`).join('');
 }
@@ -3099,7 +3148,7 @@ window.playItem = async (id) => {
       $('pc').appendChild(video);
       $('ld2').style.display = 'none';
       video.play().catch(() => {});
-    } else if ((scheme === 'rtsp' || scheme === 'rtsps' || scheme === 'ftp' || scheme === 'ftps') && !(window.NativePlayer && typeof window.NativePlayer.isAvailable === 'function' && window.NativePlayer.isAvailable())) {
+    } else if ((scheme === 'rtsp' || scheme === 'rtsps' || scheme === 'ftp' || scheme === 'ftps' || scheme === 'smb') && !(window.NativePlayer && typeof window.NativePlayer.isAvailable === 'function' && window.NativePlayer.isAvailable())) {
       $('pc').innerHTML = '<div style="padding:18px;color:var(--t2);font-size:10px;line-height:1.5">This source type (' + esc(getSourceType(url)) + ') is supported in the Android app build. Open this stream there for native playback.</div>';
       $('ld2').style.display = 'none';
     } else if (typeof Hls !== 'undefined' && Hls.isSupported()) {
