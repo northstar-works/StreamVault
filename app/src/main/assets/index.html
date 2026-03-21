@@ -149,18 +149,18 @@ body.tv-mode .hd{padding-top:10px}
 
 /* Guide */
 .gw{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}.gw::-webkit-scrollbar{display:none}
-.grow{display:flex;height:27px;min-height:27px;border-bottom:1px solid rgba(255,255,255,.16)}
-.gch{width:112px;min-width:112px;padding:3px 6px;display:flex;align-items:center;gap:4px;background:linear-gradient(90deg,var(--c1),var(--c1));position:sticky;left:0;z-index:8;border-right:1px solid rgba(255,255,255,.18);cursor:pointer;font-size:8px;font-weight:600;height:27px;overflow:hidden}
+.grow{display:flex;height:32px;min-height:32px;border-bottom:1px solid rgba(255,255,255,.18)}
+.gch{width:112px;min-width:112px;padding:4px 6px;display:flex;align-items:center;gap:5px;background:linear-gradient(90deg,var(--c1),var(--c1));position:sticky;left:0;z-index:8;border-right:1px solid rgba(255,255,255,.22);cursor:pointer;font-size:8px;font-weight:600;height:32px;overflow:hidden}
 .gch:active{background:var(--c2)}
-.gch img{width:16px;height:16px;border-radius:3px;flex-shrink:0;object-fit:cover}
-.gpr{position:absolute;top:0;bottom:0;padding:2px 4px;border-right:1px solid rgba(255,255,255,.11);overflow:hidden;display:flex;flex-direction:column;justify-content:center;font-size:7px;background:rgba(255,255,255,.02)}
+.gch img{width:18px;height:18px;border-radius:3px;flex-shrink:0;object-fit:cover}
+.gpr{position:absolute;top:0;bottom:0;padding:3px 5px;border-right:1px solid rgba(255,255,255,.12);overflow:hidden;display:flex;flex-direction:column;justify-content:center;font-size:7px;background:rgba(255,255,255,.02)}
 .gpr .gt{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.05}
 .gpr .gti{font-size:5px;color:var(--t3);line-height:1}
 .gpr.now{background:rgba(108,92,231,.1);border-left:2px solid var(--ac)}
 .gpr.past{opacity:.4}
 .gnl{position:absolute;top:0;bottom:0;width:2px;background:var(--rd);z-index:4;pointer-events:none}
 
-.guide-strip{position:relative;flex:1;min-width:2240px;background:linear-gradient(180deg,rgba(255,255,255,.01),rgba(255,255,255,0));height:27px}
+.guide-strip{position:relative;flex:1;min-width:2240px;background:linear-gradient(180deg,rgba(255,255,255,.01),rgba(255,255,255,0));height:32px}
 .px-note{font-size:8px;color:var(--t2);margin-top:6px;line-height:1.4}
 
 /* EPG Cards */
@@ -239,7 +239,8 @@ body.tv-mode .hd{padding-top:10px}
 @keyframes sp{to{transform:rotate(360deg)}}
 body.tv-mode .bnav .ni,body.tv-mode button,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode .epg-opt,body.tv-mode .lmb,body.tv-mode .pl,body.tv-mode .tgl,body.tv-mode .ib,body.tv-mode .gch,body.tv-mode .gpr,[role="button"]{outline:none;transition:box-shadow .12s ease,transform .12s ease,background .12s ease,border-color .12s ease}
 body.tv-mode .tv-f,body.tv-mode .ni:focus,body.tv-mode button:focus,body.tv-mode input:focus,body.tv-mode textarea:focus,body.tv-mode select:focus,body.tv-mode .itm:focus,body.tv-mode .rc:focus,body.tv-mode .ri:focus,body.tv-mode .epg-opt:focus,body.tv-mode .lmb:focus,body.tv-mode .pl:focus,body.tv-mode .tgl:focus,body.tv-mode .ib:focus,body.tv-mode .gch:focus,body.tv-mode .gpr:focus,[role="button"]:focus{box-shadow:0 0 0 2px rgba(108,92,231,.98),0 0 0 4px rgba(108,92,231,.28),0 0 12px rgba(108,92,231,.22)!important;transform:scale(1.008);background-image:linear-gradient(0deg,rgba(108,92,231,.10),rgba(108,92,231,.10));border-color:rgba(108,92,231,.98)!important}
-body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .pl,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode button,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .ib,body.tv-mode .gch,body.tv-mode .gpr,[role="button"]{min-height:44px;position:relative}
+body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .pl,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode button,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .ib,[role="button"]{min-height:44px;position:relative}
+body.tv-mode .gch,body.tv-mode .gpr{min-height:0;position:relative}
 body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.tv-mode .px-grid{scroll-margin-top:70px}
 body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 0 4px rgba(108,92,231,.55)!important;border-color:#fff!important}
 .itm .ab{display:none}
@@ -366,7 +367,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.5.6 (Build 41)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.5.7 (Build 42)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
   </div>
 </div>
 
@@ -2386,7 +2387,7 @@ function renderGuide() {
   }
 
   const now = Date.now();
-  const slotW = 160, chW = 112, guideRowH = 27;
+  const slotW = 160, chW = 112, guideRowH = 32;
   const startTime = new Date(now);
   startTime.setMinutes(startTime.getMinutes() < 30 ? 0 : 30, 0, 0);
   startTime.setHours(startTime.getHours() - 1);
