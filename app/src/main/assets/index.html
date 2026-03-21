@@ -147,20 +147,27 @@ body.tv-mode .hd{padding-top:10px}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .cnt{font-size:8px;color:var(--t3);background:var(--c1);padding:2px 6px;border-radius:8px;border:1px solid var(--bd);font-family:monospace}
 
-/* Guide — div-flex, single overflow:auto; position:relative on div strip (not td) */
-.gw{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}
+/* Guide — div-flex EPG grid. display:block (not inline-block) is critical for WebView. */
+.gw{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;position:relative}
 .gw::-webkit-scrollbar{display:none}
-.gwrap{display:inline-block}
+/* gwrap: block element with fixed total width so gw gets both scroll axes */
+.gwrap{display:block}
+/* Sticky header row — sticks to top of .gw */
 .ghdr{display:flex;position:sticky;top:0;z-index:12;background:var(--bg);border-bottom:1px solid var(--bd)}
-.gcorner{flex-shrink:0;display:flex;align-items:center;padding:0 10px;background:var(--bg);color:var(--t3);font-weight:700;position:sticky;left:0;z-index:13;border-right:1px solid rgba(255,255,255,.2)}
-.gslots{display:flex}
-.gslot{flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--t3);border-left:1px solid rgba(255,255,255,.1);font-size:8px}
-.grow2{display:flex;border-bottom:1px solid rgba(255,255,255,.07)}
+/* Corner: sticky left AND top (inherits top via .ghdr) */
+.gcorner{flex-shrink:0;display:flex;align-items:center;padding:0 10px;background:var(--bg);color:var(--t3);font-weight:700;font-size:8px;position:sticky;left:0;z-index:13;border-right:1px solid rgba(255,255,255,.2);box-sizing:border-box}
+.gslots{display:flex;flex-shrink:0}
+.gslot{flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--t3);font-size:8px;border-left:1px solid rgba(255,255,255,.1);box-sizing:border-box}
+/* Channel rows: overflow:hidden is critical — prevents row from growing beyond rowH */
+.grow2{display:flex;border-bottom:1px solid rgba(255,255,255,.07);overflow:hidden}
+/* Channel cell: sticky left, explicit dimensions, flex-shrink:0 */
 .gch{flex-shrink:0;display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--c1);position:sticky;left:0;z-index:8;cursor:pointer;overflow:hidden;border-right:1px solid rgba(255,255,255,.18);box-sizing:border-box}
 .gch:hover,.gch:active,.gch:focus{background:var(--c2);outline:none}
 .gch img{width:20px;height:20px;border-radius:3px;flex-shrink:0;object-fit:cover}
 .gch-nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:8px;font-weight:600}
+/* Program strip: position:relative DIV with explicit width+height — programs anchor here only */
 .gstrip{position:relative;flex-shrink:0;overflow:hidden}
+/* Program block: position:absolute with explicit top/left/width/height set in JS */
 .gpr{position:absolute;border:1px solid rgba(255,255,255,.10);overflow:hidden;display:flex;flex-direction:column;justify-content:center;padding:4px 6px;font-size:8px;background:rgba(255,255,255,.03);z-index:2;border-radius:4px;cursor:pointer;box-sizing:border-box}
 .gpr .gt{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.1}
 .gpr .gti{font-size:6px;color:var(--t3);line-height:1.1;margin-top:2px;white-space:nowrap;overflow:hidden}
@@ -268,7 +275,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
 
 <!-- ═══ LIBRARY ═══ -->
 <div id="lib-scr" class="scr on">
-  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b50</span>
+  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b51</span>
     <button class="ib" id="btn-lib-edit" title="Toggle edit controls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
     <button class="ib" id="btn-add-top" title="Add stream"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
     <button class="ib" id="btn-exp" title="Export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
@@ -405,7 +412,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.6.3 (Build 50)<br>IPTV · Plex · iCam · Local · Network · EPG Guide · DPad TV Navigation · HLS Recording · Failover · Scheduled Recording.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.6.4 (Build 51)<br>IPTV · Plex · iCam · Local · Network · EPG Guide · DPad TV Navigation · HLS Recording · Failover · Scheduled Recording.</p>
   </div>
 </div>
 
@@ -580,6 +587,20 @@ http://stream.example.com/cnn
 </div>
 
 <div class="toast" id="toast"></div>
+<!-- Plex Resume Modal -->
+<div class="mo" id="mo-resume">
+<div class="mc" style="text-align:center">
+  <h2 id="resume-title" style="margin-bottom:8px">Resume Playback?</h2>
+  <p id="resume-pos" style="font-size:11px;color:var(--t2);margin-bottom:18px"></p>
+  <div class="mab">
+    <button class="bc" id="resume-start">▶ Start Over</button>
+    <button class="bs" id="resume-cont">⏩ Resume</button>
+  </div>
+</div>
+</div>
+
+<!-- Live TV Timeshift status bar (injected into player overlay) -->
+
 <!-- Local Videos Config -->
 <div class="mo" id="mo-local-cfg">
 <div class="mc">
@@ -696,8 +717,15 @@ http://stream.example.com/cnn
 "use strict";
 
 // ─── Constants & State ───
-const VERSION = '4.6.3', BUILD = 50;
+const VERSION = '4.6.4', BUILD = 51;
 const KEYS = { items: 'sv_items_v3', repos: 'sv_repos_v2', epgSrc: 'sv_epg_src', epgData: 'sv_epg_data', settings: 'sv_settings_v2' };
+const PLOG_KEY = 'sv_playlog_v1';      // Plex/VOD progress log
+let playLog = {};                        // {itemId: {posMs, duration, ts, title}}
+function loadPlayLog() { try { const d=localStorage.getItem(PLOG_KEY); if(d) playLog=JSON.parse(d); } catch(e){} }
+function savePlayLog() { try { localStorage.setItem(PLOG_KEY, JSON.stringify(playLog)); } catch(e){} }
+function getResumePos(id) { const e=playLog[id]; if(!e||!e.posMs||e.posMs<5000) return 0; if(e.duration&&e.posMs>e.duration*0.95) return 0; return e.posMs; }
+function setResumePos(id, posMs, duration, title) { playLog[id]={posMs,duration:duration||0,ts:Date.now(),title:title||''}; savePlayLog(); }
+function clearResumePos(id) { delete playLog[id]; savePlayLog(); }
 const TAG_PRI = ['', 'F', 'H', 'A', 'S'];
 
 let items = [];
@@ -2558,15 +2586,15 @@ function renderGuide() {
     return;
   }
 
-  const now    = Date.now();
-  const isTv   = !!isTvDevice;
-  const slotW  = isTv ? 180 : 160;  // px per 30-min slot
-  const chW    = isTv ? 160 : 140;  // channel column width (px)
-  const rowH   = isTv ? 56  : 50;   // row height — EVERY row same height
-  const gapV   = 4;                  // top/bottom inset for program blocks
-  const fs     = isTv ? '9px' : '8px';
+  const now   = Date.now();
+  const isTv  = !!isTvDevice;
+  const slotW = isTv ? 180 : 160;   // px per 30-min slot
+  const chW   = isTv ? 160 : 140;   // channel column width
+  const rowH  = isTv ? 56  : 50;    // EVERY row (header + channel rows) same height
+  const gapV  = 4;                   // top/bottom inset for program blocks
+  const fs    = isTv ? '9px' : '8px';
 
-  // 14-slot window starting 1 hour before now
+  // 14-slot window: 1 hour before now → 6 hours after
   const t0 = new Date(now);
   t0.setMinutes(t0.getMinutes() < 30 ? 0 : 30, 0, 0);
   t0.setHours(t0.getHours() - 1);
@@ -2575,18 +2603,14 @@ function renderGuide() {
   const endMs   = slots[slots.length - 1].getTime() + 1800000;
   const stripW  = slotW * slots.length;
   const minW    = isTv ? 36 : 44;
-  const totalW  = chW + stripW;
+  const totalW  = chW + stripW;     // explicit total width for .gwrap
 
-  // ── Outer column-flex wrapper (inline-block so gw scrolls both axes) ──────
-  // CRITICAL: .gwrap must be inline-block, NOT inline-flex, so width resolves
-  // correctly and position:sticky left works in Android WebView
-  let html = `<div class="gwrap" style="min-width:${totalW}px">`;
+  // .gwrap must be display:block with explicit min-width so .gw gets horizontal scroll
+  let html = `<div class="gwrap" style="min-width:${totalW}px;width:${totalW}px">`;
 
-  // ── Sticky header row ────────────────────────────────────────────────────
-  html += `<div class="ghdr" style="height:${rowH}px">`;
-  // Corner cell — sticky both top (via parent) and left
+  // ── Sticky header row ──────────────────────────────────────────────────────
+  html += `<div class="ghdr" style="height:${rowH}px;width:${totalW}px">`;
   html += `<div class="gcorner" style="width:${chW}px;min-width:${chW}px;height:${rowH}px;font-size:${fs}">Channel</div>`;
-  // Time slots
   html += `<div class="gslots" style="height:${rowH}px">`;
   slots.forEach(s => {
     const hh = s.getHours(), mm = s.getMinutes();
@@ -2594,47 +2618,46 @@ function renderGuide() {
   });
   html += `</div></div>`;
 
-  // ── One row per channel ──────────────────────────────────────────────────
+  // ── Channel rows ────────────────────────────────────────────────────────────
   matched.forEach((m, chIdx) => {
     const ch    = epgData.channels[m.epgTitle];
     const progs = getGuidePrograms(m.epgTitle, startMs, endMs);
 
-    html += `<div class="grow2" style="height:${rowH}px">`;
+    // grow2 has overflow:hidden so nothing escapes rowH
+    html += `<div class="grow2" style="height:${rowH}px;min-height:${rowH}px;max-height:${rowH}px;width:${totalW}px">`;
 
     // Channel cell — sticky left
     html += `<div class="gch" role="button" tabindex="0" data-item-id="${m.id}" data-ch-idx="${chIdx}" onclick="playItem('${m.id}')" style="width:${chW}px;min-width:${chW}px;height:${rowH}px">`;
     if (m.icon || (ch && ch.icon)) {
-      html += `<img src="${esc(m.icon || ch.icon)}" onerror="this.style.display='none'" style="flex-shrink:0">`;
+      html += `<img src="${esc(m.icon||ch.icon)}" onerror="this.style.display='none'" style="flex-shrink:0">`;
     }
     html += `<span class="gch-nm">${esc(m.title)}</span></div>`;
 
-    // Program strip — position:relative DIV. Height and width must be EXPLICIT.
-    // Programs (gpr) use position:absolute and anchor to THIS div, not any ancestor.
+    // Program strip — position:relative div, explicit size, overflow:hidden
+    // Programs absolutely positioned inside this div ONLY
     html += `<div class="gstrip" style="width:${stripW}px;min-width:${stripW}px;height:${rowH}px">`;
 
-    // Render programs
     progs.forEach((p, progIdx) => {
       const pStart = Math.max(p.start, startMs);
       const pStop  = Math.min(p.stop,  endMs);
       if (pStop <= pStart) return;
-      const left  = ((pStart - startMs) / 1800000) * slotW;
-      const rawW  = ((pStop  - pStart)  / 1800000) * slotW;
+      const left  = Math.max(0, ((pStart - startMs) / 1800000) * slotW);
+      const rawW  = ((pStop - pStart) / 1800000) * slotW;
       const width = Math.max(minW, Math.min(rawW, stripW - left));
       if (width < 4 || left >= stripW) return;
       const isNow  = p.start <= now && p.stop > now;
       const isPast = p.stop  <= now;
       const pH     = rowH - gapV * 2;
-      html += `<div class="gpr${isNow?' now':''}${isPast?' past':''}" role="button" tabindex="${isTv?'0':'-1'}" data-ch-idx="${chIdx}" data-prog-idx="${progIdx}" aria-label="${esc(p.title)}" onclick="playItem('${m.id}')" style="left:${left}px;top:${gapV}px;width:${width}px;height:${pH}px">`;
+      // Absolute positioning with explicit top/left/width/height — no ambiguity
+      html += `<div class="gpr${isNow?' now':''}${isPast?' past':''}" role="button" tabindex="${isTv?'0':'-1'}" data-ch-idx="${chIdx}" data-prog-idx="${progIdx}" onclick="playItem('${m.id}')" style="left:${left}px;top:${gapV}px;width:${width}px;height:${pH}px">`;
       html += `<div class="gt" style="font-size:${fs}">${esc(p.title)}</div>`;
       if (width > 72) html += `<div class="gti">${fmtTime(p.start)}–${fmtTime(p.stop)}</div>`;
       html += `</div>`;
     });
 
-    // "Now" red line
-    const nowLeft = ((now - startMs) / 1800000) * slotW;
-    if (nowLeft >= 0 && nowLeft <= stripW) {
-      html += `<div class="gnl" style="left:${nowLeft}px"></div>`;
-    }
+    // "Now" marker
+    const nowLeft = Math.max(0, ((now - startMs) / 1800000) * slotW);
+    if (nowLeft < stripW) html += `<div class="gnl" style="left:${nowLeft}px"></div>`;
 
     html += `</div></div>`; // .gstrip, .grow2
   });
@@ -2642,7 +2665,7 @@ function renderGuide() {
   html += `</div>`; // .gwrap
   wrap.innerHTML = html;
 
-  // Scroll to "now minus a little padding"
+  // Scroll to now
   setTimeout(() => {
     const nowOff = Math.max(0, ((now - startMs) / 1800000) * slotW - (isTv ? 150 : 110));
     wrap.scrollLeft = nowOff;
@@ -2680,6 +2703,23 @@ window.onNativeBackupSaved = function(savedPath) {
 window.onNativeBackupError = function(message) {
   toast('Backup failed: ' + message);
 };
+// ─── Plex progress callbacks (called from native PlayerActivity) ───
+window.onPlexPositionUpdate = function(itemId, posMs, durationMs, title) {
+  if (posMs > 5000) setResumePos(itemId, posMs, durationMs, title);
+};
+window.onPlexPlaybackComplete = function(itemId) {
+  clearResumePos(itemId);
+};
+
+// ─── Live TV Timeshift callbacks ───
+window.onTimeshiftStatus = function(bufferedSec, posOffsetSec, isPaused) {
+  const el = $('ts-status');
+  if (el) {
+    el.textContent = isPaused ? '⏸ PAUSED (live buf: ' + bufferedSec + 's)' : (posOffsetSec > 5 ? '⏪ ' + posOffsetSec + 's behind live' : '● LIVE');
+    el.style.color = isPaused ? '#ffa502' : (posOffsetSec > 5 ? '#ffa502' : '#2ed573');
+  }
+};
+
 window.onNativeBackupFilePicked = function(rawText, label) {
   try {
     const data = JSON.parse(rawText);
@@ -3746,17 +3786,47 @@ window.playItem = async (id) => {
           m.plexMeta.server = normalizePlexServer(cfg.server);
           m.plexMeta.token = cfg.token;
         }
-        toast('Preparing Plex stream…');
-        const resolvedPlex = await resolvePlexPlayback(m);
-        m.plexMeta = { ...m.plexMeta, ...resolvedPlex.meta };
-        m.url = resolvedPlex.urls[0].url || m.url;
-        if (m.plexMeta.thumb && !m.icon) m.icon = plexThumb(m.plexMeta.thumb, '');
-        failoverList = resolvedPlex.urls.map((u, idx) => ({
-          url: extractUrl(u.url),
-          title: idx === 0 ? ((m.title || 'Plex item') + ' · Plex ' + u.mode) : ((m.title || 'Plex item') + ' · Plex fallback ' + u.mode),
-          region: 'Plex',
-          tag: u.mode
-        }));
+        // Check for resume position before resolving playback
+        const resumePos = getResumePos(m.id);
+        if (resumePos > 0) {
+          const mins = Math.floor(resumePos / 60000);
+          const secs = Math.floor((resumePos % 60000) / 1000);
+          const posStr = mins + 'm ' + secs + 's';
+          // Show resume modal
+          await new Promise(resolve => {
+            $('resume-title').textContent = m.title || 'Resume?';
+            $('resume-pos').textContent = 'You watched ' + posStr + ' — continue from here?';
+            $('mo-resume').classList.add('on');
+            $('resume-cont').onclick = () => { $('mo-resume').classList.remove('on'); resolve(resumePos); };
+            $('resume-start').onclick = () => { clearResumePos(m.id); $('mo-resume').classList.remove('on'); resolve(0); };
+          }).then(async seekMs => {
+            toast('Preparing Plex stream…');
+            const resolvedPlex = await resolvePlexPlayback(m);
+            m.plexMeta = { ...m.plexMeta, ...resolvedPlex.meta };
+            m.url = resolvedPlex.urls[0].url || m.url;
+            if (m.plexMeta.thumb && !m.icon) m.icon = plexThumb(m.plexMeta.thumb, '');
+            failoverList = resolvedPlex.urls.map((u, idx) => ({
+              url: extractUrl(u.url),
+              title: idx === 0 ? ((m.title || 'Plex item') + ' · Plex ' + u.mode) : ((m.title || 'Plex item') + ' · Plex fallback ' + u.mode),
+              region: 'Plex',
+              tag: u.mode,
+              seekMs: seekMs   // pass seek position to native player
+            }));
+          });
+          if (!failoverList) return; // user cancelled somehow
+        } else {
+          toast('Preparing Plex stream…');
+          const resolvedPlex = await resolvePlexPlayback(m);
+          m.plexMeta = { ...m.plexMeta, ...resolvedPlex.meta };
+          m.url = resolvedPlex.urls[0].url || m.url;
+          if (m.plexMeta.thumb && !m.icon) m.icon = plexThumb(m.plexMeta.thumb, '');
+          failoverList = resolvedPlex.urls.map((u, idx) => ({
+            url: extractUrl(u.url),
+            title: idx === 0 ? ((m.title || 'Plex item') + ' · Plex ' + u.mode) : ((m.title || 'Plex item') + ' · Plex fallback ' + u.mode),
+            region: 'Plex',
+            tag: u.mode
+          }));
+        }
       }
     }
 
@@ -3904,6 +3974,7 @@ loadItems();
 loadRepos();
 loadEpg();
 loadSettings();
+loadPlayLog();
 ensureActiveLibPage();
 applyTvMode();
 renderCats();

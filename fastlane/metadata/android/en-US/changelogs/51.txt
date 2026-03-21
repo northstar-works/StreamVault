@@ -1,0 +1,24 @@
+StreamVault v4.6.4 (Build 51)
+
+Guide layout — definitive fix:
+- Root cause: display:inline-block on wrapper caused Android WebView to misinterpret flex-child heights, expanding channel rows to full screen height. Fixed by using display:block with explicit pixel width.
+- Added overflow:hidden + min-height + max-height on every channel row so rows cannot expand beyond rowH.
+- Programs remain inside their own .gstrip div (position:relative) — no cascade possible.
+- Sticky header and sticky channel column both working.
+
+Plex resume / progress tracking:
+- Playback position saved to localStorage every 10 seconds while a Plex item plays.
+- On re-opening any Plex item with a saved position, a modal appears: "Resume from 42m 25s" vs "Start Over".
+- Position cleared automatically on playback completion.
+- Resume position passed to ExoPlayer via seekTo() after STATE_READY.
+
+Live TV recording fix (0-byte .ts files):
+- Root cause 1: probe.getURL() now returns the FINAL URL after HTTP redirects (gohyperspeed redirects to real HLS URL). baseUrl was previously built from the original URL, not the final one, so relative segment paths failed.
+- Root cause 2: HLS segment detection now catches ALL non-M3U URI lines after #EXTINF, not just those containing ".ts". gohyperspeed segments don't use .ts extensions.
+- FileOutputStream flush() before close() added to guarantee bytes are written to disk.
+
+Live TV timeshift (pause & resume):
+- Press the ⏸ button or DPad-Up while watching live TV to pause. ExoPlayer's HLS buffer accumulates.
+- Press ▶ or DPad-Enter/Down to resume from paused position, or tap "► LIVE" to jump to live edge.
+- Buffer is in-memory (ExoPlayer native buffer). Cleared automatically on channel change or app close.
+- No storage space consumed.

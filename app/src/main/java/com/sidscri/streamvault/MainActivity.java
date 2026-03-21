@@ -126,6 +126,7 @@ public class MainActivity extends Activity {
 
         webView.addJavascriptInterface(new NativeBridge(), "NativePlayer");
 
+        webViewRef = webView;
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view,
@@ -206,6 +207,14 @@ public class MainActivity extends Activity {
         public void playStream(String failoverJson, String title,
             String category, String nowNext,
             String foTimeoutStr, String foAutoStr, String savePathStr) {
+            playStreamEx(failoverJson, title, category, nowNext, foTimeoutStr, foAutoStr, savePathStr, "", "0");
+        }
+
+        @JavascriptInterface
+        public void playStreamEx(String failoverJson, String title,
+            String category, String nowNext,
+            String foTimeoutStr, String foAutoStr, String savePathStr,
+            String itemId, String seekMsStr) {
             runOnUiThread(() -> {
                 Intent intent = new Intent(MainActivity.this, PlayerActivity.class);
                 intent.putExtra(PlayerActivity.EXTRA_FAILOVER_JSON,
@@ -224,9 +233,14 @@ public class MainActivity extends Activity {
                 boolean autoFo = !"false".equalsIgnoreCase(foAutoStr);
                 intent.putExtra(PlayerActivity.EXTRA_FO_AUTO, autoFo);
 
-                if (savePathStr != null && !savePathStr.isEmpty()) {
+                if (savePathStr != null && !savePathStr.isEmpty())
                     intent.putExtra(PlayerActivity.EXTRA_SAVE_PATH, savePathStr);
-                }
+                if (itemId != null && !itemId.isEmpty())
+                    intent.putExtra(PlayerActivity.EXTRA_ITEM_ID, itemId);
+
+                long seekMs = 0;
+                try { seekMs = Long.parseLong(seekMsStr); } catch (Exception e) {}
+                if (seekMs > 0) intent.putExtra(PlayerActivity.EXTRA_SEEK_MS, seekMs);
 
                 startActivity(intent);
             });
