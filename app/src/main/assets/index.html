@@ -147,21 +147,30 @@ body.tv-mode .hd{padding-top:10px}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .cnt{font-size:8px;color:var(--t3);background:var(--c1);padding:2px 6px;border-radius:8px;border:1px solid var(--bd);font-family:monospace}
 
-/* Guide */
-.gw{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}.gw::-webkit-scrollbar{display:none}
-.grow{display:grid;grid-template-columns:var(--guide-chw,136px) 1fr;height:var(--guide-rowh,48px);min-height:var(--guide-rowh,48px);border-bottom:1px solid rgba(255,255,255,.18);align-items:stretch}
-.gch{width:var(--guide-chw,136px);min-width:var(--guide-chw,136px);padding:7px 10px;display:flex;align-items:center;gap:8px;background:linear-gradient(90deg,var(--c1),var(--c1));position:sticky;left:0;z-index:8;border-right:1px solid rgba(255,255,255,.22);cursor:pointer;font-size:8px;font-weight:600;height:var(--guide-rowh,48px);overflow:hidden}
-.gch:active{background:var(--c2)}
+/* Guide — Two-panel EPG layout */
+.gw{flex:1;display:flex;flex-direction:row;overflow:hidden}
+.guide-container{display:flex;width:100%;height:100%;overflow:hidden}
+.guide-left{flex-shrink:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;background:var(--bg);border-right:1px solid rgba(255,255,255,.2);position:relative;z-index:5}
+.guide-left::-webkit-scrollbar{display:none}
+.guide-ch-header{display:flex;align-items:center;padding:6px 10px;background:var(--bg);position:sticky;top:0;z-index:6;color:var(--t3);font-weight:700;border-bottom:1px solid var(--bd)}
+.guide-right{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
+.guide-program-area{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;position:relative}
+.guide-program-area::-webkit-scrollbar{display:none}
+.guide-prog-wrap{position:relative}
+.guide-time-header{display:flex;position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:1px solid var(--bd)}
+.guide-time-slot{display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--t3);flex-shrink:0;border-left:1px solid rgba(255,255,255,.12)}
+.guide-prog-row{position:relative;border-bottom:1px solid rgba(255,255,255,.08)}
+.gch{width:100%;padding:7px 10px;display:flex;align-items:center;gap:8px;background:var(--c1);cursor:pointer;font-size:8px;font-weight:600;overflow:hidden;border-bottom:1px solid rgba(255,255,255,.06)}
+.gch:active,.gch:hover{background:var(--c2)}
 .gch img{width:20px;height:20px;border-radius:3px;flex-shrink:0;object-fit:cover}
-.gpr{position:absolute;top:4px;bottom:4px;padding:5px 7px;border:1px solid rgba(255,255,255,.10);overflow:hidden;display:flex;flex-direction:column;justify-content:center;font-size:8px;background:rgba(255,255,255,.03);z-index:2;min-width:0}
+.gch span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gpr{position:absolute;top:4px;bottom:4px;padding:5px 7px;border:1px solid rgba(255,255,255,.10);overflow:hidden;display:flex;flex-direction:column;justify-content:center;font-size:8px;background:rgba(255,255,255,.03);z-index:2;min-width:0;border-radius:4px;cursor:pointer}
 .gpr .gt{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.08}
-.gpr .gti{font-size:6px;color:var(--t3);line-height:1.05;margin-top:2px}
+.gpr .gti{font-size:6px;color:var(--t3);line-height:1.05;margin-top:2px;white-space:nowrap}
 .gpr.now{background:rgba(108,92,231,.16);border-left:3px solid var(--ac)}
-.gpr.past{opacity:.5}
+.gpr.past{opacity:.45}
+.gpr:hover,.gpr:active{background:rgba(255,255,255,.07)}
 .gnl{position:absolute;top:0;bottom:0;width:2px;background:var(--rd);z-index:4;pointer-events:none}
-
-.guide-strip{position:relative;flex:1;min-width:2240px;background:linear-gradient(180deg,rgba(255,255,255,.01),rgba(255,255,255,0));height:var(--guide-rowh,48px);overflow:hidden}
-.guide-strip::before{content:'';position:absolute;inset:0;background-image:repeating-linear-gradient(to right,transparent 0,transparent calc(var(--guide-slotw,160px) - 1px),rgba(255,255,255,.10) calc(var(--guide-slotw,160px) - 1px),rgba(255,255,255,.10) var(--guide-slotw,160px));pointer-events:none;z-index:0}
 .px-note{font-size:8px;color:var(--t2);margin-top:6px;line-height:1.4}
 
 /* EPG Cards */
@@ -241,7 +250,7 @@ body.tv-mode .hd{padding-top:10px}
 body.tv-mode .bnav .ni,body.tv-mode button,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode .epg-opt,body.tv-mode .lmb,body.tv-mode .pl,body.tv-mode .tgl,body.tv-mode .ib,body.tv-mode .gch,body.tv-mode .gpr,[role="button"]{outline:none;transition:box-shadow .12s ease,transform .12s ease,background .12s ease,border-color .12s ease}
 body.tv-mode .tv-f,body.tv-mode .ni:focus,body.tv-mode button:focus,body.tv-mode input:focus,body.tv-mode textarea:focus,body.tv-mode select:focus,body.tv-mode .itm:focus,body.tv-mode .rc:focus,body.tv-mode .ri:focus,body.tv-mode .epg-opt:focus,body.tv-mode .lmb:focus,body.tv-mode .pl:focus,body.tv-mode .tgl:focus,body.tv-mode .ib:focus,body.tv-mode .gch:focus,body.tv-mode .gpr:focus,[role="button"]:focus{box-shadow:0 0 0 2px rgba(108,92,231,.98),0 0 0 4px rgba(108,92,231,.28),0 0 12px rgba(108,92,231,.22)!important;transform:scale(1.008);background-image:linear-gradient(0deg,rgba(108,92,231,.10),rgba(108,92,231,.10));border-color:rgba(108,92,231,.98)!important}
 body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .pl,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode button,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .ib,[role="button"]{min-height:44px;position:relative}
-body.tv-mode .gch,body.tv-mode .gpr{min-height:0;position:relative}
+body.tv-mode .gch,body.tv-mode .gpr{min-height:0}
 body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.tv-mode .px-grid{scroll-margin-top:70px}
 body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 0 4px rgba(108,92,231,.55)!important;border-color:#fff!important}
 .itm .ab{display:none}
@@ -341,7 +350,84 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
       </div>
     </div>
   </div>
-  <div class="ss"><h3>Backup & Restore</h3>
+  <div class="ss"><h3>Local Videos</h3>
+    <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Configure on-device video sources. Added files appear in the Local tab.</p>
+    <div class="sr"><div><div class="sl">Enable local file browsing</div><div class="sd">Browse device storage for video files</div></div><div class="tgl on" id="s-local-enable"></div></div>
+    <div class="sr" style="margin-top:4px"><div><div class="sl">Default local folder</div><div class="sd">Starting folder for file browser</div></div><input id="s-local-path" placeholder="Movies, Downloads…" style="max-width:150px;font-size:9px" readonly></div>
+    <div class="tv-row" data-tv-group="local-folder" style="margin-top:8px">
+      <button class="bc" id="s-local-pick" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Choose Folder</button>
+      <button class="bs" id="s-local-scan" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Scan for Videos</button>
+    </div>
+    <p style="font-size:9px;color:var(--t2);margin-top:6px">Supports MP4, MKV, AVI, MOV, TS. Use the Local tab to add individual files.</p>
+  </div>
+
+  <div class="ss"><h3>Network Sources</h3>
+    <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Access media from LAN shares, Samba/SMB, and FTP servers. Added sources appear in the Network tab.</p>
+    <div style="font-size:9px;color:var(--ac);font-weight:700;margin-bottom:6px">LAN Discovery</div>
+    <div class="sr"><div><div class="sl">Auto-scan local network</div><div class="sd">Discover media servers on your LAN at startup</div></div><div class="tgl" id="s-net-scan-auto"></div></div>
+    <div class="tv-row" data-tv-group="lan-scan" style="margin-top:6px">
+      <button class="bc" id="s-net-scan-now" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Scan Now</button>
+      <input id="s-net-scan-status" placeholder="Not scanned" style="max-width:150px;font-size:9px" readonly>
+    </div>
+    <div style="font-size:9px;color:var(--ac);font-weight:700;margin:12px 0 6px">Samba / SMB</div>
+    <div class="rw">
+      <div><label>Host / IP</label><input id="s-smb-host" placeholder="192.168.1.10"></div>
+      <div><label>Share name</label><input id="s-smb-share" placeholder="Media"></div>
+    </div>
+    <div class="rw">
+      <div><label>Username</label><input id="s-smb-user" placeholder="Optional" autocomplete="username"></div>
+      <div><label>Password</label><input id="s-smb-pass" type="password" placeholder="Optional" autocomplete="current-password"></div>
+    </div>
+    <div class="tv-row" data-tv-group="smb-actions">
+      <button class="bc" id="s-smb-test" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Test SMB</button>
+      <button class="bs" id="s-smb-add" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Browse &amp; Add</button>
+    </div>
+    <div style="font-size:9px;color:var(--ac);font-weight:700;margin:12px 0 6px">FTP</div>
+    <div class="rw">
+      <div><label>FTP Host / URL</label><input id="s-ftp-host" placeholder="ftp://192.168.1.10"></div>
+      <div><label>Port</label><input id="s-ftp-port" placeholder="21" type="number" style="max-width:80px"></div>
+    </div>
+    <div class="rw">
+      <div><label>Username</label><input id="s-ftp-user" placeholder="anonymous" autocomplete="username"></div>
+      <div><label>Password</label><input id="s-ftp-pass" type="password" placeholder="Optional" autocomplete="current-password"></div>
+    </div>
+    <div class="tv-row" data-tv-group="ftp-actions">
+      <button class="bc" id="s-ftp-test" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Test FTP</button>
+      <button class="bs" id="s-ftp-add" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Browse &amp; Add</button>
+    </div>
+  </div>
+
+  <div class="ss"><h3>iCam — IP Cameras</h3>
+    <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Add IP cameras via RTSP, ONVIF, RTMP, or SRT. Added cameras appear in the iCam tab.</p>
+    <div class="sr"><div><div class="sl">Protocol</div><div class="sd">Connection method for the camera</div></div>
+      <select id="s-icam-proto">
+        <option value="rtsp">RTSP</option>
+        <option value="onvif">ONVIF</option>
+        <option value="rtmp">RTMP</option>
+        <option value="srt">SRT</option>
+      </select>
+    </div>
+    <div class="rw" style="margin-top:6px">
+      <div style="flex:2"><label>Camera Host / Stream URL</label><input id="s-icam-host" placeholder="192.168.1.50 or rtsp://…/stream"></div>
+      <div><label>Port</label><input id="s-icam-port" placeholder="554" type="number" style="max-width:80px"></div>
+    </div>
+    <div class="rw">
+      <div><label>Username</label><input id="s-icam-user" placeholder="admin" autocomplete="username"></div>
+      <div><label>Password</label><input id="s-icam-pass" type="password" placeholder="••••••" autocomplete="current-password"></div>
+    </div>
+    <div><label>Camera / Stream Name</label><input id="s-icam-name" placeholder="Front Door, Driveway…"></div>
+    <div id="s-icam-onvif-panel" style="display:none;margin-top:8px;padding:8px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs)">
+      <div style="font-size:9px;color:var(--t2);margin-bottom:6px">ONVIF: discover stream profiles from the device</div>
+      <button class="bc" id="s-icam-discover" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Discover Profiles</button>
+      <div id="s-icam-profiles" style="margin-top:6px;font-size:9px;color:var(--t3)"></div>
+    </div>
+    <div class="tv-row" data-tv-group="icam-actions" style="margin-top:8px">
+      <button class="bc" id="s-icam-test" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Test Stream</button>
+      <button class="bs" id="s-icam-add" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Add Camera</button>
+    </div>
+  </div>
+
+  <div class="ss"><h3>Backup &amp; Restore</h3>
     <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Backup or restore your library, EPG sources/data, repositories, and settings in one file.</p>
     <div class="sr"><div><div class="sl">Backup location</div><div class="sd">Folder for backup exports</div></div><input id="s-backup-path" placeholder="Downloads/StreamVault" style="max-width:180px;font-size:9px" readonly></div>
     <div class="tv-row" data-tv-group="backup-location">
@@ -368,7 +454,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.5.10 (Build 45)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.6.0 (Build 46)<br>IPTV · Plex · iCam · Local · Network · EPG Guide · DPad TV Navigation · HLS Recording · Failover · Scheduled Recording.</p>
   </div>
 </div>
 
@@ -551,7 +637,7 @@ http://stream.example.com/cnn
 "use strict";
 
 // ─── Constants & State ───
-const VERSION = '4.5.6', BUILD = 41;
+const VERSION = '4.6.0', BUILD = 46;
 const KEYS = { items: 'sv_items_v3', repos: 'sv_repos_v2', epgSrc: 'sv_epg_src', epgData: 'sv_epg_data', settings: 'sv_settings_v2' };
 const TAG_PRI = ['', 'F', 'H', 'A', 'S'];
 
@@ -2402,15 +2488,17 @@ function renderGuide() {
   const matched = localitySort(items.filter(m => m.epgTitle && epgData.programs && epgData.programs[m.epgTitle])).slice(0, 80);
 
   if (!matched.length) {
-    wrap.innerHTML = `<div class="emp" style="height:100%"><h3>No guide data</h3><p>${!epgSrc.length ? 'Add an EPG source via the ⚙ button' : 'Tap refresh or set EPG IDs on your streams'}</p></div>`;
+    wrap.innerHTML = `<div class="emp" style="height:100%;flex:1"><h3>No guide data</h3><p>${!epgSrc.length ? 'Add an EPG source via the ⚙ button' : 'Tap refresh or set EPG IDs on your streams'}</p></div>`;
     return;
   }
 
   const now = Date.now();
   const isTv = !!isTvDevice;
-  const slotW = isTv ? 170 : 154;
-  const chW = isTv ? 150 : 136;
-  const guideRowH = isTv ? 52 : 50;
+  const slotW = isTv ? 180 : 160;
+  const chW = isTv ? 160 : 140;
+  const guideRowH = isTv ? 56 : 50;
+  const headerH = guideRowH;
+
   const startTime = new Date(now);
   startTime.setMinutes(startTime.getMinutes() < 30 ? 0 : 30, 0, 0);
   startTime.setHours(startTime.getHours() - 1);
@@ -2420,57 +2508,91 @@ function renderGuide() {
   for (let i = 0; i < 14; i++) slots.push(new Date(startMs + i * 1800000));
   const endTime = slots[13].getTime() + 1800000;
   const stripW = slotW * slots.length;
-  const minProgWidth = isTv ? 40 : 56;
-  const rowVars = `--guide-slotw:${slotW}px;--guide-chw:${chW}px;--guide-rowh:${guideRowH}px;`;
+  const minProgW = isTv ? 36 : 48;
 
-  let html = `<div style="display:flex;flex-direction:column;min-width:${chW + stripW}px;${rowVars}">`;
-
-  html += '<div style="display:grid;grid-template-columns:var(--guide-chw) ' + stripW + 'px;position:sticky;top:0;z-index:12;background:var(--bg)">';
-  html += `<div style="width:${chW}px;min-width:${chW}px;height:${guideRowH}px;padding:6px 10px;font-size:${isTv ? 9 : 8}px;color:var(--t3);border-bottom:1px solid var(--bd);position:sticky;left:0;z-index:13;background:var(--bg);display:flex;align-items:center">Channel</div>`;
-  html += `<div style="display:flex;width:${stripW}px;height:${guideRowH}px;background:var(--bg)">`;
-  slots.forEach(s => {
-    const h = s.getHours(), m = s.getMinutes();
-    html += `<div style="min-width:${slotW}px;width:${slotW}px;height:${guideRowH}px;padding:6px;font-size:${isTv ? 9 : 8}px;font-weight:700;color:var(--t3);text-align:center;border-bottom:1px solid var(--bd);border-left:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center">${h % 12 || 12}:${m.toString().padStart(2,'0')}${h >= 12 ? 'p' : 'a'}</div>`;
-  });
-  html += '</div></div>';
-
-  matched.forEach(m => {
-    const progs = getGuidePrograms(m.epgTitle, startMs, endTime);
+  // ── Left panel: channel column ──
+  let leftHtml = `<div class="guide-container"><div class="guide-left" id="guide-left" style="width:${chW}px">`;
+  leftHtml += `<div class="guide-ch-header" style="height:${headerH}px;font-size:${isTv ? 9 : 8}px">Channel</div>`;
+  matched.forEach((m, chIdx) => {
     const ch = epgData.channels[m.epgTitle];
+    leftHtml += `<div class="gch" role="button" tabindex="0" data-item-id="${m.id}" data-ch-idx="${chIdx}" onclick="playItem('${m.id}')" style="height:${guideRowH}px">`;
+    if (m.icon || (ch && ch.icon)) leftHtml += `<img src="${esc(m.icon || ch.icon)}" onerror="this.style.display='none'">`;
+    leftHtml += `<span>${esc(m.title)}</span></div>`;
+  });
+  leftHtml += `</div>`;
 
-    html += `<div class="grow" style="grid-template-columns:${chW}px ${stripW}px;height:${guideRowH}px;min-height:${guideRowH}px">`;
-    html += `<div class="gch" role="button" tabindex="-1" onclick="playItem('${m.id}')" style="width:${chW}px;min-width:${chW}px;height:${guideRowH}px">`;
-    if (m.icon || (ch && ch.icon)) html += `<img src="${esc(m.icon || ch.icon)}" onerror="this.style.display='none'">`;
-    html += `<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.title)}</span></div>`;
-    html += `<div class="guide-strip" style="width:${stripW}px;min-width:${stripW}px;height:${guideRowH}px">`;
+  // ── Right panel: time header + programs ──
+  leftHtml += `<div class="guide-right"><div class="guide-program-area" id="guide-program-area">`;
+  leftHtml += `<div class="guide-prog-wrap" style="width:${stripW}px">`;
 
-    progs.forEach(p => {
+  // Sticky time header inside program area
+  leftHtml += `<div class="guide-time-header" style="height:${headerH}px">`;
+  slots.forEach(s => {
+    const h = s.getHours(), mm = s.getMinutes();
+    leftHtml += `<div class="guide-time-slot" style="min-width:${slotW}px;width:${slotW}px;height:${headerH}px;font-size:${isTv ? 9 : 8}px">${h % 12 || 12}:${mm.toString().padStart(2,'0')}${h >= 12 ? 'p' : 'a'}</div>`;
+  });
+  leftHtml += `</div>`;
+
+  // Program rows — one per channel
+  matched.forEach((m, chIdx) => {
+    const progs = getGuidePrograms(m.epgTitle, startMs, endTime);
+    leftHtml += `<div class="guide-prog-row" data-ch-idx="${chIdx}" style="height:${guideRowH}px;width:${stripW}px">`;
+
+    progs.forEach((p, progIdx) => {
       const pStart = Math.max(p.start, startMs);
-      const pStop = Math.min(p.stop, endTime);
-      const left = Math.max(0, ((pStart - startMs) / 1800000) * slotW);
+      const pStop  = Math.min(p.stop,  endTime);
+      if (pStop <= pStart) return;
+      const left     = Math.max(0, ((pStart - startMs) / 1800000) * slotW);
       const rawWidth = ((pStop - pStart) / 1800000) * slotW;
-      const width = Math.max(minProgWidth, rawWidth);
-      const clippedWidth = Math.max(Math.min(width, stripW - left), Math.min(rawWidth, stripW - left));
-      if (clippedWidth <= 2) return;
-      const isNow = p.start <= now && p.stop > now;
-      const isPast = p.stop <= now;
-      html += `<div class="gpr${isNow ? ' now' : ''}${isPast ? ' past' : ''}" role="button" tabindex="-1" aria-label="${esc(m.title)} ${esc(p.title)}" onclick="playItem('${m.id}')" style="left:${left}px;width:${clippedWidth}px"><div class="gt">${esc(p.title)}</div><div class="gti">${fmtTime(p.start)}-${fmtTime(p.stop)}</div></div>`;
+      const width    = Math.max(minProgW, Math.min(rawWidth, stripW - left));
+      if (width < 4) return;
+      const isNow  = p.start <= now && p.stop > now;
+      const isPast = p.stop  <= now;
+      leftHtml += `<div class="gpr${isNow ? ' now' : ''}${isPast ? ' past' : ''}" role="button" tabindex="${isTv ? '0' : '-1'}" data-ch-idx="${chIdx}" data-prog-idx="${progIdx}" aria-label="${esc(p.title)}" onclick="playItem('${m.id}')" style="left:${left}px;width:${width}px">`;
+      leftHtml += `<div class="gt">${esc(p.title)}</div>`;
+      if (width > 64) leftHtml += `<div class="gti">${fmtTime(p.start)}–${fmtTime(p.stop)}</div>`;
+      leftHtml += `</div>`;
     });
 
+    // "Now" marker line
     const nowLeft = ((now - startMs) / 1800000) * slotW;
-    if (nowLeft >= 0 && nowLeft <= stripW) html += `<div class="gnl" style="left:${nowLeft}px"></div>`;
+    if (nowLeft >= 0 && nowLeft <= stripW) {
+      leftHtml += `<div class="gnl" style="left:${nowLeft}px"></div>`;
+    }
 
-    html += '</div></div>';
+    leftHtml += `</div>`;
   });
 
-  html += '</div>';
-  wrap.innerHTML = html;
+  leftHtml += `</div></div></div></div>`;
+  wrap.innerHTML = leftHtml;
 
+  // Sync vertical scroll: program area ↔ channel list
+  const guideLeft = $('guide-left');
+  const progArea  = $('guide-program-area');
+  let _guideSync = false;
+  progArea.addEventListener('scroll', () => {
+    if (_guideSync) return;
+    _guideSync = true;
+    guideLeft.scrollTop = progArea.scrollTop;
+    requestAnimationFrame(() => { _guideSync = false; });
+  }, { passive: true });
+  guideLeft.addEventListener('scroll', () => {
+    if (_guideSync) return;
+    _guideSync = true;
+    progArea.scrollTop = guideLeft.scrollTop;
+    requestAnimationFrame(() => { _guideSync = false; });
+  }, { passive: true });
+
+  // Scroll to "now" on load
   setTimeout(() => {
-    const nowOff = ((now - startMs) / 1800000) * slotW - (isTv ? 120 : 90);
-    wrap.scrollLeft = Math.max(0, nowOff);
-    if (isTvDevice) refreshTvFocus();
-  }, 100);
+    const nowOff = Math.max(0, ((now - startMs) / 1800000) * slotW - (isTv ? 140 : 100));
+    if (progArea) progArea.scrollLeft = nowOff;
+    if (isTvDevice) {
+      // Focus first channel cell
+      const firstCh = wrap.querySelector('.gch');
+      if (firstCh) focusGuideElement(firstCh);
+    }
+  }, 80);
 }
 
 // ═══ SETTINGS ═══
@@ -2746,6 +2868,117 @@ function focusWithinContainerRows(container, current, dirCode) {
     .sort((a,b) => Math.abs((a.rect.left + a.rect.width / 2) - cx) - Math.abs((b.rect.left + b.rect.width / 2) - cx));
   return targetRow.length ? focusElementAtIndex(targetRow[0].idx) : false;
 }
+// ─── Guide DPad Navigation ───
+function focusGuideElement(el) {
+  if (!el) return false;
+  document.querySelectorAll('.gch.tv-f,.gpr.tv-f').forEach(e => e.classList.remove('tv-f'));
+  el.classList.add('tv-f');
+  if (el.focus) el.focus({ preventScroll: true });
+  el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  // Keep tvFocusIndex pointing to the element if it's in the list
+  const els = getTvFocusableElements();
+  const idx = els.indexOf(el);
+  if (idx >= 0) tvFocusIndex = idx;
+  return true;
+}
+
+function scrollGuideToRow(chIdx) {
+  const guideLeft = $('guide-left');
+  const progArea  = $('guide-program-area');
+  const rowH = isTvDevice ? 56 : 50;
+  if (guideLeft) guideLeft.scrollTop = chIdx * rowH;
+  if (progArea)  progArea.scrollTop  = chIdx * rowH;
+}
+
+function handleGuideDpad(current, dirCode) {
+  const isGch  = current.classList.contains('gch');
+  const isGpr  = current.classList.contains('gpr');
+  const chIdx  = parseInt(current.dataset.chIdx  || '0');
+  const prIdx  = isGpr ? parseInt(current.dataset.progIdx || '0') : 0;
+  const total  = document.querySelectorAll('.gch').length;
+
+  // Helper: focus a guide nav item (preferring Guide tab)
+  const goToNav = () => {
+    const allEls = getTvFocusableElements();
+    const navEls = allEls.filter(el => el.closest && el.closest('#bnav'));
+    if (!navEls.length) return false;
+    const guideNav = navEls.find(el => el.dataset && el.dataset.t === 'guide-scr');
+    const target = guideNav || navEls[1] || navEls[0];
+    const idx = allEls.indexOf(target);
+    return idx >= 0 ? focusElementAtIndex(idx) : false;
+  };
+
+  if (isGch) {
+    if (dirCode === 19) { // UP
+      if (chIdx > 0) { scrollGuideToRow(chIdx-1); return focusGuideElement(document.querySelector(`.gch[data-ch-idx="${chIdx-1}"]`)); }
+      return false;
+    }
+    if (dirCode === 20) { // DOWN
+      if (chIdx < total - 1) { scrollGuideToRow(chIdx+1); return focusGuideElement(document.querySelector(`.gch[data-ch-idx="${chIdx+1}"]`)); }
+      return goToNav(); // last channel → bottom nav
+    }
+    if (dirCode === 22) { // RIGHT → first prog in this row
+      const first = document.querySelector(`.gpr[data-ch-idx="${chIdx}"]`);
+      if (first) return focusGuideElement(first);
+      return false;
+    }
+    if (dirCode === 21) { // LEFT → go to previous channel
+      if (chIdx > 0) { scrollGuideToRow(chIdx-1); return focusGuideElement(document.querySelector(`.gch[data-ch-idx="${chIdx-1}"]`)); }
+      return false;
+    }
+  }
+
+  if (isGpr) {
+    if (dirCode === 22) { // RIGHT → next prog same row
+      const next = document.querySelector(`.gpr[data-ch-idx="${chIdx}"][data-prog-idx="${prIdx+1}"]`);
+      if (next) return focusGuideElement(next);
+      return false;
+    }
+    if (dirCode === 21) { // LEFT → prev prog, or back to channel cell
+      if (prIdx > 0) {
+        const prev = document.querySelector(`.gpr[data-ch-idx="${chIdx}"][data-prog-idx="${prIdx-1}"]`);
+        if (prev) return focusGuideElement(prev);
+      }
+      const ch = document.querySelector(`.gch[data-ch-idx="${chIdx}"]`);
+      if (ch) { scrollGuideToRow(chIdx); return focusGuideElement(ch); }
+      return false;
+    }
+    if (dirCode === 19) { // UP → same horizontal pos in prev channel
+      if (chIdx > 0) {
+        const rect = current.getBoundingClientRect();
+        const cx   = rect.left + rect.width / 2;
+        let best = null, bestD = Infinity;
+        document.querySelectorAll(`.gpr[data-ch-idx="${chIdx-1}"]`).forEach(p => {
+          const r = p.getBoundingClientRect();
+          const d = Math.abs((r.left + r.width/2) - cx);
+          if (d < bestD) { bestD = d; best = p; }
+        });
+        const target = best || document.querySelector(`.gch[data-ch-idx="${chIdx-1}"]`);
+        if (target) { scrollGuideToRow(chIdx-1); return focusGuideElement(target); }
+      }
+      return false;
+    }
+    if (dirCode === 20) { // DOWN → same horizontal pos in next channel
+      if (chIdx < total - 1) {
+        const rect = current.getBoundingClientRect();
+        const cx   = rect.left + rect.width / 2;
+        let best = null, bestD = Infinity;
+        document.querySelectorAll(`.gpr[data-ch-idx="${chIdx+1}"]`).forEach(p => {
+          const r = p.getBoundingClientRect();
+          const d = Math.abs((r.left + r.width/2) - cx);
+          if (d < bestD) { bestD = d; best = p; }
+        });
+        const target = best || document.querySelector(`.gch[data-ch-idx="${chIdx+1}"]`);
+        if (target) { scrollGuideToRow(chIdx+1); return focusGuideElement(target); }
+      } else {
+        return goToNav(); // last channel → bottom nav
+      }
+      return false;
+    }
+  }
+  return false;
+}
+
 function moveTvFocusSpatial(dirCode) {
   const els = getTvFocusableElements();
   if (!els.length) return false;
@@ -2757,6 +2990,12 @@ function moveTvFocusSpatial(dirCode) {
   const cx = currentRect.left + currentRect.width / 2;
   const cy = currentRect.top + currentRect.height / 2;
   const currentZone = getTvZone(current);
+
+  // Guide-page: dedicated DPad handler for channel + program cells
+  if ($('guide-scr') && $('guide-scr').classList.contains('on') &&
+      current.classList && (current.classList.contains('gch') || current.classList.contains('gpr'))) {
+    return handleGuideDpad(current, dirCode);
+  }
 
   if (current && current.tagName && current.tagName.toLowerCase() === 'select' && (dirCode === 21 || dirCode === 22)) {
     return cycleSelectOption(current, dirCode === 22 ? 1 : -1);
@@ -2984,7 +3223,7 @@ function renderTabOrderSettings() {
   if (!host) return;
   const labels = { itv:'ITV', plex:'PlexStr', icam:'iCam', local:'Local', network:'Network' };
   const order = getTabOrder();
-  host.innerHTML = order.map((id, i) => `<div class="lr"><div><div class="ln">${labels[id]}</div><div class="lm">${id === 'itv' ? 'IPTV / stream URLs' : id === 'plex' ? 'Plex library streams' : 'RTSP / camera streams'}</div></div><div class="lra">${i > 0 ? '<button onclick="moveTabOrder(' + i + ',-1)">↑</button>' : ''}${i < order.length - 1 ? '<button onclick="moveTabOrder(' + i + ',1)">↓</button>' : ''}</div></div>`).join('');
+  host.innerHTML = order.map((id, i) => `<div class="lr"><div class="ln" style="font-size:9px;font-weight:600">${labels[id]}</div><div class="lra">${i > 0 ? '<button onclick="moveTabOrder(' + i + ',-1)">↑</button>' : ''}${i < order.length - 1 ? '<button onclick="moveTabOrder(' + i + ',1)">↓</button>' : ''}</div></div>`).join('');
 }
 
 function renderSettings() {
@@ -3117,7 +3356,88 @@ function renderSettings() {
     toast('Plex settings cleared');
   };
 
-  // Localities
+  // ─── Local Videos ───
+  const localEnableTgl = $('s-local-enable');
+  if (localEnableTgl) {
+    if (settings.localEnable === undefined) settings.localEnable = true;
+    localEnableTgl.className = 'tgl' + (settings.localEnable ? ' on' : '');
+    localEnableTgl.onclick = () => { settings.localEnable = !settings.localEnable; localEnableTgl.className = 'tgl' + (settings.localEnable ? ' on' : ''); saveSettings(); };
+  }
+  const localPathEl = $('s-local-path');
+  if (localPathEl) localPathEl.value = (settings.localPath || '');
+  const localPickBtn = $('s-local-pick');
+  if (localPickBtn) localPickBtn.onclick = () => {
+    if (window.NativePlayer && typeof window.NativePlayer.pickLocalDirectory === 'function') window.NativePlayer.pickLocalDirectory();
+    else toast('Folder picker available in Android app build');
+  };
+  const localScanBtn = $('s-local-scan');
+  if (localScanBtn) localScanBtn.onclick = () => toast('Video scan initiated — results appear in Local tab');
+
+  // ─── Network (SMB / FTP) ───
+  const netScanAutoTgl = $('s-net-scan-auto');
+  if (netScanAutoTgl) {
+    if (!settings.networkCfg) settings.networkCfg = {};
+    netScanAutoTgl.className = 'tgl' + (settings.networkCfg.lanScanAuto ? ' on' : '');
+    netScanAutoTgl.onclick = () => { settings.networkCfg.lanScanAuto = !settings.networkCfg.lanScanAuto; netScanAutoTgl.className = 'tgl' + (settings.networkCfg.lanScanAuto ? ' on' : ''); saveSettings(); };
+  }
+  if ($('s-net-scan-now')) $('s-net-scan-now').onclick = () => { const st = $('s-net-scan-status'); if (st) { st.value = 'Scanning…'; setTimeout(() => { st.value = 'Done — use Network tab to browse'; }, 2000); } };
+  ['s-smb-host','s-smb-share','s-smb-user','s-smb-pass','s-ftp-host','s-ftp-port','s-ftp-user','s-ftp-pass'].forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    if (!settings.networkCfg) settings.networkCfg = {};
+    el.value = settings.networkCfg[id] || '';
+    el.onchange = () => { settings.networkCfg[id] = el.value; saveSettings(); };
+  });
+  if ($('s-smb-test')) $('s-smb-test').onclick = () => toast('SMB connection test available in Android app build');
+  if ($('s-smb-add')) $('s-smb-add').onclick = () => {
+    const host = ($('s-smb-host') && $('s-smb-host').value) || 'host';
+    const share = ($('s-smb-share') && $('s-smb-share').value) || 'share';
+    openAddStreamPreset({ name: host + '/' + share, url: 'smb://' + host + '/' + share, category: 'Network' });
+  };
+  if ($('s-ftp-test')) $('s-ftp-test').onclick = () => toast('FTP connection test available in Android app build');
+  if ($('s-ftp-add')) $('s-ftp-add').onclick = () => {
+    let host = ($('s-ftp-host') && $('s-ftp-host').value) || '';
+    if (host && !host.startsWith('ftp')) host = 'ftp://' + host;
+    openAddStreamPreset({ name: host || 'FTP Source', url: host || 'ftp://', category: 'Network' });
+  };
+
+  // ─── iCam ───
+  if (!settings.icamCfg) settings.icamCfg = {};
+  const icamProto = $('s-icam-proto');
+  if (icamProto) {
+    icamProto.value = settings.icamCfg.proto || 'rtsp';
+    const onvifPanel = $('s-icam-onvif-panel');
+    const syncOnvif = () => { if (onvifPanel) onvifPanel.style.display = icamProto.value === 'onvif' ? 'block' : 'none'; };
+    syncOnvif();
+    icamProto.onchange = () => { settings.icamCfg.proto = icamProto.value; saveSettings(); syncOnvif(); };
+  }
+  ['s-icam-host','s-icam-port','s-icam-user','s-icam-pass','s-icam-name'].forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    el.value = settings.icamCfg[id] || '';
+    el.onchange = () => { settings.icamCfg[id] = el.value; saveSettings(); };
+  });
+  if ($('s-icam-discover')) $('s-icam-discover').onclick = () => { $('s-icam-profiles').textContent = 'ONVIF discovery available in Android app build'; };
+  if ($('s-icam-test')) $('s-icam-test').onclick = () => toast('Open stream test available in Android app build');
+  if ($('s-icam-add')) $('s-icam-add').onclick = () => {
+    const proto = ($('s-icam-proto') && $('s-icam-proto').value) || 'rtsp';
+    const host  = ($('s-icam-host') && $('s-icam-host').value) || '';
+    const port  = ($('s-icam-port') && $('s-icam-port').value) || (proto === 'rtsp' ? '554' : proto === 'rtmp' ? '1935' : '8554');
+    const user  = ($('s-icam-user') && $('s-icam-user').value) || '';
+    const pass  = ($('s-icam-pass') && $('s-icam-pass').value) || '';
+    const name  = ($('s-icam-name') && $('s-icam-name').value) || 'IP Camera';
+    if (!host) { toast('Enter a camera host or URL'); return; }
+    let url;
+    if (host.includes('://')) {
+      url = host;
+    } else {
+      const auth = user ? (encodeURIComponent(user) + (pass ? ':' + encodeURIComponent(pass) : '') + '@') : '';
+      url = proto + '://' + auth + host + ':' + port + '/stream';
+    }
+    openAddStreamPreset({ name, url, category: 'iCam' });
+  };
+
+  // Localities & Schedules
   renderLocalities();
   // Schedules
   renderSchedules();

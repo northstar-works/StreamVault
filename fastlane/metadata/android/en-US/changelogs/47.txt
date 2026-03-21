@@ -1,0 +1,20 @@
+StreamVault v4.6.0 (Build 47)
+
+Guide:
+- Fixed channel column — now permanently pinned to the left via two-panel layout; channel column never scrolls horizontally
+- Fixed EPG program rendering: corrected width calculation for programs crossing the window boundary, text clipping, time labels hidden on narrow slots
+- TV DPad guide navigation: Down/Up moves between channels; Right enters program strip; Left in program strip returns to channel column, second Left goes to previous channel; Down from last channel lands on bottom nav
+
+TV / Fire TV:
+- Guide DPad handles all direction keys with spatial awareness (finds nearest program in adjacent channel row)
+- Bottom nav reachable by pressing Down from last guide channel
+
+Home Tabs:
+- Sortable tab list in Settings: removed sub-descriptions, reduced label font size for cleaner layout
+
+Settings — new sections:
+- Local Videos: toggle local file browsing, choose default folder, scan for videos
+- Network Sources: LAN auto-scan, Samba/SMB host/share/credentials, FTP host/port/credentials with Browse & Add shortcuts
+- iCam — IP Cameras: RTSP / ONVIF / RTMP / SRT config with host, port, credentials, stream name, ONVIF profile discovery panel
+
+Version bump: v4.5.x → v4.6.0
