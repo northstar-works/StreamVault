@@ -63,8 +63,8 @@ body.tv-mode .hd{padding-top:10px}
 .px-row button{padding:7px 9px;border-radius:var(--rs);border:none;cursor:pointer;background:var(--ac);color:#fff;font-size:9px;font-weight:700}
 
 /* Pills */
-.pls{display:flex;gap:3px;padding:3px 16px 5px;overflow-x:auto;-webkit-overflow-scrolling:touch}.pls::-webkit-scrollbar{display:none}
-.pl{padding:4px 8px;border-radius:8px;font-size:8px;font-weight:600;white-space:nowrap;cursor:pointer;background:var(--c1);border:1px solid var(--bd);color:var(--t2);flex-shrink:0}
+.pls{display:flex;gap:3px;padding:2px 16px 3px;overflow-x:auto;-webkit-overflow-scrolling:touch;align-items:center}.pls::-webkit-scrollbar{display:none}
+.pl{padding:2px 8px;border-radius:7px;font-size:8px;font-weight:600;white-space:nowrap;cursor:pointer;background:var(--c1);border:1px solid var(--bd);color:var(--t2);flex-shrink:0;line-height:1.1;min-height:24px;display:inline-flex;align-items:center}
 .pl.on{background:var(--ac);color:#fff;border-color:var(--ac)}
 
 /* Lists & Items */
@@ -149,18 +149,18 @@ body.tv-mode .hd{padding-top:10px}
 
 /* Guide */
 .gw{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}.gw::-webkit-scrollbar{display:none}
-.grow{display:flex;min-height:36px;border-bottom:1px solid rgba(255,255,255,.12)}
-.gch{width:112px;min-width:112px;padding:4px 6px;display:flex;align-items:center;gap:4px;background:linear-gradient(90deg,var(--c1),var(--c1));position:sticky;left:0;z-index:8;border-right:1px solid rgba(255,255,255,.14);cursor:pointer;font-size:8px;font-weight:600}
+.grow{display:flex;height:27px;min-height:27px;border-bottom:1px solid rgba(255,255,255,.16)}
+.gch{width:112px;min-width:112px;padding:3px 6px;display:flex;align-items:center;gap:4px;background:linear-gradient(90deg,var(--c1),var(--c1));position:sticky;left:0;z-index:8;border-right:1px solid rgba(255,255,255,.18);cursor:pointer;font-size:8px;font-weight:600;height:27px;overflow:hidden}
 .gch:active{background:var(--c2)}
-.gch img{width:20px;height:20px;border-radius:3px;flex-shrink:0;object-fit:cover}
-.gpr{position:absolute;top:0;bottom:0;padding:3px 5px;border-right:1px solid rgba(255,255,255,.09);overflow:hidden;display:flex;flex-direction:column;justify-content:center;font-size:8px;background:rgba(255,255,255,.015)}
-.gpr .gt{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.gpr .gti{font-size:6px;color:var(--t3)}
+.gch img{width:16px;height:16px;border-radius:3px;flex-shrink:0;object-fit:cover}
+.gpr{position:absolute;top:0;bottom:0;padding:2px 4px;border-right:1px solid rgba(255,255,255,.11);overflow:hidden;display:flex;flex-direction:column;justify-content:center;font-size:7px;background:rgba(255,255,255,.02)}
+.gpr .gt{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.05}
+.gpr .gti{font-size:5px;color:var(--t3);line-height:1}
 .gpr.now{background:rgba(108,92,231,.1);border-left:2px solid var(--ac)}
 .gpr.past{opacity:.4}
 .gnl{position:absolute;top:0;bottom:0;width:2px;background:var(--rd);z-index:4;pointer-events:none}
 
-.guide-strip{position:relative;flex:1;min-width:2240px;background:linear-gradient(180deg,rgba(255,255,255,.01),rgba(255,255,255,0))}
+.guide-strip{position:relative;flex:1;min-width:2240px;background:linear-gradient(180deg,rgba(255,255,255,.01),rgba(255,255,255,0));height:27px}
 .px-note{font-size:8px;color:var(--t2);margin-top:6px;line-height:1.4}
 
 /* EPG Cards */
@@ -366,7 +366,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.5.5 (Build 40)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.5.6 (Build 41)<br>IPTV player with URL repos, failover, EPG guide, HLS recording, scheduled recording, stream buffer control &amp; locality priorities.</p>
   </div>
 </div>
 
@@ -549,7 +549,7 @@ http://stream.example.com/cnn
 "use strict";
 
 // ─── Constants & State ───
-const VERSION = '4.5.5', BUILD = 40;
+const VERSION = '4.5.6', BUILD = 41;
 const KEYS = { items: 'sv_items_v3', repos: 'sv_repos_v2', epgSrc: 'sv_epg_src', epgData: 'sv_epg_data', settings: 'sv_settings_v2' };
 const TAG_PRI = ['', 'F', 'H', 'A', 'S'];
 
@@ -2386,7 +2386,7 @@ function renderGuide() {
   }
 
   const now = Date.now();
-  const slotW = 160, chW = 100;
+  const slotW = 160, chW = 112, guideRowH = 27;
   const startTime = new Date(now);
   startTime.setMinutes(startTime.getMinutes() < 30 ? 0 : 30, 0, 0);
   startTime.setHours(startTime.getHours() - 1);
@@ -2399,10 +2399,10 @@ function renderGuide() {
 
   // Time header
   html += '<div style="display:flex;position:sticky;top:0;z-index:5;background:var(--bg)">';
-  html += `<div style="width:${chW}px;min-width:${chW}px;padding:3px 4px;font-size:7px;color:var(--t3);border-bottom:1px solid var(--bd);position:sticky;left:0;z-index:6;background:var(--bg)">Channel</div>`;
+  html += `<div style="width:${chW}px;min-width:${chW}px;height:${guideRowH}px;padding:3px 6px;font-size:7px;color:var(--t3);border-bottom:1px solid var(--bd);position:sticky;left:0;z-index:6;background:var(--bg);display:flex;align-items:center">Channel</div>`;
   slots.forEach(s => {
     const h = s.getHours(), m = s.getMinutes();
-    html += `<div style="min-width:${slotW}px;width:${slotW}px;padding:3px;font-size:7px;font-weight:600;color:var(--t3);text-align:center;border-bottom:1px solid var(--bd);border-left:1px solid var(--bd)">${h % 12 || 12}:${m.toString().padStart(2,'0')}${h >= 12 ? 'p' : 'a'}</div>`;
+    html += `<div style="min-width:${slotW}px;width:${slotW}px;height:${guideRowH}px;padding:3px;font-size:7px;font-weight:600;color:var(--t3);text-align:center;border-bottom:1px solid var(--bd);border-left:1px solid var(--bd);display:flex;align-items:center;justify-content:center">${h % 12 || 12}:${m.toString().padStart(2,'0')}${h >= 12 ? 'p' : 'a'}</div>`;
   });
   html += '</div>';
 
@@ -2628,6 +2628,49 @@ function focusWithinGroupRow(current, dirCode) {
   if (dirCode === 22 && idx < els.length - 1) return focusElementAtIndex(getTvFocusableElements().indexOf(els[idx+1]));
   return false;
 }
+
+function isLandscapeHomeGridActive() {
+  try {
+    return $('home-scr') && $('home-scr').classList.contains('on') && $('lib-lst') && $('lib-lst').classList.contains('home-grid') && window.matchMedia && window.matchMedia('(orientation: landscape)').matches;
+  } catch (e) { return false; }
+}
+function getChannelListSpatialCandidates() {
+  return getTvFocusableElements()
+    .map((el, idx) => ({ el, idx, rect: el.getBoundingClientRect() }))
+    .filter(x => x.el && x.el.classList && x.el.classList.contains('itm') && getTvZone(x.el) === 'channel-list');
+}
+function focusHomeGridHorizontal(current, dirCode) {
+  if (!isLandscapeHomeGridActive() || !current || !current.classList || !current.classList.contains('itm')) return false;
+  const currentRect = current.getBoundingClientRect();
+  const cx = currentRect.left + currentRect.width / 2;
+  const cy = currentRect.top + currentRect.height / 2;
+  const candidates = getChannelListSpatialCandidates().filter(x => x.el !== current);
+  if (!candidates.length) return false;
+  const rowBand = Math.max(42, currentRect.height * 1.2);
+  const sameRow = candidates.filter(({ rect }) => Math.abs((rect.top + rect.height / 2) - cy) <= rowBand);
+  if (dirCode === 22) {
+    const right = sameRow.filter(({ rect }) => (rect.left + rect.width / 2) > cx + 10).sort((a,b) => a.rect.left - b.rect.left);
+    if (right.length) return focusElementAtIndex(right[0].idx);
+    const belowLeft = candidates.filter(({ rect }) => (rect.top + rect.height / 2) > cy + 10).sort((a,b) => {
+      const ay = a.rect.top - currentRect.top;
+      const by = b.rect.top - currentRect.top;
+      if (ay !== by) return ay - by;
+      return a.rect.left - b.rect.left;
+    });
+    if (belowLeft.length) {
+      const list = $('lib-lst');
+      if (list && typeof list.scrollBy === 'function') list.scrollBy({ top: Math.max(list.clientHeight * 0.72, 180), behavior: 'smooth' });
+      return focusElementAtIndex(belowLeft[0].idx);
+    }
+    return false;
+  }
+  if (dirCode === 21) {
+    const left = sameRow.filter(({ rect }) => (rect.left + rect.width / 2) < cx - 10).sort((a,b) => b.rect.left - a.rect.left);
+    if (left.length) return focusElementAtIndex(left[0].idx);
+    return false;
+  }
+  return false;
+}
 function moveTvFocusSpatial(dirCode) {
   const els = getTvFocusableElements();
   if (!els.length) return false;
@@ -2656,9 +2699,13 @@ function moveTvFocusSpatial(dirCode) {
     if (dirCode === 20) return focusNearestInSelector('.itm[data-tv-zone=\"channel-list\"]', current, true);
   }
   if (currentZone === 'channel-list') {
+    if ((dirCode === 21 || dirCode === 22) && focusHomeGridHorizontal(current, dirCode)) return true;
     if (dirCode === 22) {
       if (libEditMode) return focusNearestInSelector('.itm .ab button', current, true);
       return false;
+    }
+    if (dirCode === 21 && libEditMode && current && current.closest && current.closest('.ab')) {
+      return focusNearestInSelector('.itm[data-tv-zone="channel-list"]', current, true);
     }
   }
   if (current && current.closest && current.closest('.ab')) {
