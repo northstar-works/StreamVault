@@ -249,8 +249,8 @@ body.tv-mode .hd{padding-top:10px}
 .ld2{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:5}
 .spn{width:32px;height:32px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--ac);border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
-body.tv-mode .bnav .ni,body.tv-mode button,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode .epg-opt,body.tv-mode .lmb,body.tv-mode .pl,body.tv-mode .tgl,body.tv-mode .ib,body.tv-mode .gch,body.tv-mode .gpr,[role="button"]{outline:none;transition:box-shadow .12s ease,transform .12s ease,background .12s ease,border-color .12s ease}
-body.tv-mode .tv-f,body.tv-mode .ni:focus,body.tv-mode button:focus,body.tv-mode input:focus,body.tv-mode textarea:focus,body.tv-mode select:focus,body.tv-mode .itm:focus,body.tv-mode .rc:focus,body.tv-mode .ri:focus,body.tv-mode .epg-opt:focus,body.tv-mode .lmb:focus,body.tv-mode .pl:focus,body.tv-mode .tgl:focus,body.tv-mode .ib:focus,body.tv-mode .gch:focus,body.tv-mode .gpr:focus,[role="button"]:focus{box-shadow:0 0 0 2px rgba(108,92,231,.98),0 0 0 4px rgba(108,92,231,.28),0 0 12px rgba(108,92,231,.22)!important;transform:scale(1.008);background-image:linear-gradient(0deg,rgba(108,92,231,.10),rgba(108,92,231,.10));border-color:rgba(108,92,231,.98)!important}
+body.tv-mode .bnav .ni,body.tv-mode button,body.tv-mode .acc-hdr,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode .epg-opt,body.tv-mode .lmb,body.tv-mode .pl,body.tv-mode .tgl,body.tv-mode .ib,body.tv-mode .gch,body.tv-mode .gpr,[role="button"]{outline:none;transition:box-shadow .12s ease,transform .12s ease,background .12s ease,border-color .12s ease}
+body.tv-mode .tv-f,body.tv-mode .ni:focus,body.tv-mode button:focus,body.tv-mode .acc-hdr:focus,body.tv-mode input:focus,body.tv-mode textarea:focus,body.tv-mode select:focus,body.tv-mode .itm:focus,body.tv-mode .rc:focus,body.tv-mode .ri:focus,body.tv-mode .epg-opt:focus,body.tv-mode .lmb:focus,body.tv-mode .pl:focus,body.tv-mode .tgl:focus,body.tv-mode .ib:focus,body.tv-mode .gch:focus,body.tv-mode .gpr:focus,[role="button"]:focus{box-shadow:0 0 0 2px rgba(108,92,231,.98),0 0 0 4px rgba(108,92,231,.28),0 0 12px rgba(108,92,231,.22)!important;transform:scale(1.008);background-image:linear-gradient(0deg,rgba(108,92,231,.10),rgba(108,92,231,.10));border-color:rgba(108,92,231,.98)!important}
 body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .pl,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode button,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .ib,[role="button"]{min-height:44px;position:relative}
 body.tv-mode .gch,body.tv-mode .gpr{min-height:0}
 body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.tv-mode .px-grid{scroll-margin-top:70px}
@@ -267,7 +267,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
 
 <!-- ═══ LIBRARY ═══ -->
 <div id="lib-scr" class="scr on">
-  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b48</span>
+  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b49</span>
     <button class="ib" id="btn-lib-edit" title="Toggle edit controls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
     <button class="ib" id="btn-add-top" title="Add stream"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
     <button class="ib" id="btn-exp" title="Export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
@@ -352,80 +352,89 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
       </div>
     </div>
   </div>
-  <div class="ss"><h3>Local Videos</h3>
-    <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Configure on-device video sources. Added files appear in the Local tab.</p>
-    <div class="sr"><div><div class="sl">Enable local file browsing</div><div class="sd">Browse device storage for video files</div></div><div class="tgl on" id="s-local-enable"></div></div>
-    <div class="sr" style="margin-top:4px"><div><div class="sl">Default local folder</div><div class="sd">Starting folder for file browser</div></div><input id="s-local-path" placeholder="Movies, Downloads…" style="max-width:150px;font-size:9px" readonly></div>
-    <div class="tv-row" data-tv-group="local-folder" style="margin-top:8px">
-      <button class="bc" id="s-local-pick" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Choose Folder</button>
-      <button class="bs" id="s-local-scan" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Scan for Videos</button>
-    </div>
-    <p style="font-size:9px;color:var(--t2);margin-top:6px">Supports MP4, MKV, AVI, MOV, TS. Use the Local tab to add individual files.</p>
-  </div>
-
-  <div class="ss"><h3>Network Sources</h3>
-    <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Access media from LAN shares, Samba/SMB, and FTP servers. Added sources appear in the Network tab.</p>
-    <div style="font-size:9px;color:var(--ac);font-weight:700;margin-bottom:6px">LAN Discovery</div>
-    <div class="sr"><div><div class="sl">Auto-scan local network</div><div class="sd">Discover media servers on your LAN at startup</div></div><div class="tgl" id="s-net-scan-auto"></div></div>
-    <div class="tv-row" data-tv-group="lan-scan" style="margin-top:6px">
-      <button class="bc" id="s-net-scan-now" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Scan Now</button>
-      <input id="s-net-scan-status" placeholder="Not scanned" style="max-width:150px;font-size:9px" readonly>
-    </div>
-    <div style="font-size:9px;color:var(--ac);font-weight:700;margin:12px 0 6px">Samba / SMB</div>
-    <div class="rw">
-      <div><label>Host / IP</label><input id="s-smb-host" placeholder="192.168.1.10"></div>
-      <div><label>Share name</label><input id="s-smb-share" placeholder="Media"></div>
-    </div>
-    <div class="rw">
-      <div><label>Username</label><input id="s-smb-user" placeholder="Optional" autocomplete="username"></div>
-      <div><label>Password</label><input id="s-smb-pass" type="password" placeholder="Optional" autocomplete="current-password"></div>
-    </div>
-    <div class="tv-row" data-tv-group="smb-actions">
-      <button class="bc" id="s-smb-test" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Test SMB</button>
-      <button class="bs" id="s-smb-add" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Browse &amp; Add</button>
-    </div>
-    <div style="font-size:9px;color:var(--ac);font-weight:700;margin:12px 0 6px">FTP</div>
-    <div class="rw">
-      <div><label>FTP Host / URL</label><input id="s-ftp-host" placeholder="ftp://192.168.1.10"></div>
-      <div><label>Port</label><input id="s-ftp-port" placeholder="21" type="number" style="max-width:80px"></div>
-    </div>
-    <div class="rw">
-      <div><label>Username</label><input id="s-ftp-user" placeholder="anonymous" autocomplete="username"></div>
-      <div><label>Password</label><input id="s-ftp-pass" type="password" placeholder="Optional" autocomplete="current-password"></div>
-    </div>
-    <div class="tv-row" data-tv-group="ftp-actions">
-      <button class="bc" id="s-ftp-test" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Test FTP</button>
-      <button class="bs" id="s-ftp-add" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Browse &amp; Add</button>
+  <div class="ss acc" id="acc-local">
+    <button class="acc-hdr" onclick="toggleAcc('acc-local')">📁 Local Videos<span class="acc-chev">›</span></button>
+    <div class="acc-body">
+      <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Configure on-device video sources. Added files appear in the Local tab.</p>
+      <div class="sr"><div><div class="sl">Enable local file browsing</div><div class="sd">Browse device storage for video files</div></div><div class="tgl on" id="s-local-enable"></div></div>
+      <div class="sr" style="margin-top:4px"><div><div class="sl">Default local folder</div><div class="sd">Starting folder for file browser</div></div><input id="s-local-path" placeholder="Movies, Downloads…" style="max-width:150px;font-size:9px" readonly></div>
+      <div class="tv-row" data-tv-group="local-folder" style="margin-top:8px">
+        <button class="bc" id="s-local-pick" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Choose Folder</button>
+        <button class="bs" id="s-local-scan" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Scan for Videos</button>
+      </div>
+      <p style="font-size:9px;color:var(--t2);margin-top:6px">Supports MP4, MKV, AVI, MOV, TS.</p>
     </div>
   </div>
 
-  <div class="ss"><h3>iCam — IP Cameras</h3>
-    <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Add IP cameras via RTSP, ONVIF, RTMP, or SRT. Added cameras appear in the iCam tab.</p>
-    <div class="sr"><div><div class="sl">Protocol</div><div class="sd">Connection method for the camera</div></div>
-      <select id="s-icam-proto">
-        <option value="rtsp">RTSP</option>
-        <option value="onvif">ONVIF</option>
-        <option value="rtmp">RTMP</option>
-        <option value="srt">SRT</option>
-      </select>
+  <div class="ss acc" id="acc-network">
+    <button class="acc-hdr" onclick="toggleAcc('acc-network')">🌐 Network Sources<span class="acc-chev">›</span></button>
+    <div class="acc-body">
+      <p style="font-size:9px;color:var(--t2);margin-bottom:8px">LAN shares, Samba/SMB, and FTP. Added sources appear in the Network tab.</p>
+      <div style="font-size:9px;color:var(--ac);font-weight:700;margin-bottom:6px">LAN Discovery</div>
+      <div class="sr"><div><div class="sl">Auto-scan local network</div><div class="sd">Discover media servers at startup</div></div><div class="tgl" id="s-net-scan-auto"></div></div>
+      <div class="tv-row" data-tv-group="lan-scan" style="margin-top:6px">
+        <button class="bc" id="s-net-scan-now" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Scan Now</button>
+        <input id="s-net-scan-status" placeholder="Not scanned" style="max-width:150px;font-size:9px" readonly>
+      </div>
+      <div style="font-size:9px;color:var(--ac);font-weight:700;margin:12px 0 6px">Samba / SMB</div>
+      <div class="rw">
+        <div><label>Host / IP</label><input id="s-smb-host" placeholder="192.168.1.10"></div>
+        <div><label>Share name</label><input id="s-smb-share" placeholder="Media"></div>
+      </div>
+      <div class="rw">
+        <div><label>Username</label><input id="s-smb-user" placeholder="Optional" autocomplete="username"></div>
+        <div><label>Password</label><input id="s-smb-pass" type="password" placeholder="Optional" autocomplete="current-password"></div>
+      </div>
+      <div class="tv-row" data-tv-group="smb-actions">
+        <button class="bc" id="s-smb-test" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Test SMB</button>
+        <button class="bs" id="s-smb-add" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Browse &amp; Add</button>
+      </div>
+      <div style="font-size:9px;color:var(--ac);font-weight:700;margin:12px 0 6px">FTP</div>
+      <div class="rw">
+        <div><label>FTP Host / URL</label><input id="s-ftp-host" placeholder="ftp://192.168.1.10"></div>
+        <div><label>Port</label><input id="s-ftp-port" placeholder="21" type="number" style="max-width:80px"></div>
+      </div>
+      <div class="rw">
+        <div><label>Username</label><input id="s-ftp-user" placeholder="anonymous" autocomplete="username"></div>
+        <div><label>Password</label><input id="s-ftp-pass" type="password" placeholder="Optional" autocomplete="current-password"></div>
+      </div>
+      <div class="tv-row" data-tv-group="ftp-actions">
+        <button class="bc" id="s-ftp-test" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Test FTP</button>
+        <button class="bs" id="s-ftp-add" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Browse &amp; Add</button>
+      </div>
     </div>
-    <div class="rw" style="margin-top:6px">
-      <div style="flex:2"><label>Camera Host / Stream URL</label><input id="s-icam-host" placeholder="192.168.1.50 or rtsp://…/stream"></div>
-      <div><label>Port</label><input id="s-icam-port" placeholder="554" type="number" style="max-width:80px"></div>
-    </div>
-    <div class="rw">
-      <div><label>Username</label><input id="s-icam-user" placeholder="admin" autocomplete="username"></div>
-      <div><label>Password</label><input id="s-icam-pass" type="password" placeholder="••••••" autocomplete="current-password"></div>
-    </div>
-    <div><label>Camera / Stream Name</label><input id="s-icam-name" placeholder="Front Door, Driveway…"></div>
-    <div id="s-icam-onvif-panel" style="display:none;margin-top:8px;padding:8px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs)">
-      <div style="font-size:9px;color:var(--t2);margin-bottom:6px">ONVIF: discover stream profiles from the device</div>
-      <button class="bc" id="s-icam-discover" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Discover Profiles</button>
-      <div id="s-icam-profiles" style="margin-top:6px;font-size:9px;color:var(--t3)"></div>
-    </div>
-    <div class="tv-row" data-tv-group="icam-actions" style="margin-top:8px">
-      <button class="bc" id="s-icam-test" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Test Stream</button>
-      <button class="bs" id="s-icam-add" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Add Camera</button>
+  </div>
+
+  <div class="ss acc" id="acc-icam">
+    <button class="acc-hdr" onclick="toggleAcc('acc-icam')">📷 iCam — IP Cameras<span class="acc-chev">›</span></button>
+    <div class="acc-body">
+      <p style="font-size:9px;color:var(--t2);margin-bottom:6px">RTSP, ONVIF, RTMP, or SRT cameras. Added cameras appear in the iCam tab.</p>
+      <div class="sr"><div><div class="sl">Protocol</div><div class="sd">Connection method</div></div>
+        <select id="s-icam-proto">
+          <option value="rtsp">RTSP</option>
+          <option value="onvif">ONVIF</option>
+          <option value="rtmp">RTMP</option>
+          <option value="srt">SRT</option>
+        </select>
+      </div>
+      <div class="rw" style="margin-top:6px">
+        <div style="flex:2"><label>Camera Host / URL</label><input id="s-icam-host" placeholder="192.168.1.50 or rtsp://…/stream"></div>
+        <div><label>Port</label><input id="s-icam-port" placeholder="554" type="number" style="max-width:80px"></div>
+      </div>
+      <div class="rw">
+        <div><label>Username</label><input id="s-icam-user" placeholder="admin" autocomplete="username"></div>
+        <div><label>Password</label><input id="s-icam-pass" type="password" placeholder="••••••" autocomplete="current-password"></div>
+      </div>
+      <div><label>Camera Name</label><input id="s-icam-name" placeholder="Front Door, Driveway…"></div>
+      <div id="s-icam-onvif-panel" style="display:none;margin-top:8px;padding:8px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs)">
+        <div style="font-size:9px;color:var(--t2);margin-bottom:6px">ONVIF: discover stream profiles</div>
+        <button class="bc" id="s-icam-discover" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Discover Profiles</button>
+        <div id="s-icam-profiles" style="margin-top:6px;font-size:9px;color:var(--t3)"></div>
+      </div>
+      <div class="tv-row" data-tv-group="icam-actions" style="margin-top:8px">
+        <button class="bc" id="s-icam-test" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Test Stream</button>
+        <button class="bs" id="s-icam-add" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Add Camera</button>
+      </div>
     </div>
   </div>
 
@@ -456,7 +465,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.6.1 (Build 48)<br>IPTV · Plex · iCam · Local · Network · EPG Guide · DPad TV Navigation · HLS Recording · Failover · Scheduled Recording.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.6.2 (Build 49)<br>IPTV · Plex · iCam · Local · Network · EPG Guide · DPad TV Navigation · HLS Recording · Failover · Scheduled Recording.</p>
   </div>
 </div>
 
@@ -639,7 +648,7 @@ http://stream.example.com/cnn
 "use strict";
 
 // ─── Constants & State ───
-const VERSION = '4.6.1', BUILD = 48;
+const VERSION = '4.6.2', BUILD = 49;
 const KEYS = { items: 'sv_items_v3', repos: 'sv_repos_v2', epgSrc: 'sv_epg_src', epgData: 'sv_epg_data', settings: 'sv_settings_v2' };
 const TAG_PRI = ['', 'F', 'H', 'A', 'S'];
 
@@ -2503,10 +2512,11 @@ function renderGuide() {
   const isTv  = !!isTvDevice;
   const slotW = isTv ? 180 : 160;   // px per 30-min slot
   const chW   = isTv ? 160 : 140;   // channel column width
-  const rowH  = isTv ? 56  : 50;    // row height (header + every channel row)
-  const gapV  = 4;                  // top/bottom inset for .gpr blocks
+  const rowH  = isTv ? 56  : 50;    // row height for every row including header
+  const gapV  = 4;                  // vertical inset for program blocks
+  const fs    = isTv ? 9 : 8;
 
-  // 14-slot window starting 1 hour before now
+  // Build 14-slot window starting 1 hour before now
   const startTime = new Date(now);
   startTime.setMinutes(startTime.getMinutes() < 30 ? 0 : 30, 0, 0);
   startTime.setHours(startTime.getHours() - 1);
@@ -2515,35 +2525,36 @@ function renderGuide() {
   const endMs   = slots[13].getTime() + 1800000;
   const stripW  = slotW * slots.length;
   const minW    = isTv ? 36 : 48;
-  const fs      = isTv ? 9 : 8;
+  const numSlots = slots.length;
 
-  // One outer wrapper that is inline-flex column — width is content width so outer .gw scrolls both axes
-  let html = `<div style="display:inline-flex;flex-direction:column;min-width:${chW + stripW}px">`;
+  // Build HTML table — thead sticky-top, first col sticky-left
+  let html = `<table class="guide-tbl">`;
 
   // ── Sticky header row ──────────────────────────────────────────────────────
-  html += `<div class="guide-hdr-row" style="height:${rowH}px">`;
-  html += `<div class="guide-hdr-ch" style="width:${chW}px;min-width:${chW}px;height:${rowH}px;font-size:${fs}px">Channel</div>`;
-  html += `<div class="guide-hdr-times" style="height:${rowH}px">`;
+  html += `<thead><tr>`;
+  html += `<th class="g-corner" style="width:${chW}px;min-width:${chW}px;height:${rowH}px;font-size:${fs}px">Channel</th>`;
   slots.forEach(s => {
-    const h = s.getHours(), m = s.getMinutes();
-    html += `<div class="guide-time-slot" style="min-width:${slotW}px;width:${slotW}px;height:${rowH}px;font-size:${fs}px">${h%12||12}:${m.toString().padStart(2,'0')}${h>=12?'p':'a'}</div>`;
+    const h2 = s.getHours(), m2 = s.getMinutes();
+    html += `<th class="g-slot" style="width:${slotW}px;min-width:${slotW}px;height:${rowH}px;font-size:${fs}px">${h2%12||12}:${m2.toString().padStart(2,'0')}${h2>=12?'p':'a'}</th>`;
   });
-  html += `</div></div>`;
+  html += `</tr></thead>`;
 
-  // ── One row per channel ────────────────────────────────────────────────────
+  // ── One <tr> per channel ────────────────────────────────────────────────────
+  html += `<tbody>`;
   matched.forEach((m, chIdx) => {
     const ch    = epgData.channels[m.epgTitle];
     const progs = getGuidePrograms(m.epgTitle, startMs, endMs);
 
-    html += `<div class="guide-ch-row" style="height:${rowH}px">`;
+    html += `<tr>`;
 
-    // Channel cell — sticky left
-    html += `<div class="gch" role="button" tabindex="0" data-item-id="${m.id}" data-ch-idx="${chIdx}" onclick="playItem('${m.id}')" style="width:${chW}px;min-width:${chW}px;height:${rowH}px">`;
+    // Sticky left channel cell
+    html += `<td class="gch" role="button" tabindex="0" data-item-id="${m.id}" data-ch-idx="${chIdx}" onclick="playItem('${m.id}')" style="width:${chW}px;min-width:${chW}px;height:${rowH}px">`;
+    html += `<div class="gch-inner">`;
     if (m.icon || (ch && ch.icon)) html += `<img src="${esc(m.icon || ch.icon)}" onerror="this.style.display='none'">`;
-    html += `<span class="gch-nm">${esc(m.title)}</span></div>`;
+    html += `<span class="gch-nm">${esc(m.title)}</span></div></td>`;
 
-    // Program strip — position:relative, programs absolutely placed inside
-    html += `<div class="guide-strip" style="width:${stripW}px;height:${rowH}px">`;
+    // Program strip cell — spans all slot columns, position:relative for absolute blocks
+    html += `<td class="g-prog-cell" colspan="${numSlots}" style="width:${stripW}px;min-width:${stripW}px;height:${rowH}px">`;
 
     progs.forEach((p, progIdx) => {
       const pStart = Math.max(p.start, startMs);
@@ -2555,7 +2566,8 @@ function renderGuide() {
       if (width < 4 || left >= stripW) return;
       const isNow  = p.start <= now && p.stop > now;
       const isPast = p.stop  <= now;
-      html += `<div class="gpr${isNow?' now':''}${isPast?' past':''}" role="button" tabindex="${isTv?'0':'-1'}" data-ch-idx="${chIdx}" data-prog-idx="${progIdx}" aria-label="${esc(p.title)}" onclick="playItem('${m.id}')" style="left:${left}px;top:${gapV}px;width:${width}px;height:${rowH - gapV*2}px">`;
+      const pH     = rowH - gapV * 2;
+      html += `<div class="gpr${isNow?' now':''}${isPast?' past':''}" role="button" tabindex="${isTv?'0':'-1'}" data-ch-idx="${chIdx}" data-prog-idx="${progIdx}" aria-label="${esc(p.title)}" onclick="playItem('${m.id}')" style="left:${left}px;top:${gapV}px;width:${width}px;height:${pH}px">`;
       html += `<div class="gt">${esc(p.title)}</div>`;
       if (width > 72) html += `<div class="gti">${fmtTime(p.start)}–${fmtTime(p.stop)}</div>`;
       html += `</div>`;
@@ -2565,10 +2577,10 @@ function renderGuide() {
     const nowLeft = ((now - startMs) / 1800000) * slotW;
     if (nowLeft >= 0 && nowLeft <= stripW) html += `<div class="gnl" style="left:${nowLeft}px"></div>`;
 
-    html += `</div></div>`; // guide-strip, guide-ch-row
+    html += `</td></tr>`;
   });
 
-  html += `</div>`; // outer column wrapper
+  html += `</tbody></table>`;
   wrap.innerHTML = html;
 
   // Scroll to "now"
@@ -2581,6 +2593,14 @@ function renderGuide() {
     }
   }, 80);
 }
+// ═══ ACCORDION ═══
+window.toggleAcc = (id) => {
+  const el = $(id);
+  if (!el) return;
+  el.classList.toggle('open');
+  setTimeout(refreshTvFocus, 50);
+};
+
 // ═══ SETTINGS ═══
 function getDisplayDir(kind) {
   if (kind === 'recording') return settings.savePathLabel || settings.savePath || 'Downloads';
@@ -2876,11 +2896,12 @@ function focusGuideElement(el) {
 }
 
 function scrollGuideToRow(chIdx) {
-  const gw   = $('gw');
+  const gw = $('gw');
   if (!gw) return;
   const rowH   = isTvDevice ? 56 : 50;
-  const target = chIdx * rowH + rowH; // +rowH for sticky header
-  const center = target - Math.floor(gw.clientHeight / 2) + Math.floor(rowH / 2);
+  // chIdx 0 = first channel row (below sticky header). Header is rowH, then chIdx*rowH
+  const rowTop = rowH + chIdx * rowH;
+  const center = rowTop - Math.floor(gw.clientHeight / 2) + Math.floor(rowH / 2);
   gw.scrollTop = Math.max(0, center);
 }
 
@@ -3014,35 +3035,73 @@ function moveTvFocusSpatial(dirCode) {
     }
     if (dirCode === 20) return focusNearestInSelector('.itm[data-tv-zone=\"channel-list\"]', current, true);
   }
-  if (currentZone === 'channel-list') {
-    if (isLandscapeHomeGridActive() && (dirCode === 21 || dirCode === 22)) {
-      // In landscape grid, strictly navigate between columns — never fall through to edit buttons
-      return focusHomeGridHorizontal(current, dirCode);
-    }
-    if ((dirCode === 21 || dirCode === 22) && focusHomeGridHorizontal(current, dirCode)) return true;
-    if (dirCode === 22) {
-      if (libEditMode) {
-        const firstBtn = current.querySelector && current.querySelector('.ab button');
-        if (firstBtn) { const els = getTvFocusableElements(); const idx = els.indexOf(firstBtn); if (idx >= 0) return focusElementAtIndex(idx); }
+  // ── Channel list (home grid): index-based navigation ──────────────────────
+  if (currentZone === 'channel-list' || (current && current.closest && current.closest('.ab'))) {
+    const inAb = !!(current.closest && current.closest('.ab'));
+    const itemEl = inAb ? current.closest('.itm') : current;
+    if (itemEl && itemEl.classList.contains('itm')) {
+      const allItems = Array.from(document.querySelectorAll('#lib-lst .itm'));
+      const curIdx2  = allItems.indexOf(itemEl);
+      if (curIdx2 >= 0) {
+        const cols     = isLandscapeHomeGridActive() ? 2 : 1;
+        const col      = curIdx2 % cols;
+
+        if (inAb) {
+          // Navigate within edit/delete buttons
+          const ab   = current.closest('.ab');
+          const btns = Array.from(ab.querySelectorAll('button')).filter(b => getComputedStyle(b).display !== 'none');
+          const bIdx = btns.indexOf(current);
+          if (dirCode === 22) { // right within buttons — stop at end
+            if (bIdx >= 0 && bIdx < btns.length - 1) { const i = els.indexOf(btns[bIdx+1]); if (i >= 0) return focusElementAtIndex(i); }
+            return false;
+          }
+          if (dirCode === 21) { // left — back to item or prev button
+            if (bIdx > 0) { const i = els.indexOf(btns[bIdx-1]); if (i >= 0) return focusElementAtIndex(i); return false; }
+            const i = els.indexOf(itemEl); if (i >= 0) return focusElementAtIndex(i); return false;
+          }
+          // Up/down from ab button: go to same column item above/below
+          if (dirCode === 19 || dirCode === 20) {
+            const step = dirCode === 20 ? cols : -cols;
+            const target2 = allItems[curIdx2 + step];
+            if (target2) { target2.scrollIntoView({block:'nearest'}); const i = els.indexOf(target2); if (i >= 0) return focusElementAtIndex(i); }
+            if (dirCode === 20) return pickClosestNav();
+            return false;
+          }
+          return false;
+        }
+
+        // On the item itself
+        if (dirCode === 22) { // right
+          if (libEditMode) {
+            const firstBtn = itemEl.querySelector('.ab button');
+            if (firstBtn) { const i = els.indexOf(firstBtn); if (i >= 0) return focusElementAtIndex(i); }
+            return false;
+          }
+          if (cols === 2 && col === 0 && curIdx2 + 1 < allItems.length) {
+            const i = els.indexOf(allItems[curIdx2 + 1]); if (i >= 0) return focusElementAtIndex(i);
+          }
+          return false;
+        }
+        if (dirCode === 21) { // left
+          if (cols === 2 && col === 1) {
+            const i = els.indexOf(allItems[curIdx2 - 1]); if (i >= 0) return focusElementAtIndex(i);
+          }
+          return false;
+        }
+        if (dirCode === 20) { // down
+          const next2 = allItems[curIdx2 + cols];
+          if (next2) { next2.scrollIntoView({block:'nearest'}); const i = els.indexOf(next2); if (i >= 0) return focusElementAtIndex(i); }
+          return pickClosestNav();
+        }
+        if (dirCode === 19) { // up
+          const prev2 = allItems[curIdx2 - cols];
+          if (prev2) { prev2.scrollIntoView({block:'nearest'}); const i = els.indexOf(prev2); if (i >= 0) return focusElementAtIndex(i); }
+          // At top — go to filter pills or tabs
+          return focusNearestInSelector('#lib-pls .pl, #lib-modes .lmb, #lib-search-tog', current, true);
+        }
       }
-      return false;
     }
-  }
-  if (current && current.closest && current.closest('.ab')) {
-    const ab = current.closest('.ab');
-    const itm = ab.closest('.itm');
-    const btns = Array.from(ab.querySelectorAll('button')).filter(b => getComputedStyle(b).display !== 'none');
-    const btnIdx = btns.indexOf(current);
-    const els2 = getTvFocusableElements();
-    if (dirCode === 22) {
-      if (btnIdx >= 0 && btnIdx < btns.length - 1) { const idx = els2.indexOf(btns[btnIdx + 1]); if (idx >= 0) return focusElementAtIndex(idx); }
-      return false; // Stop — don't wrap to next item's buttons
-    }
-    if (dirCode === 21) {
-      if (btnIdx > 0) { const idx = els2.indexOf(btns[btnIdx - 1]); if (idx >= 0) return focusElementAtIndex(idx); return false; }
-      if (itm) { const idx = els2.indexOf(itm); if (idx >= 0) return focusElementAtIndex(idx); }
-      return false;
-    }
+    return false;
   }
 
   const pickClosestNav = () => {

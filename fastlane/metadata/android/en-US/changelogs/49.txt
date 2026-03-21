@@ -1,0 +1,18 @@
+StreamVault v4.6.2 (Build 49)
+
+Guide — fully fixed (both TV and mobile):
+- Channel column now correctly sticky-left using a proper HTML <table> with position:sticky on <td>. No more column scrolling away.
+- Programs no longer cascade into wrong rows. Each channel has its own <td> with position:relative; all program blocks are absolutely positioned inside that cell only.
+- Sticky time header remains at top while scrolling vertically.
+- Single overflow:auto container handles both axes simultaneously.
+
+Home grid DPad — complete rewrite:
+- Navigation is now index-based (not spatial/rect-based). DPad right from left column = right column same row. DPad left from right column = left column same row. DPad down = same column next row. DPad up = same column prev row. No more jumping around.
+- DPad up from top row goes to filter pills/tabs. DPad down from last row goes to bottom nav.
+- Edit mode: DPad right from item = first edit button. DPad right through buttons = stops at last (no wraparound to next item). DPad left from first button = back to item.
+
+Settings — collapsible sections:
+- Local Videos, Network Sources, and iCam sections are now accordion panels.
+- DPad through Settings without entering any text fields — just arrow past collapsed sections.
+- Press Enter/Select on any section header to expand and reveal fields.
+- Works identically on mobile (tap to expand) and TV (DPad + select).
