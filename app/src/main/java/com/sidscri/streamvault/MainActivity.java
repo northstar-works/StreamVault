@@ -303,16 +303,153 @@ public class MainActivity extends Activity {
 
 
     private void openBackupFilePicker() {
+        // TV: use our custom in-app DPad-friendly picker
+        if (isTvDevice()) {
+            listBackupFilesForJs();
+            return;
+        }
+        // Mobile: open system picker with NO MIME type filter so .json is always selectable.
+        // Android frequently mis-tags .json as text/plain; a strict filter greys them out.
         try {
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
-            intent.setType("application/json");
-            intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/json", "text/json", "text/plain"});
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-            startActivityForResult(Intent.createChooser(intent, "Choose StreamVault backup"), BACKUP_FILE_REQUEST);
+            intent.setType("*/*");   // no filter — all files shown and selectable
+            // NO EXTRA_MIME_TYPES — that's what was blocking .json selection
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                          | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            // Try to open in Downloads/StreamVault directly
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                try {
+                    // Build a URI pointing to Downloads/StreamVault folder
+                    String docId = "primary:Download/StreamVault";
+                    android.net.Uri folderUri = android.provider.DocumentsContract.buildDocumentUri(
+                        "com.android.externalstorage.documents", docId);
+                    intent.putExtra("android.provider.extra.INITIAL_URI", folderUri);
+                } catch (Exception ignored) {}
+            }
+            startActivityForResult(intent, BACKUP_FILE_REQUEST);
         } catch (Exception e) {
-            toastNative("Backup picker unavailable: " + e.getMessage());
+            // Fallback: try without INITIAL_URI
+            try {
+                Intent fallback = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                fallback.addCategory(Intent.CATEGORY_OPENABLE);
+                fallback.setType("*/*");
+                fallback.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                startActivityForResult(fallback, BACKUP_FILE_REQUEST);
+            } catch (Exception e2) {
+                toastNative("Backup picker unavailable: " + e2.getMessage());
+            }
         }
+    }
+
+    /** Scan Downloads/StreamVault for .json backup files and send list to JS */
+    private void listBackupFilesForJs() {
+        new Thread(() -> {
+            try {
+                java.util.List<String[]> files = new java.util.ArrayList<>();
+
+                // Try content:// MediaStore first (API 29+)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    android.net.Uri collection = android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI;
+                    String[] projection = {
+                        android.provider.MediaStore.Downloads._ID,
+                        android.provider.MediaStore.Downloads.DISPLAY_NAME,
+                        android.provider.MediaStore.Downloads.DATE_MODIFIED,
+                        android.provider.MediaStore.Downloads.SIZE
+                    };
+                    String selection = android.provider.MediaStore.Downloads.DISPLAY_NAME + " LIKE ?" +
+                        " AND " + android.provider.MediaStore.Downloads.RELATIVE_PATH + " LIKE ?";
+                    String[] selArgs = { "streamvault-backup-%.json", "%StreamVault%" };
+                    try (android.database.Cursor cursor = getContentResolver().query(
+                            collection, projection, selection, selArgs,
+                            android.provider.MediaStore.Downloads.DATE_MODIFIED + " DESC")) {
+                        if (cursor != null) {
+                            while (cursor.moveToNext()) {
+                                long id = cursor.getLong(0);
+                                String name = cursor.getString(1);
+                                long date = cursor.getLong(2) * 1000L;
+                                long size = cursor.getLong(3);
+                                android.net.Uri uri = android.content.ContentUris.withAppendedId(collection, id);
+                                files.add(new String[]{name, uri.toString(),
+                                    new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(new java.util.Date(date)),
+                                    (size/1024) + " KB"});
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
+
+                // Also check filesystem (for older APIs or manually saved files)
+                if (files.isEmpty()) {
+                    java.io.File dir = new java.io.File(
+                        android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
+                        "StreamVault");
+                    if (dir.exists()) {
+                        java.io.File[] jsonFiles = dir.listFiles(f -> f.getName().endsWith(".json"));
+                        if (jsonFiles != null) {
+                            java.util.Arrays.sort(jsonFiles, (a,b) -> Long.compare(b.lastModified(), a.lastModified()));
+                            for (java.io.File f : jsonFiles) {
+                                files.add(new String[]{f.getName(), f.getAbsolutePath(),
+                                    new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(new java.util.Date(f.lastModified())),
+                                    (f.length()/1024) + " KB"});
+                            }
+                        }
+                    }
+                }
+
+                final java.util.List<String[]> result = files;
+                runOnUiThread(() -> {
+                    if (result.isEmpty()) {
+                        String js = "window.onBackupFileList && window.onBackupFileList([])";
+                        webView.evaluateJavascript(js, null);
+                        return;
+                    }
+                    StringBuilder json = new StringBuilder("[");
+                    for (int i = 0; i < result.size(); i++) {
+                        String[] f = result.get(i);
+                        if (i > 0) json.append(",");
+                        json.append("{"name":").append(quoteJs(f[0]))
+                            .append(","uri":").append(quoteJs(f[1]))
+                            .append(","date":").append(quoteJs(f[2]))
+                            .append(","size":").append(quoteJs(f[3])).append("}");
+                    }
+                    json.append("]");
+                    String js = "window.onBackupFileList && window.onBackupFileList(" + json + ")";
+                    webView.evaluateJavascript(js, null);
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> toastNative("Could not list backups: " + e.getMessage()));
+            }
+        }).start();
+    }
+
+    /** Read a backup file by URI or filesystem path and send to JS */
+    @JavascriptInterface
+    public void readBackupFile(String uriOrPath) {
+        runOnUiThread(() -> {
+            new Thread(() -> {
+                try {
+                    String jsonText;
+                    if (uriOrPath.startsWith("content://")) {
+                        android.net.Uri uri = android.net.Uri.parse(uriOrPath);
+                        try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) {}
+                        try (InputStream is = getContentResolver().openInputStream(uri)) {
+                            if (is == null) throw new IllegalStateException("Cannot open file");
+                            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                            byte[] buf = new byte[8192]; int len;
+                            while ((len = is.read(buf)) != -1) bos.write(buf, 0, len);
+                            jsonText = bos.toString(StandardCharsets.UTF_8.name());
+                        }
+                    } else {
+                        jsonText = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(uriOrPath)), StandardCharsets.UTF_8);
+                    }
+                    final String jt = jsonText;
+                    final String label = uriOrPath.contains("/") ? uriOrPath.substring(uriOrPath.lastIndexOf('/')+1) : uriOrPath;
+                    runOnUiThread(() -> notifyJsBackupFilePicked(jt, label));
+                } catch (Exception e) {
+                    runOnUiThread(() -> notifyJsBackupError(e.getMessage() != null ? e.getMessage() : String.valueOf(e)));
+                }
+            }).start();
+        });
     }
 
     private void openDirectoryPicker(int requestCode) {
@@ -467,24 +604,45 @@ public class MainActivity extends Activity {
 
         if (requestCode == BACKUP_FILE_REQUEST) {
             if (resultCode == RESULT_OK && data != null && data.getData() != null) {
-                Uri uri = data.getData();
-                try {
-                    final int takeFlags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-                    getContentResolver().takePersistableUriPermission(uri, takeFlags | Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                } catch (Exception ignored) {}
-                try (InputStream is = getContentResolver().openInputStream(uri)) {
-                    if (is == null) throw new IllegalStateException("Could not open backup file");
-                    ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                    byte[] buf = new byte[4096];
-                    int len;
-                    while ((len = is.read(buf)) != -1) { bos.write(buf, 0, len); }
-                    String jsonText = bos.toString(StandardCharsets.UTF_8.name());
-                    String label = uri.getLastPathSegment() != null ? uri.getLastPathSegment() : uri.toString();
-                    notifyJsBackupFilePicked(jsonText, label);
-                } catch (Exception e) {
-                    notifyJsBackupError(e.getMessage() != null ? e.getMessage() : String.valueOf(e));
-                    toastNative("Restore failed: " + e.getMessage());
-                }
+                final Uri uri = data.getData();
+                // Read on background thread — file could be large
+                new Thread(() -> {
+                    try {
+                        // Persist read permission
+                        try {
+                            final int tf = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                            getContentResolver().takePersistableUriPermission(uri, tf | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        } catch (Exception ignored) {}
+
+                        try (InputStream is = getContentResolver().openInputStream(uri)) {
+                            if (is == null) throw new IllegalStateException("Could not open backup file");
+                            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                            byte[] buf = new byte[8192];
+                            int len;
+                            while ((len = is.read(buf)) != -1) { bos.write(buf, 0, len); }
+                            String jsonText = bos.toString(StandardCharsets.UTF_8.name());
+                            // Basic validation — must start with {
+                            String trimmed = jsonText.trim();
+                            if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+                                throw new IllegalStateException("File does not appear to be a valid StreamVault backup (.json)");
+                            }
+                            String seg = uri.getLastPathSegment();
+                            String label = seg != null ? seg : uri.toString();
+                            // Strip path prefix if present (e.g. "primary:Download/StreamVault/file.json")
+                            if (label.contains("/")) label = label.substring(label.lastIndexOf('/') + 1);
+                            if (label.contains(":")) label = label.substring(label.lastIndexOf(':') + 1);
+                            final String fl = label;
+                            final String jt = jsonText;
+                            runOnUiThread(() -> notifyJsBackupFilePicked(jt, fl));
+                        }
+                    } catch (Exception e) {
+                        final String msg = e.getMessage() != null ? e.getMessage() : String.valueOf(e);
+                        runOnUiThread(() -> {
+                            notifyJsBackupError(msg);
+                            toastNative("Restore failed: " + msg);
+                        });
+                    }
+                }).start();
             }
             return;
         }

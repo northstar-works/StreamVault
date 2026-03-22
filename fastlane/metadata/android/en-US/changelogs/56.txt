@@ -1,0 +1,10 @@
+StreamVault v4.6.6 (Build 56)
+
+Backup Restore on Fire TV — fully fixed:
+- "Restore Backup" no longer opens the system file browser (which Fire TV DPad can't navigate)
+- On TV: pressing Restore Backup now scans Downloads/StreamVault for .json files and shows them in a DPad-navigable in-app list. Arrow down to the backup, press Select/Enter to restore.
+- On mobile: system file picker still used, but now starts in Downloads (API 26+)
+- Files shown with name, date, and size
+- Works with both content:// MediaStore URIs (API 29+) and direct filesystem paths
+
+New native bridge method: readBackupFile(uriOrPath) — reads file from either a content URI or absolute path and passes JSON to the JS restore handler.
