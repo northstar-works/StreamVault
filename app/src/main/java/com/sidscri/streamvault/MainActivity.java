@@ -407,10 +407,12 @@ public class MainActivity extends Activity {
                     for (int i = 0; i < result.size(); i++) {
                         String[] f = result.get(i);
                         if (i > 0) json.append(",");
-                        json.append("{"name":").append(quoteJs(f[0]))
-                            .append(","uri":").append(quoteJs(f[1]))
-                            .append(","date":").append(quoteJs(f[2]))
-                            .append(","size":").append(quoteJs(f[3])).append("}");
+                        json.append("{")
+                            .append("\"name\":").append(quoteJs(f[0]))
+                            .append(",\"uri\":").append(quoteJs(f[1]))
+                            .append(",\"date\":").append(quoteJs(f[2]))
+                            .append(",\"size\":").append(quoteJs(f[3]))
+                            .append("}");
                     }
                     json.append("]");
                     String js = "window.onBackupFileList && window.onBackupFileList(" + json + ")";
