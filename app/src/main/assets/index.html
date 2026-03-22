@@ -275,7 +275,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
 
 <!-- ═══ LIBRARY ═══ -->
 <div id="lib-scr" class="scr on">
-  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b55</span>
+  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b54</span>
     <button class="ib" id="btn-lib-edit" title="Toggle edit controls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
     <button class="ib" id="btn-add-top" title="Add stream"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
     <button class="ib" id="btn-exp" title="Export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
@@ -442,7 +442,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.6.5 (Build 53)<br>IPTV · Plex · iCam · Local · Network · EPG Guide · DPad TV Navigation · HLS Recording · Failover · Scheduled Recording.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.6.6 (Build 53)<br>IPTV · Plex · iCam · Local · Network · EPG Guide · DPad TV Navigation · HLS Recording · Failover · Scheduled Recording.</p>
   </div>
 </div>
 
@@ -498,11 +498,11 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     <button class="bc" id="in-url-pick" type="button" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Browse local file</button>
     <div style="font-size:9px;color:var(--t3)">Use for device files, downloads, or locally saved streams</div>
   </div>
-  <div class="rw" data-tv-group="stream-cat-epg">
+  <div class="rw">
     <div><label>Category</label><input id="in-cat" placeholder="Movie, TV, News…"></div>
     <div><label>EPG ID</label>
       <div style="position:relative">
-        <input id="in-epg-search" placeholder="Search EPG — DPad Down to select" autocomplete="off">
+        <input id="in-epg-search" placeholder="Tap to search EPG channels…" autocomplete="off" readonly onfocus="this.removeAttribute('readonly')">
         <input type="hidden" id="in-epg-val" value="">
         <div id="in-epg-list" style="display:none;position:fixed;left:16px;right:16px;max-height:45vh;overflow-y:auto;background:var(--c1);border:2px solid var(--ac);border-radius:var(--rs);z-index:999;box-shadow:0 8px 30px rgba(0,0,0,.6)"></div>
       </div>
@@ -747,7 +747,7 @@ http://stream.example.com/cnn
 "use strict";
 
 // ─── Constants & State ───
-const VERSION = '4.6.6', BUILD = 55;
+const VERSION = '4.6.6', BUILD = 54;
 const KEYS = { items: 'sv_items_v3', repos: 'sv_repos_v2', epgSrc: 'sv_epg_src', epgData: 'sv_epg_data', settings: 'sv_settings_v2' };
 const PLOG_KEY = 'sv_playlog_v1';      // Plex/VOD progress log
 let playLog = {};                        // {itemId: {posMs, duration, ts, title}}
@@ -766,7 +766,6 @@ let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTim
 let plexAddMode = false;
 
 let editId = null;
-let _epgDropdownOpen = false;  // true while EPG options list is visible
 let libEditMode = false;
 let delId = null;
 let delType = null;
@@ -1887,13 +1886,12 @@ $('in-url-pick').onclick = () => {
 
 function populateEpgDropdown(selected) {
   const searchInput = $('in-epg-search');
-  const hiddenVal   = $('in-epg-val');
-  const listEl      = $('in-epg-list');
+  const hiddenVal = $('in-epg-val');
+  const listEl = $('in-epg-list');
 
   hiddenVal.value = selected || '';
-  _epgDropdownOpen = false;
 
-  // Show current selection in the input
+  // Show selected value
   if (selected && epgData.channels && epgData.channels[selected]) {
     searchInput.value = epgData.channels[selected].name + ' (' + selected + ')';
     searchInput.style.color = 'var(--ac)';
@@ -1907,10 +1905,10 @@ function populateEpgDropdown(selected) {
 
   function renderEpgOptions(query) {
     const ids = getAllEpgIds();
-    const q   = (query || '').toLowerCase().trim();
+    const q = (query || '').toLowerCase().trim();
     const filtered = ids.filter(id => {
       if (!q) return true;
-      const ch   = epgData.channels[id];
+      const ch = epgData.channels[id];
       const name = ch ? ch.name.toLowerCase() : '';
       return name.includes(q) || id.toLowerCase().includes(q);
     }).sort((a, b) => {
@@ -1922,87 +1920,61 @@ function populateEpgDropdown(selected) {
     }).slice(0, 150);
 
     let html = '';
+
     if (ids.length === 0) {
       html = '<div style="padding:14px;font-size:10px;color:var(--t3);text-align:center">No EPG data loaded yet.<br>Go to Guide tab → ⚙ → add an EPG source first.</div>';
     } else {
+      // Header showing count
       html += '<div style="padding:6px 9px;font-size:8px;color:var(--t3);border-bottom:1px solid var(--bd);position:sticky;top:0;background:var(--c1);z-index:1">';
       html += q ? 'Showing ' + filtered.length + ' of ' + ids.length + ' channels' : ids.length + ' EPG channels available';
       html += '</div>';
-      html += '<div class="epg-opt" tabindex="0" role="option" data-id="" onclick="selectEpg(this)" onkeydown="if(event.key==='Enter'||event.key===' '){selectEpg(this);event.preventDefault();}"><div class="eo-name" style="color:var(--t3)">✕ None — Clear EPG</div></div>';
+
+      // "None" option
+      html += '<div class="epg-opt" tabindex="0" data-id="" onclick="selectEpg(this)"><div class="eo-name" style="color:var(--t3)">✕ None — Clear EPG</div></div>';
+
       if (filtered.length === 0 && q) {
         html += '<div style="padding:12px;font-size:9px;color:var(--t3);text-align:center">No matches for "' + esc(q) + '"</div>';
       }
+
       html += filtered.map(id => {
-        const ch   = epgData.channels[id];
+        const ch = epgData.channels[id];
         const name = ch ? ch.name : id;
-        const isSel = id === hiddenVal.value;
-        return '<div class="epg-opt' + (isSel ? ' hl' : '') + '" tabindex="0" role="option" data-id="' + esc(id) + '"' +
-          ' onclick="selectEpg(this)"' +
-          ' onkeydown="if(event.key==='Enter'||event.key===' '){selectEpg(this);event.preventDefault();}">' +
+        const isSelected = id === hiddenVal.value;
+        return '<div class="epg-opt' + (isSelected ? ' hl' : '') + '" tabindex="0" data-id="' + esc(id) + '" onclick="selectEpg(this)">' +
           '<div class="eo-name">' + esc(name) + '</div>' +
           '<div class="eo-id">' + esc(id) + '</div></div>';
       }).join('');
     }
+
     listEl.innerHTML = html;
   }
 
+  // Position fixed dropdown below the input
   function positionDropdown() {
     const rect = searchInput.getBoundingClientRect();
     listEl.style.top = rect.bottom + 'px';
   }
 
-  function openEpgList() {
+  // Show dropdown on focus
+  searchInput.onfocus = () => {
     searchInput.removeAttribute('readonly');
     positionDropdown();
     renderEpgOptions(searchInput.value);
     listEl.style.display = 'block';
-    _epgDropdownOpen = true;
-    // On TV: immediately focus first option so DPad can navigate it
-    if (isTvDevice) {
-      setTimeout(() => {
-        const first = listEl.querySelector('.epg-opt');
-        if (first) { first.focus(); setTvFocusClass(first); }
-      }, 50);
-    }
-  }
-
-  function closeEpgList() {
-    listEl.style.display = 'none';
-    _epgDropdownOpen = false;
-  }
-
-  // Mouse/touch: open on focus
-  searchInput.onfocus = () => openEpgList();
-
-  // TV DPad Enter on search input opens the list
-  searchInput.onkeydown = (e) => {
-    if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
-      e.preventDefault();
-      openEpgList();
-    } else if (e.key === 'Escape') {
-      closeEpgList();
-    }
   };
 
-  // Filter on text input
+  // Filter on input
   searchInput.oninput = () => {
     searchInput.style.color = '';
     hiddenVal.value = '';
     positionDropdown();
     renderEpgOptions(searchInput.value);
     listEl.style.display = 'block';
-    _epgDropdownOpen = true;
   };
 
-  // Only hide on blur if focus didn't move INTO the list
-  searchInput.onblur = (e) => {
-    const rt = e.relatedTarget;
-    if (rt && (listEl.contains(rt) || rt === listEl)) return; // focus moved into list — keep open
-    setTimeout(() => {
-      // Re-check: if an epg-opt has focus, keep open
-      if (listEl.contains(document.activeElement)) return;
-      closeEpgList();
-    }, 300); // longer delay for TV remote timing
+  // Hide on blur (with delay so clicks register)
+  searchInput.onblur = () => {
+    setTimeout(() => { listEl.style.display = 'none'; }, 250);
   };
 }
 
@@ -2863,9 +2835,10 @@ function getTvFocusableElements() {
       if (!inBottomNav && !inActiveScreen && !inOpenModal) return false;
 
       // MODAL FOCUS TRAP: when a modal is open, ONLY allow focus inside that modal
-      // Allow the EPG dropdown too (position:fixed, outside modal in DOM but visually inside it)
+      // Also allow focus in the EPG dropdown (position:fixed, visually part of the modal)
       const anyOpenModal = document.querySelector('.mo.on, .cod.on');
-      const inEpgList = _epgDropdownOpen && !!(el.closest && el.closest('#in-epg-list'));
+      const epgListOpen = $('in-epg-list') && $('in-epg-list').style.display !== 'none';
+      const inEpgList = epgListOpen && !!(el.closest && el.closest('#in-epg-list'));
       if (anyOpenModal && !inOpenModal && !inEpgList) return false;
 
       if (inBottomNav) {
@@ -3181,43 +3154,11 @@ function moveTvFocusSpatial(dirCode) {
     return handleGuideDpad(current, dirCode);
   }
 
-  // EPG dropdown: up/down between options; up from first = back to search input
-  if (current.classList && current.classList.contains('epg-opt')) {
-    const listEl = $('in-epg-list');
-    if (!listEl) return false;
-    const opts = Array.from(listEl.querySelectorAll('.epg-opt'));
-    const oi = opts.indexOf(current);
-    if (dirCode === 20 && oi < opts.length - 1) { // down
-      opts[oi + 1].focus(); setTvFocusClass(opts[oi + 1]); return true;
-    }
-    if (dirCode === 19) { // up
-      if (oi > 0) { opts[oi - 1].focus(); setTvFocusClass(opts[oi - 1]); return true; }
-      // Back to search input
-      const si = $('in-epg-search');
-      if (si) { const allEls = getTvFocusableElements(); const idx2 = allEls.indexOf(si); if (idx2 >= 0) return focusElementAtIndex(idx2); si.focus(); }
-      return true;
-    }
-    if (dirCode === 23 || dirCode === 21 || dirCode === 22) { selectEpg(current); return true; } // Enter/left/right = select
-    return false;
-  }
-
-  // DPad Down from EPG search input → enter the dropdown if open
-  if (current.id === 'in-epg-search' && dirCode === 20 && _epgDropdownOpen) {
-    const listEl = $('in-epg-list');
-    if (listEl) {
-      const first = listEl.querySelector('.epg-opt');
-      if (first) { first.focus(); setTvFocusClass(first); return true; }
-    }
-  }
-
   if (current && current.tagName && current.tagName.toLowerCase() === 'select' && (dirCode === 21 || dirCode === 22)) {
     return cycleSelectOption(current, dirCode === 22 ? 1 : -1);
   }
   const settingsContainer = current && current.closest && current.closest('#set-scr');
   if (settingsContainer && focusWithinContainerRows(settingsContainer, current, dirCode)) return true;
-  // Edit stream modal — same row-based navigation
-  const editModalContainer = current && current.closest && current.closest('#mo-ed .mc');
-  if (editModalContainer && !_epgDropdownOpen && focusWithinContainerRows(editModalContainer, current, dirCode)) return true;
   const repoFilterBar = current && current.closest && current.closest('.fbar');
   if (repoFilterBar && focusWithinContainerRows(repoFilterBar, current, dirCode)) return true;
 
@@ -3420,16 +3361,10 @@ window.__svHandleTvKey = function(code) {
       setTimeout(refreshTvFocus, 30);
       return true;
     }
-    if (el.classList.contains('epg-opt')) { selectEpg(el); return true; }
     if (tag === 'select') { el.focus(); if (typeof el.showPicker === 'function' && !isTvDevice) { try { el.showPicker(); return true; } catch(e) {} } return cycleSelectOption(el, 1) || true; }
     if (tag === 'textarea') { el.focus(); return true; }
     if (tag === 'input') {
       const type = (el.type || '').toLowerCase();
-      // EPG search: Enter opens the dropdown
-      if (el.id === 'in-epg-search') {
-        el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-        return true;
-      }
       el.focus();
       if (['checkbox','radio','range','file','date','time','datetime-local','color'].includes(type)) el.click();
       return true;
@@ -3446,13 +3381,8 @@ window.__svHandleTvKey = function(code) {
     if ($('br-scr').classList.contains('on')) { showTab('repo-scr'); refreshTvFocus(); return true; }
     const openModal = document.querySelector('.mo.on,.cod.on');
     // Close EPG dropdown first if open
-    if (_epgDropdownOpen) {
-      const epgList = $('in-epg-list');
-      if (epgList) epgList.style.display = 'none';
-      _epgDropdownOpen = false;
-      const si = $('in-epg-search'); if (si) { const els2 = getTvFocusableElements(); const i2 = els2.indexOf(si); if (i2 >= 0) focusElementAtIndex(i2); }
-      return true;
-    }
+    const epgList = $('in-epg-list');
+    if (epgList && epgList.style.display !== 'none') { epgList.style.display = 'none'; refreshTvFocus(); return true; }
     if (openModal) { openModal.classList.remove('on'); refreshTvFocus(); return true; }
   }
   return false;
