@@ -275,7 +275,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
 
 <!-- ═══ LIBRARY ═══ -->
 <div id="lib-scr" class="scr on">
-  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b52</span>
+  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b53</span>
     <button class="ib" id="btn-lib-edit" title="Toggle edit controls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
     <button class="ib" id="btn-add-top" title="Add stream"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
     <button class="ib" id="btn-exp" title="Export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
@@ -317,14 +317,44 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
   <div class="ss"><h3>Home Tabs</h3>
     <div id="tab-order-lst"></div>
   </div>
-  <div class="ss"><h3>TV / Fire TV</h3>
-    <div class="sr"><div><div class="sl">TV mode</div><div class="sd">Auto enables remote-friendly focus on Fire TV / Android TV</div></div><select id="s-tv-mode"><option value="auto">Auto</option><option value="on">On</option><option value="off">Off</option></select></div>
-  </div>
+
   <div class="ss"><h3>Locality Priorities</h3>
     <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Local areas prioritized in search, filters & failover. Top = highest priority.</p>
     <div class="ll" id="loc-lst"></div>
     <div class="la"><input id="loc-in" placeholder="Add: DFW, Dallas…"><button id="loc-add">Add</button></div>
   </div>
+  <div class="ss"><h3>Live TV — Timeshift &amp; DVR</h3>
+    <div class="sr"><div><div class="sl">Enable Timeshift (pause live TV)</div><div class="sd">Pause live TV and resume from where you left off</div></div><div class="tgl on" id="s-ts-enable"></div></div>
+    <div class="sr"><div><div class="sl">Max buffer duration</div><div class="sd">How many minutes to keep in the live buffer</div></div>
+      <select id="s-ts-maxbuf">
+        <option value="10">10 min</option>
+        <option value="30" selected>30 min</option>
+        <option value="60">1 hour</option>
+        <option value="0">Unlimited</option>
+      </select>
+    </div>
+    <div class="sr"><div><div class="sl">DVR remote storage</div><div class="sd">Save recordings to a network device instead of this one</div></div><div class="tgl" id="s-dvr-remote-enable"></div></div>
+    <div id="s-dvr-remote-cfg" style="display:none;margin-top:8px">
+      <div class="sr"><div><div class="sl">Protocol</div><div class="sd">Connection for remote DVR</div></div>
+        <select id="s-dvr-proto"><option value="ftp">FTP</option><option value="ftps">FTPS</option><option value="smb">Samba/SMB</option></select>
+      </div>
+      <div class="rw" style="margin-top:6px">
+        <div><label>Host / IP</label><input id="s-dvr-host" placeholder="192.168.1.50"></div>
+        <div><label>Port</label><input id="s-dvr-port" placeholder="21" type="number" style="max-width:80px"></div>
+      </div>
+      <div class="rw">
+        <div><label>Username</label><input id="s-dvr-user" placeholder="Optional" autocomplete="username"></div>
+        <div><label>Password</label><input id="s-dvr-pass" type="password" placeholder="Optional" autocomplete="current-password"></div>
+      </div>
+      <div><label>Remote folder path</label><input id="s-dvr-path" placeholder="/recordings or /media/DVR"></div>
+      <div class="tv-row" data-tv-group="dvr-test" style="margin-top:8px">
+        <button class="bc" id="s-dvr-test" style="padding:9px 16px;font-size:10px;border-radius:var(--rs)">Test Connection</button>
+        <button class="bs" id="s-dvr-save" style="padding:9px 16px;font-size:10px;border-radius:var(--rs)">Save DVR Config</button>
+      </div>
+      <p style="font-size:9px;color:var(--t2);margin-top:6px">When configured, all recordings and scheduled recordings are sent to this remote server. The DVR tab appears in the ITV page.</p>
+    </div>
+  </div>
+
   <div class="ss"><h3>Failover</h3>
     <div class="sr"><div><div class="sl">Buffer timeout (sec)</div><div class="sd">Switch source after buffering this long</div></div><input type="number" id="s-fo-t" value="15" min="5" max="60" style="width:60px"></div>
     <div class="sr"><div><div class="sl">Auto-failover</div><div class="sd">Try alternative streams on failure</div></div><div class="tgl on" id="s-fo-auto"></div></div>
@@ -412,7 +442,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.6.4 (Build 51)<br>IPTV · Plex · iCam · Local · Network · EPG Guide · DPad TV Navigation · HLS Recording · Failover · Scheduled Recording.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v4.6.5 (Build 53)<br>IPTV · Plex · iCam · Local · Network · EPG Guide · DPad TV Navigation · HLS Recording · Failover · Scheduled Recording.</p>
   </div>
 </div>
 
@@ -717,7 +747,7 @@ http://stream.example.com/cnn
 "use strict";
 
 // ─── Constants & State ───
-const VERSION = '4.6.4', BUILD = 52;
+const VERSION = '4.6.5', BUILD = 53;
 const KEYS = { items: 'sv_items_v3', repos: 'sv_repos_v2', epgSrc: 'sv_epg_src', epgData: 'sv_epg_data', settings: 'sv_settings_v2' };
 const PLOG_KEY = 'sv_playlog_v1';      // Plex/VOD progress log
 let playLog = {};                        // {itemId: {posMs, duration, ts, title}}
@@ -732,7 +762,7 @@ let items = [];
 let repos = [];
 let epgSrc = [];
 let epgData = { channels: {}, programs: {} };
-let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [], tabOrder: ['itv','plex','icam','local','network'], tvMode: 'auto', plex: { server: '', token: '', section: '', sections: [] } };
+let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [], tabOrder: ['itv','plex','icam','local','network'], tvMode: 'auto', plex: { server: '', token: '', section: '', sections: [] }, timeshiftEnabled: true, timeshiftMaxMin: 30, dvrCfg: { remoteEnabled: false, proto: 'ftp', host: '', port: '21', user: '', pass: '', path: '/recordings' } };
 let plexAddMode = false;
 
 let editId = null;
@@ -1372,9 +1402,12 @@ function getTabOrder() {
 }
 function getLibPageDefs() {
   const c = getLibPageCounts();
-  const labels = { itv:'ITV', plex:'PlexStr', icam:'iCam', local:'Local', network:'Network' };
+  const labels = { itv:'ITV', plex:'PlexStr', icam:'iCam', local:'Local', network:'Network', dvr:'DVR' };
   const plexCfg = getPlexCfg();
-  return getTabOrder().filter(id => c[id] || (id === 'plex' && (plexAddMode || !!(plexCfg.server && plexCfg.token)))).map(id => ({ id, label: labels[id], count: c[id] }));
+  const dvrEnabled = settings.dvrCfg && settings.dvrCfg.remoteEnabled;
+  const baseDefs = getTabOrder().filter(id => c[id] || (id === 'plex' && (plexAddMode || !!(plexCfg.server && plexCfg.token)))).map(id => ({ id, label: labels[id], count: c[id] }));
+  if (dvrEnabled) baseDefs.push({ id: 'dvr', label: 'DVR', count: 0 });
+  return baseDefs;
 }
 function ensureActiveLibPage() {
   const defs = getLibPageDefs().map(x => x.id);
@@ -1388,6 +1421,7 @@ function getItemsForLibPage() {
   if (activeLibPage === 'plex') return items.filter(isPlexItem);
   if (activeLibPage === 'local') return items.filter(isLocalItem);
   if (activeLibPage === 'network') return items.filter(isNetworkItem);
+  if (activeLibPage === 'dvr') return []; // DVR shows remote library, not local items
   return items;
 }
 function renderLibModes() {
@@ -1745,8 +1779,8 @@ function renderLib() {
   renderLibExtra();
   $('lib-lst').classList.toggle('home-grid', window.matchMedia && window.matchMedia('(orientation: landscape)').matches);
   const f = getFilteredItems();
-  const emptyTitle = activeLibPage === 'itv' ? 'No ITV streams' : activeLibPage === 'icam' ? 'No iCam streams' : activeLibPage === 'plex' ? 'No PlexStr items' : activeLibPage === 'local' ? 'No local media yet' : activeLibPage === 'network' ? 'No network sources yet' : 'No streams';
-  const emptyBody = activeLibPage === 'plex' ? 'Use the PlexStr panel above to open your Plex library or search and add titles.' : activeLibPage === 'local' ? 'Use the Local panel above to pick a device file or add a local path.' : activeLibPage === 'network' ? 'Use the Network panel above to add FTP or Samba paths.' : 'Tap + to add or browse Repos tab';
+  const emptyTitle = activeLibPage === 'itv' ? 'No ITV streams' : activeLibPage === 'icam' ? 'No iCam streams' : activeLibPage === 'plex' ? 'No PlexStr items' : activeLibPage === 'local' ? 'No local media yet' : activeLibPage === 'network' ? 'No network sources yet' : activeLibPage === 'dvr' ? 'DVR Library' : 'No streams';
+  const emptyBody = activeLibPage === 'plex' ? 'Use the PlexStr panel above to open your Plex library or search and add titles.' : activeLibPage === 'local' ? 'Use the Local panel above to pick a device file or add a local path.' : activeLibPage === 'network' ? 'Use the Network panel above to add FTP or Samba paths.' : activeLibPage === 'dvr' ? 'Remote DVR is enabled. Browse and play recordings from your network DVR server. Configure DVR in Settings → Live TV.' : 'Tap + to add or browse Repos tab';
   if (!f.length) {
     $('lib-lst').innerHTML = '<div class="emp"><h3>' + emptyTitle + '</h3><p>' + emptyBody + '</p></div>';
     return;
@@ -3392,11 +3426,7 @@ function renderTabOrderSettings() {
 
 function renderSettings() {
   renderTabOrderSettings();
-  const tvSel = $('s-tv-mode');
-  if (tvSel) {
-    tvSel.value = settings.tvMode || 'auto';
-    tvSel.onchange = (e) => { settings.tvMode = e.target.value || 'auto'; saveSettings(); applyTvMode(); };
-  }
+
   // Startup channel
   const sel = $('s-startup');
   sel.innerHTML = '<option value="">None (show library)</option>' +
@@ -3521,6 +3551,48 @@ function renderSettings() {
   };
 
   // ─── Local / Network / iCam — open modal buttons ───
+  // ─── Timeshift settings ───
+  const tsTgl = $('s-ts-enable');
+  if (tsTgl) {
+    tsTgl.className = 'tgl' + (settings.timeshiftEnabled !== false ? ' on' : '');
+    tsTgl.onclick = () => { settings.timeshiftEnabled = !settings.timeshiftEnabled; tsTgl.className = 'tgl' + (settings.timeshiftEnabled ? ' on' : ''); saveSettings(); toast(settings.timeshiftEnabled ? 'Timeshift enabled' : 'Timeshift disabled'); };
+  }
+  const tsBuf = $('s-ts-maxbuf');
+  if (tsBuf) { tsBuf.value = String(settings.timeshiftMaxMin || 30); tsBuf.onchange = e => { settings.timeshiftMaxMin = parseInt(e.target.value)||30; saveSettings(); }; }
+
+  // ─── DVR remote settings ───
+  const dvrTgl = $('s-dvr-remote-enable');
+  const dvrCfg2 = $('s-dvr-remote-cfg');
+  if (!settings.dvrCfg) settings.dvrCfg = { remoteEnabled:false, proto:'ftp', host:'', port:'21', user:'', pass:'', path:'/recordings' };
+  if (dvrTgl) {
+    dvrTgl.className = 'tgl' + (settings.dvrCfg.remoteEnabled ? ' on' : '');
+    if (dvrCfg2) dvrCfg2.style.display = settings.dvrCfg.remoteEnabled ? 'block' : 'none';
+    dvrTgl.onclick = () => {
+      settings.dvrCfg.remoteEnabled = !settings.dvrCfg.remoteEnabled;
+      dvrTgl.className = 'tgl' + (settings.dvrCfg.remoteEnabled ? ' on' : '');
+      if (dvrCfg2) dvrCfg2.style.display = settings.dvrCfg.remoteEnabled ? 'block' : 'none';
+      saveSettings(); renderLibModes(); renderLib();
+      toast(settings.dvrCfg.remoteEnabled ? 'DVR tab enabled' : 'DVR tab hidden');
+    };
+  }
+  ['s-dvr-host','s-dvr-port','s-dvr-user','s-dvr-pass','s-dvr-path'].forEach(id => {
+    const el = $(id); if (!el) return;
+    const key = id.replace('s-dvr-','');
+    el.value = settings.dvrCfg[key] || '';
+    el.onchange = () => { settings.dvrCfg[key] = el.value; saveSettings(); };
+  });
+  const dvrProto = $('s-dvr-proto');
+  if (dvrProto) { dvrProto.value = settings.dvrCfg.proto || 'ftp'; dvrProto.onchange = e => { settings.dvrCfg.proto = e.target.value; saveSettings(); }; }
+  const dvrTest = $('s-dvr-test');
+  if (dvrTest) dvrTest.onclick = () => {
+    if (!settings.dvrCfg.host) { toast('Enter a host/IP first'); return; }
+    if (window.NativePlayer && typeof window.NativePlayer.testDvrConnection === 'function') {
+      window.NativePlayer.testDvrConnection(JSON.stringify(settings.dvrCfg));
+    } else toast('DVR connection test available in Android app build');
+  };
+  const dvrSave = $('s-dvr-save');
+  if (dvrSave) dvrSave.onclick = () => { saveSettings(); toast('DVR config saved'); };
+
   function wireConfigModals() {
     // Local Videos modal
     const openLocal = () => {
@@ -3848,7 +3920,8 @@ window.playItem = async (id) => {
       const foTimeout = String(settings.foTimeout || 15);
       const foAuto = String(settings.foAuto !== false);
       // SINGLE method call — all String params — NO overloading
-      window.NativePlayer.playStream(json, m.title || 'Stream', category, nowNext || '', foTimeout, foAuto, settings.savePath || '');
+      const tsEnabled = String(settings.timeshiftEnabled !== false);
+      window.NativePlayer.playStreamExTs(json, m.title || 'Stream', category, nowNext || '', foTimeout, foAuto, settings.savePath || '', m.id || '', '0', tsEnabled);
       return;
     }
 

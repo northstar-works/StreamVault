@@ -100,6 +100,7 @@ public class PlayerActivity extends Activity {
     private String      lastSuccessUrl  = null, savePath = null;
     private long        playbackStartTime = 0, foTimeoutMs = 15000, recordingStartTime = 0;
     private long        seekOnReadyMs   = 0;    // seek to this position after STATE_READY
+    private boolean     timeshiftUserEnabled = true;  // from settings/intent
     private String      itemId          = null; // for Plex progress reporting
     private boolean     foAuto          = true;
     private ConnectivityManager.NetworkCallback networkCallback;
@@ -168,6 +169,7 @@ public class PlayerActivity extends Activity {
         savePath    = getIntent().getStringExtra(EXTRA_SAVE_PATH);
         itemId      = getIntent().getStringExtra(EXTRA_ITEM_ID);
         long globalSeek = getIntent().getLongExtra(EXTRA_SEEK_MS, 0);
+        timeshiftUserEnabled = getIntent().getBooleanExtra("ts_enabled", true);
 
         String json = getIntent().getStringExtra(EXTRA_FAILOVER_JSON);
         if (json != null && !json.isEmpty()) {
@@ -444,8 +446,8 @@ public class PlayerActivity extends Activity {
                         player.seekTo(seekOnReadyMs);
                         seekOnReadyMs=0;
                     }
-                    // Start timeshift buffer for live TV
-                    if (isIptvItem()) startTimeshiftBuffer();
+                    // Start timeshift buffer for live TV (if enabled in settings)
+                    if (isIptvItem() && timeshiftUserEnabled) startTimeshiftBuffer();
                     // Start Plex position reporter
                     if (!isIptvItem()) startPositionReporter();
                 } else if (state==Player.STATE_BUFFERING) {
@@ -783,6 +785,7 @@ public class PlayerActivity extends Activity {
     }
 
     private void stopRecording() {
+        if (!recording) return;   // no toast if not actually recording
         recording=false;
         recordBtn.setColorFilter(Color.parseColor("#80ffffff"));
         showMsg("⏹ Stopping recording…");
@@ -887,11 +890,11 @@ public class PlayerActivity extends Activity {
     private TextView makeLabel(int sp, int color, boolean bold) { TextView t=new TextView(this); t.setTextColor(color); t.setTextSize(sp); t.setSingleLine(true); if(bold)t.setTypeface(null,Typeface.BOLD); return t; }
 
     // ─── Lifecycle ───────────────────────────────────────────────────────────
-    @Override public void onBackPressed() { if(recording)stopRecording(); finish(); }
+    @Override public void onBackPressed() { recording=false; finish(); }
     @Override protected void onResume() { super.onResume(); hideSystemUI(); if(player!=null)player.play(); }
     @Override protected void onPause()  { if(player!=null)player.pause(); super.onPause(); }
     @Override protected void onDestroy() {
-        stopRecording(); stopTimeshiftBuffer(); stopPositionReporter();
+        recording=false; stopTimeshiftBuffer(); stopPositionReporter();
         if(handler!=null) handler.removeCallbacksAndMessages(null);
         releasePlayer();
         if (Build.VERSION.SDK_INT>=Build.VERSION_CODES.N&&networkCallback!=null) {
@@ -924,6 +927,11 @@ public class PlayerActivity extends Activity {
                     else if(player!=null){if(player.isPlaying())player.pause();else player.play();updatePlayPauseIcon();}
                     return true;
                 case KeyEvent.KEYCODE_BACK: finish(); return true;
+                case KeyEvent.KEYCODE_MEDIA_RECORD:
+                    toggleRecording(); return true;
+                // Yellow button (on Fire TV remotes) → toggle record
+                case 183: // KEYCODE_INFO sometimes used as yellow
+                    toggleRecording(); return true;
             }
         }
         return super.dispatchKeyEvent(event);

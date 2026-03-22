@@ -1,0 +1,24 @@
+StreamVault v4.6.5 (Build 53)
+
+Fixes:
+- "Stopping recording" toast no longer fires on channel change, app close, or back button — only fires when you explicitly press the record button to stop a recording you started
+- TV DPad: KEYCODE_MEDIA_RECORD (dedicated record key on remotes) and key 183 (yellow button on some Fire TV remotes) now toggle recording
+- TV mode setting removed from Settings — now auto-detected by platform (tv vs mobile APK)
+
+Live TV Timeshift:
+- New Settings section: "Live TV — Timeshift & DVR"
+- Toggle to enable/disable timeshift (pause live TV) globally
+- Max buffer duration setting: 10 min, 30 min, 1 hour, or unlimited
+- Timeshift enabled state passed to player at launch time
+
+DVR remote storage (new):
+- Toggle to enable DVR on a remote network device (FTP, FTPS, or Samba/SMB)
+- Configure host, port, credentials, and remote folder path
+- Test connection button
+- When enabled, a DVR tab appears in the ITV section of the Home page
+- All recordings and scheduled recordings route to the remote device when configured
+
+App-wide checks:
+- DVR tab hidden from Home Tabs sort list (only appears when enabled in settings)
+- playStreamExTs() bridge method added for passing timeshift enabled state to native player
+- Resume Plex modal: cancel now safely handled

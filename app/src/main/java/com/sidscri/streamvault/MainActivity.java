@@ -217,6 +217,14 @@ public class MainActivity extends Activity {
             String category, String nowNext,
             String foTimeoutStr, String foAutoStr, String savePathStr,
             String itemId, String seekMsStr) {
+            playStreamExTs(failoverJson, title, category, nowNext, foTimeoutStr, foAutoStr, savePathStr, itemId, seekMsStr, "true");
+        }
+
+        @JavascriptInterface
+        public void playStreamExTs(String failoverJson, String title,
+            String category, String nowNext,
+            String foTimeoutStr, String foAutoStr, String savePathStr,
+            String itemId, String seekMsStr, String tsEnabledStr) {
             runOnUiThread(() -> {
                 Intent intent = new Intent(MainActivity.this, PlayerActivity.class);
                 intent.putExtra(PlayerActivity.EXTRA_FAILOVER_JSON,
@@ -243,6 +251,9 @@ public class MainActivity extends Activity {
                 long seekMs = 0;
                 try { seekMs = Long.parseLong(seekMsStr); } catch (Exception e) {}
                 if (seekMs > 0) intent.putExtra(PlayerActivity.EXTRA_SEEK_MS, seekMs);
+
+                boolean tsEnabled = !"false".equalsIgnoreCase(tsEnabledStr);
+                intent.putExtra("ts_enabled", tsEnabled);
 
                 startActivity(intent);
             });
