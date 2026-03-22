@@ -1,0 +1,19 @@
+StreamVault v4.6.5 (Build 54)
+
+Settings DPad — Root cause fixed:
+- Single typo '#settings-scr' (non-existent ID) was used in moveTvFocusSpatial to find the settings container. The real ID is '#set-scr'. This one bug caused ALL settings DPad navigation to fall through to generic spatial logic, making it erratic everywhere.
+- With the correct container ID, focusWithinContainerRows now properly handles up/down movement between settings rows and left/right within each row.
+
+Locality Priorities DPad:
+- Input field and Add button row now has data-tv-group="locality-add" — DPad right from the input goes to the Add button; DPad left from Add goes back to the input. No more jumping to unrelated fields.
+
+Backup & Restore:
+- On Fire TV: choosing a backup folder now immediately triggers the backup (no second "Backup All" press needed — the two-step was confusing).
+- On mobile: shows clear toast "Backup folder set — tap Backup All to save".
+- Backup All button shows progress toast with destination path before writing.
+- Readonly display-only inputs (save path, backup path, alt-status) are now skipped by TV DPad focus — they're labels, not interactive fields.
+
+Other settings DPad fixes:
+- Scheduled Recording add rows (both time-based and EPG-based) now have data-tv-group for clean left/right navigation.
+- Plex server + token fields tagged for proper vertical nav.
+- Failover "Refresh Alternatives Now" row tagged.
