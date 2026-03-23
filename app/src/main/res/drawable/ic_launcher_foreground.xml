@@ -4,12 +4,12 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Play triangle -->
+    <!-- Accent bar (left edge) -->
+    <path
+        android:fillColor="#C4B5FF"
+        android:pathData="M33,28L38,28L38,80L33,80Z" />
+    <!-- Main play triangle — bold, centered in safe zone (72dp inner) -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M42,36L42,72L72,54Z" />
-    <!-- Small accent bar -->
-    <path
-        android:fillColor="#B8AEFF"
-        android:pathData="M38,36L40,36L40,72L38,72Z" />
+        android:pathData="M41,28L41,80L78,54Z" />
 </vector>

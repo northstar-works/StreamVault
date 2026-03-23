@@ -95,7 +95,6 @@ public class PlayerActivity extends Activity {
     private SeekBar     timeshiftBar;
     private ImageButton playPauseBtn, lockBtn, recordBtn, prevBtn, nextBtn,
                         timeshiftPauseBtn, timeshiftLiveBtn;
-    private TextView    seekRew30, seekRew10, seekFwd10, seekFwd30;
     private Handler     handler;
     private Runnable    hideOverlayRunnable, failoverTimeoutRunnable, strengthUpdater, positionReporter;
     private boolean     overlayVisible = false, locked = false, networkAvailable = true;
@@ -314,16 +313,7 @@ public class PlayerActivity extends Activity {
         prevBtn.setOnClickListener(v->{ playPreviousVariant(); scheduleHideOverlay(); });
         c.addView(prevBtn);
 
-        // Seek buttons — hidden for live IPTV, shown for Plex/iCam/Local/Network
-        seekRew30 = makeSeekLabel("-30s");
-        seekRew30.setVisibility(View.GONE);
-        seekRew30.setOnClickListener(v->{ seekRelative(-30000); scheduleHideOverlay(); });
-        c.addView(seekRew30);
 
-        seekRew10 = makeSeekLabel("-10s");
-        seekRew10.setVisibility(View.GONE);
-        seekRew10.setOnClickListener(v->{ seekRelative(-10000); scheduleHideOverlay(); });
-        c.addView(seekRew10);
 
         playPauseBtn = new ImageButton(this);
         playPauseBtn.setImageResource(android.R.drawable.ic_media_pause);
@@ -339,15 +329,7 @@ public class PlayerActivity extends Activity {
         pLp.leftMargin=dp(10); pLp.rightMargin=dp(10);
         c.addView(playPauseBtn, pLp);
 
-        seekFwd10 = makeSeekLabel("+10s");
-        seekFwd10.setVisibility(View.GONE);
-        seekFwd10.setOnClickListener(v->{ seekRelative(10000); scheduleHideOverlay(); });
-        c.addView(seekFwd10);
 
-        seekFwd30 = makeSeekLabel("+30s");
-        seekFwd30.setVisibility(View.GONE);
-        seekFwd30.setOnClickListener(v->{ seekRelative(30000); scheduleHideOverlay(); });
-        c.addView(seekFwd30);
 
         nextBtn = makeButton(android.R.drawable.ic_media_next);
         nextBtn.setBackgroundColor(Color.parseColor("#33000000"));
@@ -357,30 +339,8 @@ public class PlayerActivity extends Activity {
         return c;
     }
 
-    private TextView makeSeekLabel(String text) {
-        TextView tv = new TextView(this);
-        tv.setText(text);
-        tv.setTextColor(Color.WHITE);
-        tv.setTextSize(11);
-        tv.setTypeface(null, Typeface.BOLD);
-        tv.setGravity(Gravity.CENTER);
-        tv.setBackgroundColor(Color.parseColor("#33000000"));
-        tv.setPadding(dp(12), dp(10), dp(12), dp(10));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2,-2);
-        lp.leftMargin = dp(4); lp.rightMargin = dp(4);
-        tv.setLayoutParams(lp);
-        return tv;
-    }
 
-    private void seekRelative(long offsetMs) {
-        if (player == null) return;
-        long dur = player.getDuration();
-        long pos = player.getCurrentPosition();
-        long target = Math.max(0, pos + offsetMs);
-        if (dur > 0) target = Math.min(target, dur);
-        player.seekTo(target);
-        updatePlayPauseIcon();
-    }
+
 
     private View buildBottomOverlay() {
         LinearLayout bot = new LinearLayout(this);
@@ -501,12 +461,6 @@ public class PlayerActivity extends Activity {
                         player.seekTo(seekOnReadyMs);
                         seekOnReadyMs=0;
                     }
-                    // Show/hide seek buttons based on stream type
-                    int seekVis = isIptvItem() ? View.GONE : View.VISIBLE;
-                    if (seekRew30 != null) seekRew30.setVisibility(seekVis);
-                    if (seekRew10 != null) seekRew10.setVisibility(seekVis);
-                    if (seekFwd10 != null) seekFwd10.setVisibility(seekVis);
-                    if (seekFwd30 != null) seekFwd30.setVisibility(seekVis);
                     // Start timeshift buffer for live TV (if enabled in settings)
                     if (isIptvItem() && timeshiftUserEnabled) startTimeshiftBuffer();
                     // Start keep-alive for live streams
@@ -1020,12 +974,8 @@ public class PlayerActivity extends Activity {
                     if(timeshiftPaused){resumeTimeshift();}
                     else if(player!=null){if(player.isPlaying())player.pause();else player.play();updatePlayPauseIcon();}
                     scheduleHideOverlay(); return true;
-                case KeyEvent.KEYCODE_DPAD_LEFT:
-                    if (!isIptvItem()) { seekRelative(-10000); } else { playPreviousVariant(); }
-                    scheduleHideOverlay(); return true;
-                case KeyEvent.KEYCODE_DPAD_RIGHT:
-                    if (!isIptvItem()) { seekRelative(10000); } else { playNextVariant(); }
-                    scheduleHideOverlay(); return true;
+                case KeyEvent.KEYCODE_DPAD_LEFT:  playPreviousVariant(); scheduleHideOverlay(); return true;
+                case KeyEvent.KEYCODE_DPAD_RIGHT: playNextVariant();     scheduleHideOverlay(); return true;
                 case KeyEvent.KEYCODE_DPAD_UP:
                     // Timeshift: pause if IPTV and not paused
                     if(isIptvItem()&&timeshiftEnabled&&!timeshiftPaused){pauseTimeshift();}
