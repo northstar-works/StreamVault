@@ -206,7 +206,7 @@ public class PlayerActivity extends Activity {
         return v.contains(".m3u8")||v.contains("m3u_plus")||v.contains("type=m3u")||v.contains("output=m3u8");
     }
     private boolean isIptvItem() {
-        // IPTV items don't have itemId set (only Plex items do)
+        // ITV items don't have itemId set (only Plex items do)
         return itemId == null || itemId.isEmpty();
     }
 
@@ -282,7 +282,7 @@ public class PlayerActivity extends Activity {
         recordBtn.setOnClickListener(v->toggleRecording());
         top.addView(recordBtn);
 
-        // Timeshift pause button (only for IPTV)
+        // Timeshift pause button (only for ITV)
         if (isIptvItem()) {
             timeshiftPauseBtn = makeButton(android.R.drawable.ic_media_pause);
             timeshiftPauseBtn.setColorFilter(Color.parseColor("#80ffffff"));
@@ -879,7 +879,7 @@ public class PlayerActivity extends Activity {
     private void releaseWifiLock() {
         try { if (wifiLock != null && wifiLock.isHeld()) wifiLock.release(); } catch (Exception ignored) {}
     }
-    /** Periodic keep-alive: for live IPTV, nudge ExoPlayer every 8 min to prevent
+    /** Periodic keep-alive: for live ITV, nudge ExoPlayer every 8 min to prevent
      *  Android network idle timeout from stalling the connection silently. */
     private void startLiveKeepAlive() {
         stopLiveKeepAlive();
@@ -977,7 +977,7 @@ public class PlayerActivity extends Activity {
                 case KeyEvent.KEYCODE_DPAD_LEFT:  playPreviousVariant(); scheduleHideOverlay(); return true;
                 case KeyEvent.KEYCODE_DPAD_RIGHT: playNextVariant();     scheduleHideOverlay(); return true;
                 case KeyEvent.KEYCODE_DPAD_UP:
-                    // Timeshift: pause if IPTV and not paused
+                    // Timeshift: pause if ITV and not paused
                     if(isIptvItem()&&timeshiftEnabled&&!timeshiftPaused){pauseTimeshift();}
                     else{toggleOverlay();scheduleHideOverlay();}
                     return true;

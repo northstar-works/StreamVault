@@ -6,7 +6,7 @@ Live stream freeze fix:
 
 PlexStr seek controls:
 - Added -30s / -10s / +10s / +30s skip buttons around the play/pause button in the player overlay
-- Fire TV DPad: Left/Right arrows seek ±10s for Plex items (instead of switching variants). For live IPTV, Left/Right still switches to previous/next source.
+- Fire TV DPad: Left/Right arrows seek ±10s for Plex items (instead of switching variants). For live ITV, Left/Right still switches to previous/next source.
 
 Guide — programs not populating fix:
 - Added `will-change:transform` and `contain:layout` to .gstrip: forces WebView to create a GPU compositing layer for each channel's program strip. Prevents WebView's paint culling from skipping off-screen absolute-positioned program blocks until hovered/focused.

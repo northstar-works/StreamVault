@@ -1,10 +1,10 @@
 StreamVault v3.0.0 (Build 5)
 
-Major rewrite — native ExoPlayer IPTV playback
+Major rewrite — native ExoPlayer ITV playback
 
 • Replaced WebView/iframe player with native Android ExoPlayer (Media3)
   - Proper HLS stream handling — no more spinning or black screens
-  - Works with gohyperspeed.com and all IPTV provider URLs
+  - Works with gohyperspeed.com and all ITV provider URLs
   - Hardware-accelerated video decoding
   - Handles HLS, DASH, RTSP, progressive streams
 • Native fullscreen player with overlay controls
