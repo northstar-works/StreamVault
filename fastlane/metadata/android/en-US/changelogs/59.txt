@@ -1,0 +1,17 @@
+StreamVault v4.6.9 (Build 59)
+
+Live stream freeze fix:
+- Added WifiLock (WIFI_MODE_FULL_HIGH_PERF) — acquired when stream starts, released on channel change or exit. Prevents Android power manager from throttling WiFi during long playback sessions.
+- Added live keep-alive monitor (every 8 min): re-acquires WifiLock and checks if stream is silently stalled (buffered position not advancing beyond current). If stalled, triggers soft reconnect automatically.
+
+PlexStr seek controls:
+- Added -30s / -10s / +10s / +30s skip buttons around the play/pause button in the player overlay
+- Fire TV DPad: Left/Right arrows seek ±10s for Plex items (instead of switching variants). For live IPTV, Left/Right still switches to previous/next source.
+
+Guide — programs not populating fix:
+- Added `will-change:transform` and `contain:layout` to .gstrip: forces WebView to create a GPU compositing layer for each channel's program strip. Prevents WebView's paint culling from skipping off-screen absolute-positioned program blocks until hovered/focused.
+- Added `transform:translateZ(0)` to .gpr: promotes each program block to its own layer.
+- Guide expanded from 14 to 16 slots (8 hours total window).
+- Program titles now shown on all blocks; time range shown when block is wider than 60px.
+- EPG past-data retention extended from 1 hour to 3 hours so scrolling left still shows recent history.
+- getGuidePrograms: fallback pass includes programs near "now" even if startMs filter would exclude them.

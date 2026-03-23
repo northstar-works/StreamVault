@@ -5,6 +5,8 @@ import android.content.Context;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.net.ConnectivityManager;
+import android.net.wifi.WifiManager;
+import android.os.PowerManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
@@ -104,6 +106,8 @@ public class PlayerActivity extends Activity {
     private String      itemId          = null; // for Plex progress reporting
     private boolean     foAuto          = true;
     private ConnectivityManager.NetworkCallback networkCallback;
+    private WifiManager.WifiLock wifiLock;
+    private Runnable liveKeepAlive;
     private Thread      recordThread;
     private WebView     parentWebView   = null; // set by MainActivity if available
 
@@ -309,6 +313,16 @@ public class PlayerActivity extends Activity {
         prevBtn.setOnClickListener(v->{ playPreviousVariant(); scheduleHideOverlay(); });
         c.addView(prevBtn);
 
+        // Plex: -30s rewind
+        TextView rew30 = makeSeekLabel("-30s");
+        rew30.setOnClickListener(v->{ seekRelative(-30000); scheduleHideOverlay(); });
+        c.addView(rew30);
+
+        // Plex: -10s rewind
+        TextView rew10 = makeSeekLabel("-10s");
+        rew10.setOnClickListener(v->{ seekRelative(-10000); scheduleHideOverlay(); });
+        c.addView(rew10);
+
         playPauseBtn = new ImageButton(this);
         playPauseBtn.setImageResource(android.R.drawable.ic_media_pause);
         playPauseBtn.setColorFilter(Color.WHITE);
@@ -320,8 +334,18 @@ public class PlayerActivity extends Activity {
             scheduleHideOverlay();
         });
         LinearLayout.LayoutParams pLp = new LinearLayout.LayoutParams(-2,-2);
-        pLp.leftMargin=dp(12); pLp.rightMargin=dp(12);
+        pLp.leftMargin=dp(10); pLp.rightMargin=dp(10);
         c.addView(playPauseBtn, pLp);
+
+        // Plex: +10s skip
+        TextView fwd10 = makeSeekLabel("+10s");
+        fwd10.setOnClickListener(v->{ seekRelative(10000); scheduleHideOverlay(); });
+        c.addView(fwd10);
+
+        // Plex: +30s skip
+        TextView fwd30 = makeSeekLabel("+30s");
+        fwd30.setOnClickListener(v->{ seekRelative(30000); scheduleHideOverlay(); });
+        c.addView(fwd30);
 
         nextBtn = makeButton(android.R.drawable.ic_media_next);
         nextBtn.setBackgroundColor(Color.parseColor("#33000000"));
@@ -329,6 +353,31 @@ public class PlayerActivity extends Activity {
         nextBtn.setOnClickListener(v->{ playNextVariant(); scheduleHideOverlay(); });
         c.addView(nextBtn);
         return c;
+    }
+
+    private TextView makeSeekLabel(String text) {
+        TextView tv = new TextView(this);
+        tv.setText(text);
+        tv.setTextColor(Color.WHITE);
+        tv.setTextSize(11);
+        tv.setTypeface(null, Typeface.BOLD);
+        tv.setGravity(Gravity.CENTER);
+        tv.setBackgroundColor(Color.parseColor("#33000000"));
+        tv.setPadding(dp(12), dp(10), dp(12), dp(10));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2,-2);
+        lp.leftMargin = dp(4); lp.rightMargin = dp(4);
+        tv.setLayoutParams(lp);
+        return tv;
+    }
+
+    private void seekRelative(long offsetMs) {
+        if (player == null) return;
+        long dur = player.getDuration();
+        long pos = player.getCurrentPosition();
+        long target = Math.max(0, pos + offsetMs);
+        if (dur > 0) target = Math.min(target, dur);
+        player.seekTo(target);
+        updatePlayPauseIcon();
     }
 
     private View buildBottomOverlay() {
@@ -396,6 +445,8 @@ public class PlayerActivity extends Activity {
     private void playVariant(int idx) {
         // On channel change, clear timeshift buffer
         stopTimeshiftBuffer();
+        stopLiveKeepAlive();
+        releaseWifiLock();
 
         if (idx<0||idx>=variants.size()) { if (lastSuccessUrl!=null) { for(int i=0;i<variants.size();i++) if(lastSuccessUrl.equals(variants.get(i).url)){playVariant(i);return;} } showAllFailed(); return; }
         currentIdx = idx;
@@ -419,7 +470,9 @@ public class PlayerActivity extends Activity {
             .setUserAgent("StreamVault/4.6 ExoPlayer")
             .setConnectTimeoutMs(12000).setReadTimeoutMs(12000)
             .setAllowCrossProtocolRedirects(true);
+        // Wake lock keeps CPU alive during HLS segment downloads
         player = new ExoPlayer.Builder(this).build();
+        acquireWifiLock();
         playerView.setPlayer(player);
         playbackStartTime = System.currentTimeMillis();
 
@@ -448,6 +501,8 @@ public class PlayerActivity extends Activity {
                     }
                     // Start timeshift buffer for live TV (if enabled in settings)
                     if (isIptvItem() && timeshiftUserEnabled) startTimeshiftBuffer();
+                    // Start keep-alive for live streams
+                    if (isIptvItem()) startLiveKeepAlive();
                     // Start Plex position reporter
                     if (!isIptvItem()) startPositionReporter();
                 } else if (state==Player.STATE_BUFFERING) {
@@ -847,6 +902,52 @@ public class PlayerActivity extends Activity {
         handler.postDelayed(strengthUpdater,3000);
     }
 
+    // ─── WiFi Lock & Live Keep-Alive ─────────────────────────────────────────
+    private void acquireWifiLock() {
+        try {
+            if (wifiLock == null) {
+                WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+                if (wm != null) {
+                    wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "StreamVault:stream");
+                }
+            }
+            if (wifiLock != null && !wifiLock.isHeld()) wifiLock.acquire();
+        } catch (Exception ignored) {}
+    }
+    private void releaseWifiLock() {
+        try { if (wifiLock != null && wifiLock.isHeld()) wifiLock.release(); } catch (Exception ignored) {}
+    }
+    /** Periodic keep-alive: for live IPTV, nudge ExoPlayer every 8 min to prevent
+     *  Android network idle timeout from stalling the connection silently. */
+    private void startLiveKeepAlive() {
+        stopLiveKeepAlive();
+        if (!isIptvItem()) return;
+        liveKeepAlive = new Runnable() {
+            @Override public void run() {
+                if (player != null && player.getPlaybackState() == Player.STATE_READY && player.isPlaying()) {
+                    // Poke ExoPlayer — get buffered position to force internal activity check
+                    long buf = player.getBufferedPosition();
+                    long pos = player.getCurrentPosition();
+                    // If buffered position hasn't advanced beyond current in a stuck window, retry
+                    if (buf > 0 && pos > 0 && buf <= pos + 500) {
+                        // Looks stalled despite STATE_READY — soft reconnect
+                        if (!locked && foAuto && networkAvailable) {
+                            showMsg("Auto-recovering stalled stream…");
+                            tryNextVariant();
+                            return;
+                        }
+                    }
+                    acquireWifiLock();
+                }
+                handler.postDelayed(this, 8 * 60 * 1000L); // every 8 minutes
+            }
+        };
+        handler.postDelayed(liveKeepAlive, 8 * 60 * 1000L);
+    }
+    private void stopLiveKeepAlive() {
+        if (liveKeepAlive != null) { handler.removeCallbacks(liveKeepAlive); liveKeepAlive = null; }
+    }
+
     // ─── Network ─────────────────────────────────────────────────────────────
     private void registerNetworkCallback() {
         if (Build.VERSION.SDK_INT>=Build.VERSION_CODES.N) {
@@ -894,7 +995,7 @@ public class PlayerActivity extends Activity {
     @Override protected void onResume() { super.onResume(); hideSystemUI(); if(player!=null)player.play(); }
     @Override protected void onPause()  { if(player!=null)player.pause(); super.onPause(); }
     @Override protected void onDestroy() {
-        recording=false; stopTimeshiftBuffer(); stopPositionReporter();
+        recording=false; stopTimeshiftBuffer(); stopLiveKeepAlive(); stopPositionReporter(); releaseWifiLock();
         if(handler!=null) handler.removeCallbacksAndMessages(null);
         releasePlayer();
         if (Build.VERSION.SDK_INT>=Build.VERSION_CODES.N&&networkCallback!=null) {
@@ -911,8 +1012,12 @@ public class PlayerActivity extends Activity {
                     if(timeshiftPaused){resumeTimeshift();}
                     else if(player!=null){if(player.isPlaying())player.pause();else player.play();updatePlayPauseIcon();}
                     scheduleHideOverlay(); return true;
-                case KeyEvent.KEYCODE_DPAD_LEFT:  playPreviousVariant(); scheduleHideOverlay(); return true;
-                case KeyEvent.KEYCODE_DPAD_RIGHT: playNextVariant();     scheduleHideOverlay(); return true;
+                case KeyEvent.KEYCODE_DPAD_LEFT:
+                    if (!isIptvItem()) { seekRelative(-10000); } else { playPreviousVariant(); }
+                    scheduleHideOverlay(); return true;
+                case KeyEvent.KEYCODE_DPAD_RIGHT:
+                    if (!isIptvItem()) { seekRelative(10000); } else { playNextVariant(); }
+                    scheduleHideOverlay(); return true;
                 case KeyEvent.KEYCODE_DPAD_UP:
                     // Timeshift: pause if IPTV and not paused
                     if(isIptvItem()&&timeshiftEnabled&&!timeshiftPaused){pauseTimeshift();}

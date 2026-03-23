@@ -166,9 +166,9 @@ body.tv-mode .hd{padding-top:10px}
 .gch img{width:20px;height:20px;border-radius:3px;flex-shrink:0;object-fit:cover}
 .gch-nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:8px;font-weight:600}
 /* Program strip: position:relative DIV with explicit width+height — programs anchor here only */
-.gstrip{position:relative;flex-shrink:0;overflow:hidden}
+.gstrip{position:relative;flex-shrink:0;overflow:hidden;will-change:transform;contain:layout}
 /* Program block: position:absolute with explicit top/left/width/height set in JS */
-.gpr{position:absolute;border:1px solid rgba(255,255,255,.10);overflow:hidden;display:flex;flex-direction:column;justify-content:center;padding:4px 6px;font-size:8px;background:rgba(255,255,255,.03);z-index:2;border-radius:4px;cursor:pointer;box-sizing:border-box}
+.gpr{position:absolute;border:1px solid rgba(255,255,255,.10);overflow:hidden;display:flex;flex-direction:column;justify-content:center;padding:4px 6px;font-size:8px;background:rgba(255,255,255,.03);z-index:2;border-radius:4px;cursor:pointer;box-sizing:border-box;transform:translateZ(0)}
 .gpr .gt{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.1}
 .gpr .gti{font-size:6px;color:var(--t3);line-height:1.1;margin-top:2px;white-space:nowrap;overflow:hidden}
 .gpr.now{background:rgba(108,92,231,.18);border-left:3px solid var(--ac)}
@@ -275,7 +275,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
 
 <!-- ═══ LIBRARY ═══ -->
 <div id="lib-scr" class="scr on">
-  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b58</span>
+  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b@@VERSION_CODE@@</span>
     <button class="ib" id="btn-lib-edit" title="Toggle edit controls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
     <button class="ib" id="btn-add-top" title="Add stream"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
     <button class="ib" id="btn-exp" title="Export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
@@ -442,7 +442,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v4.6.5 (Build 53)<br>IPTV · Plex · iCam · Local · Network · EPG Guide · DPad TV Navigation · HLS Recording · Failover · Scheduled Recording.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v@@VERSION_NAME@@ (Build @@VERSION_CODE@@)<br>IPTV · Plex · iCam · Local · Network · EPG Guide · DPad TV Navigation · HLS Recording · Failover · Scheduled Recording.</p>
   </div>
 </div>
 
@@ -759,7 +759,7 @@ http://stream.example.com/cnn
 "use strict";
 
 // ─── Constants & State ───
-const VERSION = '4.6.6', BUILD = 58;
+const VERSION = '@@VERSION_NAME@@', BUILD = @@VERSION_CODE@@;
 const KEYS = { items: 'sv_items_v3', repos: 'sv_repos_v2', epgSrc: 'sv_epg_src', epgData: 'sv_epg_data', settings: 'sv_settings_v2' };
 const PLOG_KEY = 'sv_playlog_v1';      // Plex/VOD progress log
 let playLog = {};                        // {itemId: {posMs, duration, ts, title}}
@@ -1215,7 +1215,7 @@ function parseXMLTV(xml) {
     const chId = p.getAttribute('channel');
     const start = parseXMLDate(p.getAttribute('start'));
     const stop = parseXMLDate(p.getAttribute('stop'));
-    if (stop < now - 3600000 || start > cutoff) return;
+    if (stop < now - 10800000 || start > cutoff) return; // keep 3hrs of past
     const title = p.querySelector('title');
     if (!programs[chId]) programs[chId] = [];
     programs[chId].push({ start, stop, title: title ? title.textContent : '' });
@@ -1321,10 +1321,18 @@ function getGuidePrograms(epgId, startMs, endMs) {
     seen.add(key);
     out.push(p);
   };
+  // Main pass: all programs overlapping the window
   for (const p of list) pushProg(p);
+  // Always include now+next so the current programme shows even if it started before startMs
   const nn = getNowNext(epgId);
   if (nn.now) pushProg(nn.now);
   if (nn.next) pushProg(nn.next);
+  // If still empty, include any program that contains or is near now
+  if (!out.length) {
+    const now = Date.now();
+    const nearby = list.filter(p => p.stop > now - 3600000 && p.start < now + 3600000);
+    nearby.forEach(p => pushProg({ ...p })); // force past the time window filter
+  }
   return out.sort((a, b) => a.start - b.start);
 }
 
@@ -2684,7 +2692,7 @@ function renderGuide() {
   t0.setMinutes(t0.getMinutes() < 30 ? 0 : 30, 0, 0);
   t0.setHours(t0.getHours() - 1);
   const startMs = t0.getTime();
-  const slots   = Array.from({length: 14}, (_, i) => new Date(startMs + i * 1800000));
+  const slots   = Array.from({length: 16}, (_, i) => new Date(startMs + i * 1800000));
   const endMs   = slots[slots.length - 1].getTime() + 1800000;
   const stripW  = slotW * slots.length;
   const minW    = isTv ? 36 : 44;
@@ -2736,7 +2744,7 @@ function renderGuide() {
       // Absolute positioning with explicit top/left/width/height — no ambiguity
       html += `<div class="gpr${isNow?' now':''}${isPast?' past':''}" role="button" tabindex="${isTv?'0':'-1'}" data-ch-idx="${chIdx}" data-prog-idx="${progIdx}" onclick="playItem('${m.id}')" style="left:${left}px;top:${gapV}px;width:${width}px;height:${pH}px">`;
       html += `<div class="gt" style="font-size:${fs}">${esc(p.title)}</div>`;
-      if (width > 72) html += `<div class="gti">${fmtTime(p.start)}–${fmtTime(p.stop)}</div>`;
+      if (width > 60) html += `<div class="gti">${fmtTime(p.start)}–${fmtTime(p.stop)}</div>`;
       html += `</div>`;
     });
 

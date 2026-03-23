@@ -10,8 +10,8 @@ android {
         applicationId "com.sidscri.streamvault"
         minSdk 24
         targetSdk 34
-        versionCode 55
-        versionName "4.6.8"
+        versionCode 56
+        versionName "4.6.9"
     }
 
 
@@ -80,4 +80,41 @@ dependencies {
     implementation 'androidx.media3:media3-exoplayer-rtsp:1.2.1'
     implementation 'androidx.media3:media3-ui:1.2.1'
     implementation 'androidx.media3:media3-datasource-okhttp:1.2.1'
+}
+
+// ─── Version token injection into index.html ────────────────────────────────
+// build.gradle is the single source of truth for version/build numbers.
+// @@VERSION_NAME@@ and @@VERSION_CODE@@ in index.html are replaced at build time.
+// To bump the app version: only edit versionCode and versionName above — nothing else.
+
+android.applicationVariants.configureEach { variant ->
+    def variantName  = variant.name.capitalize()
+    def vName        = android.defaultConfig.versionName + (variant.flavorName == "tv" ? "-tv" : "")
+    def vCode        = android.defaultConfig.versionCode.toString()
+    def outDir       = layout.buildDirectory.dir("injectAssets/${variantName}").get().asFile
+
+    // Task: copy index.html to build dir with tokens replaced
+    def injectTask = tasks.register("injectVersion${variantName}", Copy) {
+        description "Inject versionName/versionCode from build.gradle into index.html"
+        from("src/main/assets")
+        include("index.html")
+        into(outDir)
+        filter { String line ->
+            line.replace("@@VERSION_NAME@@", vName)
+                .replace("@@VERSION_CODE@@", vCode)
+        }
+    }
+
+    // Run before assets are merged
+    tasks.matching { it.name == "merge${variantName}Assets" }.configureEach {
+        dependsOn injectTask
+    }
+    tasks.matching { it.name == "compress${variantName}Assets" }.configureEach {
+        dependsOn injectTask
+    }
+
+    // Add generated dir as asset source (before main assets so it takes precedence)
+    android.sourceSets.getByName(variant.flavorName) {
+        assets.srcDirs = [outDir] + assets.srcDirs.findAll { it.absolutePath != outDir.absolutePath }
+    }
 }
