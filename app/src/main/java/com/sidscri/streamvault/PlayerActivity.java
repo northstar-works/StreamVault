@@ -102,6 +102,8 @@ public class PlayerActivity extends Activity {
     private String      lastSuccessUrl  = null, savePath = null;
     private long        playbackStartTime = 0, foTimeoutMs = 15000, recordingStartTime = 0;
     private long        seekOnReadyMs   = 0;    // seek to this position after STATE_READY
+    private boolean     userExplicitPause = false; // true only when user pressed pause
+    private TextView    seekRew30, seekRew10, seekFwd10, seekFwd30;
     private boolean     timeshiftUserEnabled = true;  // from settings/intent
     private String      itemId          = null; // for Plex progress reporting
     private boolean     foAuto          = true;
@@ -313,6 +315,17 @@ public class PlayerActivity extends Activity {
         prevBtn.setOnClickListener(v->{ playPreviousVariant(); scheduleHideOverlay(); });
         c.addView(prevBtn);
 
+        // Seek buttons — hidden until stream confirms seekable (VOD/Plex only)
+        seekRew30 = makeSeekLabel("⏪30s");
+        seekRew30.setVisibility(View.GONE);
+        seekRew30.setOnClickListener(v->{ seekRelative(-30000); scheduleHideOverlay(); });
+        c.addView(seekRew30);
+
+        seekRew10 = makeSeekLabel("⏪10s");
+        seekRew10.setVisibility(View.GONE);
+        seekRew10.setOnClickListener(v->{ seekRelative(-10000); scheduleHideOverlay(); });
+        c.addView(seekRew10);
+
 
 
         playPauseBtn = new ImageButton(this);
@@ -321,8 +334,12 @@ public class PlayerActivity extends Activity {
         playPauseBtn.setBackgroundColor(Color.parseColor("#6c5ce7"));
         playPauseBtn.setPadding(dp(15),dp(15),dp(15),dp(15));
         playPauseBtn.setOnClickListener(v->{
-            if (timeshiftPaused) { resumeTimeshift(); }
-            else if (player!=null) { if (player.isPlaying()) player.pause(); else player.play(); updatePlayPauseIcon(); }
+            if (timeshiftPaused) { resumeTimeshift(); userExplicitPause=false; }
+            else if (player!=null) {
+                if (player.isPlaying()) { player.pause(); userExplicitPause=true; }
+                else { player.play(); userExplicitPause=false; }
+                updatePlayPauseIcon();
+            }
             scheduleHideOverlay();
         });
         LinearLayout.LayoutParams pLp = new LinearLayout.LayoutParams(-2,-2);
@@ -331,12 +348,47 @@ public class PlayerActivity extends Activity {
 
 
 
+        seekFwd10 = makeSeekLabel("10s⏩");
+        seekFwd10.setVisibility(View.GONE);
+        seekFwd10.setOnClickListener(v->{ seekRelative(10000); scheduleHideOverlay(); });
+        c.addView(seekFwd10);
+
+        seekFwd30 = makeSeekLabel("30s⏩");
+        seekFwd30.setVisibility(View.GONE);
+        seekFwd30.setOnClickListener(v->{ seekRelative(30000); scheduleHideOverlay(); });
+        c.addView(seekFwd30);
+
         nextBtn = makeButton(android.R.drawable.ic_media_next);
         nextBtn.setBackgroundColor(Color.parseColor("#33000000"));
         nextBtn.setColorFilter(Color.WHITE);
         nextBtn.setOnClickListener(v->{ playNextVariant(); scheduleHideOverlay(); });
         c.addView(nextBtn);
         return c;
+    }
+
+    private TextView makeSeekLabel(String text) {
+        TextView tv = new TextView(this);
+        tv.setText(text);
+        tv.setTextColor(Color.WHITE);
+        tv.setTextSize(10);
+        tv.setTypeface(null, android.graphics.Typeface.BOLD);
+        tv.setGravity(android.view.Gravity.CENTER);
+        tv.setBackgroundColor(Color.parseColor("#44000000"));
+        tv.setPadding(dp(10), dp(8), dp(10), dp(8));
+        android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(-2,-2);
+        lp.leftMargin = dp(3); lp.rightMargin = dp(3);
+        tv.setLayoutParams(lp);
+        return tv;
+    }
+
+    private void seekRelative(long offsetMs) {
+        if (player == null) return;
+        long dur = player.getDuration();
+        long pos = player.getCurrentPosition();
+        long target = Math.max(0, pos + offsetMs);
+        if (dur > 0) target = Math.min(target, dur);
+        player.seekTo(target);
+        updatePlayPauseIcon();
     }
 
 
@@ -456,6 +508,18 @@ public class PlayerActivity extends Activity {
                     errorContainer.setVisibility(View.GONE);
                     lastSuccessUrl = v.url;
                     cancelFailoverTimeout();
+                    // Show seek buttons only for seekable VOD content (duration known, not ITV live)
+                    handler.postDelayed(() -> {
+                        if (player == null) return;
+                        boolean seekable = !isIptvItem()
+                            && player.isCurrentMediaItemSeekable()
+                            && player.getDuration() > 0;
+                        int sv = seekable ? View.VISIBLE : View.GONE;
+                        if (seekRew30 != null) seekRew30.setVisibility(sv);
+                        if (seekRew10 != null) seekRew10.setVisibility(sv);
+                        if (seekFwd10 != null) seekFwd10.setVisibility(sv);
+                        if (seekFwd30 != null) seekFwd30.setVisibility(sv);
+                    }, 1500); // small delay to let ExoPlayer report seekability
                     // Seek to resume position (Plex resume)
                     if (seekOnReadyMs>0) {
                         player.seekTo(seekOnReadyMs);
@@ -954,8 +1018,23 @@ public class PlayerActivity extends Activity {
 
     // ─── Lifecycle ───────────────────────────────────────────────────────────
     @Override public void onBackPressed() { recording=false; finish(); }
-    @Override protected void onResume() { super.onResume(); hideSystemUI(); if(player!=null)player.play(); }
-    @Override protected void onPause()  { if(player!=null)player.pause(); super.onPause(); }
+    @Override protected void onResume() {
+        super.onResume();
+        hideSystemUI();
+        // Resume playback unless user explicitly paused or timeshift is paused
+        if (player != null && !userExplicitPause && !timeshiftPaused) {
+            player.play();
+            updatePlayPauseIcon();
+        }
+    }
+    @Override protected void onPause() {
+        // For ITV live streams, don't auto-pause on activity focus loss (notifications, overlays etc.)
+        // Only pause if user explicitly pressed pause, or if it's a VOD/Plex item
+        if (player != null && (!isIptvItem() || userExplicitPause)) {
+            player.pause();
+        }
+        super.onPause();
+    }
     @Override protected void onDestroy() {
         recording=false; stopTimeshiftBuffer(); stopLiveKeepAlive(); stopPositionReporter(); releaseWifiLock();
         if(handler!=null) handler.removeCallbacksAndMessages(null);
@@ -971,8 +1050,12 @@ public class PlayerActivity extends Activity {
             switch(event.getKeyCode()) {
                 case KeyEvent.KEYCODE_DPAD_CENTER: case KeyEvent.KEYCODE_ENTER: case KeyEvent.KEYCODE_NUMPAD_ENTER:
                     toggleOverlay();
-                    if(timeshiftPaused){resumeTimeshift();}
-                    else if(player!=null){if(player.isPlaying())player.pause();else player.play();updatePlayPauseIcon();}
+                    if(timeshiftPaused){resumeTimeshift();userExplicitPause=false;}
+                    else if(player!=null){
+                        if(player.isPlaying()){player.pause();userExplicitPause=true;}
+                        else{player.play();userExplicitPause=false;}
+                        updatePlayPauseIcon();
+                    }
                     scheduleHideOverlay(); return true;
                 case KeyEvent.KEYCODE_DPAD_LEFT:  playPreviousVariant(); scheduleHideOverlay(); return true;
                 case KeyEvent.KEYCODE_DPAD_RIGHT: playNextVariant();     scheduleHideOverlay(); return true;
@@ -986,8 +1069,12 @@ public class PlayerActivity extends Activity {
                     else{toggleOverlay();scheduleHideOverlay();}
                     return true;
                 case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
-                    if(timeshiftPaused){resumeTimeshift();}
-                    else if(player!=null){if(player.isPlaying())player.pause();else player.play();updatePlayPauseIcon();}
+                    if(timeshiftPaused){resumeTimeshift();userExplicitPause=false;}
+                    else if(player!=null){
+                        if(player.isPlaying()){player.pause();userExplicitPause=true;}
+                        else{player.play();userExplicitPause=false;}
+                        updatePlayPauseIcon();
+                    }
                     return true;
                 case KeyEvent.KEYCODE_BACK: finish(); return true;
                 case KeyEvent.KEYCODE_MEDIA_RECORD:

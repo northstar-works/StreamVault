@@ -1327,11 +1327,11 @@ function getGuidePrograms(epgId, startMs, endMs) {
   const nn = getNowNext(epgId);
   if (nn.now) pushProg(nn.now);
   if (nn.next) pushProg(nn.next);
-  // If still empty, include any program that contains or is near now
+  // If still empty, directly add programs near now (bypass time window filter)
   if (!out.length) {
     const now = Date.now();
-    const nearby = list.filter(p => p.stop > now - 3600000 && p.start < now + 3600000);
-    nearby.forEach(p => pushProg({ ...p })); // force past the time window filter
+    list.filter(p => p.stop > now - 3600000 && p.start < now + 3600000)
+        .forEach(p => { const key=[p.start,p.stop,p.title||''].join('|'); if (!seen.has(key)){seen.add(key);out.push(p);} });
   }
   return out.sort((a, b) => a.start - b.start);
 }
@@ -4082,7 +4082,9 @@ window.playItem = async (id) => {
       const foAuto = String(settings.foAuto !== false);
       // SINGLE method call — all String params — NO overloading
       const tsEnabled = String(settings.timeshiftEnabled !== false);
-      window.NativePlayer.playStreamExTs(json, m.title || 'Stream', category, nowNext || '', foTimeout, foAuto, settings.savePath || '', m.id || '', '0', tsEnabled);
+      // Pass itemId only for Plex/VOD — empty string for ITV so native isIptvItem() works correctly
+      const nativeItemId = isPlexItem(m) ? (m.id || '') : '';
+      window.NativePlayer.playStreamExTs(json, m.title || 'Stream', category, nowNext || '', foTimeout, foAuto, settings.savePath || '', nativeItemId, '0', tsEnabled);
       return;
     }
 
@@ -4202,6 +4204,13 @@ window.addEventListener('popstate', () => {
 setInterval(() => {
   if (epgSrc.length) fetchAllEpg();
 }, 4 * 3600000);
+
+// ─── Guide auto-refresh every 30 min (keeps "now" line and current show updated) ───
+setInterval(() => {
+  if ($('guide-scr') && $('guide-scr').classList.contains('on')) {
+    renderGuide();
+  }
+}, 30 * 60000);
 
 // ─── Init ───
 loadItems();

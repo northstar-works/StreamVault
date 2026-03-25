@@ -1,0 +1,25 @@
+StreamVault v4.7.2 (Build 64)
+
+Stream pauses silently — ROOT CAUSE FIXED:
+- onPause() was calling player.pause() for every Activity lifecycle event (notifications, overlays, home button briefly triggering, Fire TV screensaver, etc.) with no user feedback.
+- Fix: track userExplicitPause flag. ITV live streams no longer pause on Activity lifecycle events — only when user presses pause. Plex/VOD still pauses on background (correct behavior for VOD).
+- onResume now checks userExplicitPause before auto-resuming.
+- Missing permissions added to AndroidManifest: WAKE_LOCK, ACCESS_WIFI_STATE, CHANGE_WIFI_STATE — WifiLock was silently failing without these, causing the stream stalls.
+
+Seek buttons (⏪30s ⏪10s 10s⏩ 30s⏩):
+- Restored for Plex/VOD content.
+- Now only appear when ExoPlayer confirms the stream IS seekable (isCurrentMediaItemSeekable() + getDuration() > 0).
+- Never shown for ITV live streams (getDuration() = 0 for live).
+- Hidden by default; shown 1.5s after STATE_READY once seekability is confirmed.
+
+isIptvItem() detection fixed:
+- JS was passing m.id for ALL items (including ITV), so Java always saw a non-empty itemId and isIptvItem() always returned false.
+- Fix: JS now passes empty string for itemId when item is ITV — only Plex items get their itemId passed.
+- Consequence: keepAlive, timeshift, and WifiLock now correctly activate for ITV streams.
+
+Guide improvements:
+- Empty-program fallback now adds nearby programs directly (bypasses time window filter correctly).
+- Guide auto-refreshes every 30 min while the Guide tab is open (keeps "now" line and current show title current).
+
+DPad Left/Right on ITV: confirmed correct — switches to previous/next alt source.
+Timeshift resume: confirmed working — ExoPlayer buffers while paused; resumeTimeshift() resumes from buffered position.
