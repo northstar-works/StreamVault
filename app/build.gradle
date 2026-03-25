@@ -10,8 +10,8 @@ android {
         applicationId "com.sidscri.streamvault"
         minSdk 24
         targetSdk 34
-        versionCode 60
-        versionName "4.7.3"
+        versionCode 61
+        versionName "4.7.4"
     }
 
 

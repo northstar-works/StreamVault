@@ -156,8 +156,8 @@ body.tv-mode .hd{padding-top:10px}
 .ghdr{display:flex;position:sticky;top:0;z-index:12;background:var(--bg);border-bottom:1px solid var(--bd)}
 /* Corner: sticky left AND top (inherits top via .ghdr) */
 .gcorner{flex-shrink:0;display:flex;align-items:center;padding:0 10px;background:var(--bg);color:var(--t3);font-weight:700;font-size:8px;position:sticky;left:0;z-index:13;border-right:1px solid rgba(255,255,255,.2);box-sizing:border-box}
-.gslots{display:flex;flex-shrink:0}
-.gslot{flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--t3);font-size:8px;border-left:1px solid rgba(255,255,255,.1);box-sizing:border-box}
+.gslots{display:flex;flex-shrink:0;position:relative}
+.gslot{flex-shrink:0;display:flex;align-items:center;justify-content:flex-start;padding-left:4px;font-weight:700;color:var(--t3);font-size:8px;border-left:1px solid rgba(255,255,255,.1);box-sizing:border-box}
 /* Channel rows: overflow:hidden is critical — prevents row from growing beyond rowH */
 .grow2{display:flex;border-bottom:1px solid rgba(255,255,255,.07);overflow:hidden}
 /* Channel cell: sticky left, explicit dimensions, flex-shrink:0 */
@@ -175,6 +175,8 @@ body.tv-mode .hd{padding-top:10px}
 .gpr.past{opacity:.4}
 .gpr:hover,.gpr:active,.gpr:focus{background:rgba(255,255,255,.1)!important;outline:none}
 .gnl{position:absolute;top:0;bottom:0;width:2px;background:var(--rd);z-index:4;pointer-events:none}
+.gnl-hdr{position:absolute;top:0;bottom:0;width:2px;background:var(--rd);z-index:14;pointer-events:none}
+.gnl-time{position:absolute;top:2px;left:50%;transform:translateX(-50%);background:var(--rd);color:#fff;font-size:7px;font-weight:700;padding:1px 4px;border-radius:3px;white-space:nowrap;pointer-events:none;line-height:1.2}
 .acc-hdr{width:100%;display:flex;align-items:center;justify-content:space-between;background:none;border:none;color:var(--ac);font-size:11px;font-weight:600;padding:4px 0 6px;cursor:pointer;text-align:left;font-family:inherit}
 .acc-chev{font-size:14px;color:var(--t3);transition:transform .2s;flex-shrink:0;margin-left:8px}
 .acc.open>.acc-hdr>.acc-chev{transform:rotate(90deg)}
@@ -2697,6 +2699,8 @@ function renderGuide() {
   const stripW  = slotW * slots.length;
   const minW    = isTv ? 36 : 44;
   const totalW  = chW + stripW;     // explicit total width for .gwrap
+  const nowLeft = Math.max(0, ((now - startMs) / 1800000) * slotW);
+  const nowTimeStr = fmtTime(now);
 
   // .gwrap must be display:block with explicit min-width so .gw gets horizontal scroll
   let html = `<div class="gwrap" style="min-width:${totalW}px;width:${totalW}px">`;
@@ -2709,6 +2713,8 @@ function renderGuide() {
     const hh = s.getHours(), mm = s.getMinutes();
     html += `<div class="gslot" style="width:${slotW}px;min-width:${slotW}px;height:${rowH}px;font-size:${fs}">${hh%12||12}:${mm.toString().padStart(2,'0')}${hh>=12?'p':'a'}</div>`;
   });
+  // Now marker in header
+  if (nowLeft < stripW) html += `<div class="gnl-hdr" style="left:${nowLeft}px"><div class="gnl-time">${nowTimeStr}</div></div>`;
   html += `</div></div>`;
 
   // ── Channel rows ────────────────────────────────────────────────────────────
@@ -2749,7 +2755,6 @@ function renderGuide() {
     });
 
     // "Now" marker
-    const nowLeft = Math.max(0, ((now - startMs) / 1800000) * slotW);
     if (nowLeft < stripW) html += `<div class="gnl" style="left:${nowLeft}px"></div>`;
 
     html += `</div></div>`; // .gstrip, .grow2
