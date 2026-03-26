@@ -124,9 +124,9 @@ body.tv-mode .hd{padding-top:10px}
 .mc input::placeholder,.mc textarea::placeholder{color:var(--t3)}
 .mc .rw{display:flex;gap:6px}.mc .rw>div{flex:1}
 .mc .mab{display:flex;gap:6px;margin-top:4px}
-.mc .mab button{flex:1;padding:10px;border-radius:var(--rs);font-size:11px;font-weight:600;border:none;cursor:pointer}
-.bc{background:var(--c1);color:var(--t2);border:1px solid var(--bd)!important}
-.bs{background:var(--ac);color:#fff}
+.mc .mab button{flex:1;padding:10px;border-radius:var(--rs);font-size:11px;font-weight:600;border:2px solid transparent;cursor:pointer}
+.bc{background:var(--c1);color:var(--t2);border:2px solid var(--bd)!important}
+.bs{background:var(--ac);color:#fff;border:2px solid var(--ac)!important}
 
 /* Import Zone */
 .iz{border:2px dashed var(--bd);border-radius:var(--r);padding:16px;text-align:center;margin-bottom:10px;cursor:pointer}
@@ -261,6 +261,7 @@ body.tv-mode .acc-hdr{min-height:44px}
 @keyframes sp{to{transform:rotate(360deg)}}
 body.tv-mode .bnav .ni,body.tv-mode button,body.tv-mode .acc-hdr,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode .epg-opt,body.tv-mode .lmb,body.tv-mode .pl,body.tv-mode .tgl,body.tv-mode .ib,body.tv-mode .gch,body.tv-mode .gpr,[role="button"]{outline:none;transition:box-shadow .12s ease,transform .12s ease,background .12s ease,border-color .12s ease}
 body.tv-mode .tv-f,body.tv-mode .ni:focus,body.tv-mode button:focus,body.tv-mode .acc-hdr:focus,body.tv-mode input:focus,body.tv-mode textarea:focus,body.tv-mode select:focus,body.tv-mode .itm:focus,body.tv-mode .rc:focus,body.tv-mode .ri:focus,body.tv-mode .epg-opt:focus,body.tv-mode .lmb:focus,body.tv-mode .pl:focus,body.tv-mode .tgl:focus,body.tv-mode .ib:focus,body.tv-mode .gch:focus,body.tv-mode .gpr:focus,[role="button"]:focus{box-shadow:0 0 0 2px rgba(108,92,231,.98),0 0 0 4px rgba(108,92,231,.28),0 0 12px rgba(108,92,231,.22)!important;transform:scale(1.008);background-image:linear-gradient(0deg,rgba(108,92,231,.10),rgba(108,92,231,.10));border-color:rgba(108,92,231,.98)!important}
+body.tv-mode .bs.tv-f,body.tv-mode .bs:focus{box-shadow:0 0 0 2px #fff,0 0 0 4px rgba(108,92,231,.9),0 0 14px rgba(108,92,231,.5)!important;border-color:#fff!important}
 body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .pl,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode button,body.tv-mode input:not([readonly]),body.tv-mode textarea,body.tv-mode select,body.tv-mode .ib,[role="button"]{min-height:44px;position:relative}
 body.tv-mode .gch,body.tv-mode .gpr{min-height:0}
 body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.tv-mode .px-grid{scroll-margin-top:70px}
@@ -559,7 +560,7 @@ http://stream.example.com/cnn
   <label>Name *</label>
   <input id="rp-name" placeholder="My ITV Provider">
   <label>M3U URL (fetch from web)</label>
-  <div style="display:flex;gap:4px;margin-bottom:10px">
+  <div class="tv-row" style="display:flex;gap:4px;margin-bottom:10px">
     <input id="rp-url" placeholder="https://provider.com/playlist.m3u" style="flex:1;margin-bottom:0">
     <button class="bs" id="rp-fetch" style="flex-shrink:0;padding:8px 14px;font-size:10px;border-radius:var(--rs)">Fetch</button>
   </div>
@@ -2266,6 +2267,7 @@ $('btn-repo-top').onclick = () => {
   $('rp-st').style.display = 'none';
   $('rp-f').value = '';
   $('mo-repo').classList.add('on');
+  setTimeout(() => { if (isTvDevice) refreshTvFocus(); }, 80);
 };
 $('rp-no').onclick = () => $('mo-repo').classList.remove('on');
 $('mo-repo').onclick = e => { if (e.target === $('mo-repo')) $('mo-repo').classList.remove('on'); };
@@ -2570,6 +2572,7 @@ $('sl-epg').onclick = () => {
   $('be-url').value = def;
   sel.value = def;
   $('mo-bepg').classList.add('on');
+  setTimeout(() => { if (isTvDevice) refreshTvFocus(); }, 80);
 };
 $('be-no').onclick = () => $('mo-bepg').classList.remove('on');
 $('mo-bepg').onclick = (e) => { if (e.target === $('mo-bepg')) $('mo-bepg').classList.remove('on'); };
@@ -2617,7 +2620,7 @@ $('sl-add').onclick = () => {
 };
 
 // ═══ EPG SOURCES MANAGER ═══
-$('btn-emgr').onclick = () => { renderEpgList(); $('mo-epg').classList.add('on'); };
+$('btn-emgr').onclick = () => { renderEpgList(); $('mo-epg').classList.add('on'); setTimeout(() => { if (isTvDevice) refreshTvFocus(); }, 80); };
 $('epg-cls').onclick = () => $('mo-epg').classList.remove('on');
 $('mo-epg').onclick = (e) => { if (e.target === $('mo-epg')) $('mo-epg').classList.remove('on'); };
 
@@ -3288,9 +3291,16 @@ function moveTvFocusSpatial(dirCode) {
   }
   const settingsContainer = current && current.closest && current.closest('#set-scr');
   if (settingsContainer && focusWithinContainerRows(settingsContainer, current, dirCode)) return true;
-  // Edit stream modal — same row-based navigation
+  // Edit stream modal — row-based navigation
   const editModalContainer = current && current.closest && current.closest('#mo-ed .mc');
   if (editModalContainer && !_epgDropdownOpen && focusWithinContainerRows(editModalContainer, current, dirCode)) return true;
+  // Add Repo / EPG / Bulk EPG modals — same row-based navigation
+  const repoModalContainer = current && current.closest && current.closest('#mo-repo .mc');
+  if (repoModalContainer && focusWithinContainerRows(repoModalContainer, current, dirCode)) return true;
+  const epgModalContainer = current && current.closest && current.closest('#mo-epg .mc');
+  if (epgModalContainer && focusWithinContainerRows(epgModalContainer, current, dirCode)) return true;
+  const bepgModalContainer = current && current.closest && current.closest('#mo-bepg .mc');
+  if (bepgModalContainer && focusWithinContainerRows(bepgModalContainer, current, dirCode)) return true;
   const repoFilterBar = current && current.closest && current.closest('.fbar');
   if (repoFilterBar && focusWithinContainerRows(repoFilterBar, current, dirCode)) return true;
 
