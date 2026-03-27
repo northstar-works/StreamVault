@@ -1,0 +1,12 @@
+Build 63 (v4.8.0) — Sport League Smart Filtering
+
+NEW: Sport Leagues smart filter system (Settings → Sport Leagues)
+• Master toggle: enable/disable sport-day filtering globally
+• Auto-detect sport groups from your M3U — scans all group-title values and flags known sport keywords (MLB, NFL, NBA, MLS, Premier League, etc.)
+• Manual league management: pick any M3U group from a dropdown and register it as a sport league
+• Per-league enable/disable toggle — turn filtering on or off per league independently
+• Pinned teams: add team name keywords (e.g. "Texas Rangers", "Dallas Cowboys") that always appear in the tab regardless of schedule
+• When filtering is on, league tabs are hidden from the category bar entirely if no team in that league has a game today
+• Game time badges shown in channel listing: 🔴 LIVE Xm for in-progress games, 🏟 H:MM AM/PM for upcoming tip-off/first pitch
+• Game time also reflected in EPG — uses existing EPG program data (requires EPG source linked to sport channels)
+• Powered by your existing EPG data — no external API required; works automatically when sport channels have EPG sources attached

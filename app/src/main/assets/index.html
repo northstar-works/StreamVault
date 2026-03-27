@@ -326,6 +326,20 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     <div class="ll" id="loc-lst"></div>
     <div class="la tv-row" data-tv-group="locality-add"><input id="loc-in" placeholder="Add: DFW, Dallas…"><button id="loc-add">Add</button></div>
   </div>
+  <div class="ss" id="ss-sport-leagues">
+    <h3>Sport Leagues</h3>
+    <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Filter league tabs to only show teams with games today. Hides leagues with no local/pinned games scheduled.</p>
+    <div class="sr"><div><div class="sl">Enable sport filtering</div><div class="sd">Only show teams playing today in league tabs</div></div><div class="tgl" id="s-sport-enable"></div></div>
+    <div id="s-sport-cfg" style="display:none;margin-top:10px">
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+        <select id="sport-grp-sel" style="flex:1;padding:6px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px"><option value="">— pick a group —</option></select>
+        <button class="bs" id="sport-grp-add" style="padding:6px 10px;font-size:9px;border-radius:var(--rs)">Add League</button>
+        <button class="bc" id="sport-grp-detect" style="padding:6px 10px;font-size:9px;border-radius:var(--rs)" title="Auto-detect sport groups from your M3U">Auto-detect</button>
+      </div>
+      <div id="sport-league-lst"></div>
+    </div>
+  </div>
+
   <div class="ss"><h3>Live TV — Timeshift &amp; DVR</h3>
     <div class="sr"><div><div class="sl">Enable Timeshift (pause live TV)</div><div class="sd">Pause live TV and resume from where you left off</div></div><div class="tgl on" id="s-ts-enable"></div></div>
     <div class="sr"><div><div class="sl">Max buffer duration</div><div class="sd">How many minutes to keep in the live buffer</div></div>
@@ -777,7 +791,7 @@ let items = [];
 let repos = [];
 let epgSrc = [];
 let epgData = { channels: {}, programs: {} };
-let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [], tabOrder: ['itv','plex','icam','local','network'], tvMode: 'auto', plex: { server: '', token: '', section: '', sections: [] }, timeshiftEnabled: true, timeshiftMaxMin: 30, dvrCfg: { remoteEnabled: false, proto: 'ftp', host: '', port: '21', user: '', pass: '', path: '/recordings' } };
+let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [], tabOrder: ['itv','plex','icam','local','network'], tvMode: 'auto', plex: { server: '', token: '', section: '', sections: [] }, timeshiftEnabled: true, timeshiftMaxMin: 30, dvrCfg: { remoteEnabled: false, proto: 'ftp', host: '', port: '21', user: '', pass: '', path: '/recordings' }, sportLeagueFilterEnabled: false, sportLeagues: [] };
 let plexAddMode = false;
 
 let editId = null;
@@ -977,6 +991,7 @@ function restoreBackupPayload(data) {
   saveItems(); saveRepos(); saveEpg(); saveSettings();
   refreshAltCache(true);
   renderCats(); renderLib(); renderRepos(); renderSettings(); renderEpgList(); renderGuide();
+  fetchAllLeagueSchedules(); // Sport League: fetch ESPN schedules after library loads
 }
 
 // ─── M3U Parser ───
@@ -1774,7 +1789,16 @@ function renderLibExtra() {
 function getCats() {
   const cats = new Set();
   getItemsForLibPage().forEach(m => { if (m.category) cats.add(m.category); });
-  return ['All', ...Array.from(cats).sort()];
+  const sorted = Array.from(cats).sort();
+  if (settings.sportLeagueFilterEnabled && settings.sportLeagues && settings.sportLeagues.length) {
+    const visible = sorted.filter(cat => {
+      const lg = getSportLeagueConfig(cat);
+      if (!lg || !lg.enabled) return true;
+      return getItemsForLibPage().some(m => m.category === cat && shouldShowSportTeam(m));
+    });
+    return ['All', ...visible];
+  }
+  return ['All', ...sorted];
 }
 
 function getFilteredItems() {
@@ -1782,7 +1806,12 @@ function getFilteredItems() {
   let filtered = getItemsForLibPage().filter(m => {
     const matchCat = activeCat === 'All' || m.category === activeCat;
     const matchQ = !q || m.title.toLowerCase().includes(q) || (m.epgTitle && m.epgTitle.toLowerCase().includes(q)) || (m.sourceKind === 'plex' && m.region && m.region.toLowerCase().includes(q));
-    return matchCat && matchQ;
+    if (!matchCat || !matchQ) return false;
+    if (settings.sportLeagueFilterEnabled && m.category && isSportLeagueGroup(m.category)) {
+      const lg = getSportLeagueConfig(m.category);
+      if (lg && lg.enabled && !shouldShowSportTeam(m)) return false;
+    }
+    return true;
   });
   return localitySort(filtered);
 }
@@ -1828,12 +1857,14 @@ function renderLib() {
     } else if (isPlexItem(m)) {
       epgNow = `<div class="en">▶ Plex library item</div>`;
     }
+    const gameTimeLabel = getGameTimeLabel(m);
+    const gameTimeBadge = gameTimeLabel ? `<span class="tg2" style="background:rgba(46,213,115,.15);color:var(--gn);font-weight:600">${esc(gameTimeLabel)}</span>` : '';
 
     return `<div class="itm" data-tv-zone="channel-list" data-tv-col="1" style="animation-delay:${i * 0.01}s" onclick="playItem('${m.id}')">
       <div class="th">${thumb}</div>
       <div class="nf">
         <div class="nm">${esc(m.title)}</div>
-        <div class="mt">${regBadge}${catBadge}${srcBadge}${altBadge}</div>
+        <div class="mt">${regBadge}${catBadge}${srcBadge}${altBadge}${gameTimeBadge}</div>
         ${epgNow}
       </div>
       <div class="ab${libEditMode ? '' : ' hide'}" data-tv-zone="channel-actions" data-tv-col="2">
@@ -3740,6 +3771,8 @@ function renderSettings() {
   const dvrTgl = $('s-dvr-remote-enable');
   const dvrCfg2 = $('s-dvr-remote-cfg');
   if (!settings.dvrCfg) settings.dvrCfg = { remoteEnabled:false, proto:'ftp', host:'', port:'21', user:'', pass:'', path:'/recordings' };
+  if (!settings.sportLeagues) settings.sportLeagues = [];
+  if (settings.sportLeagueFilterEnabled === undefined) settings.sportLeagueFilterEnabled = false;
   if (dvrTgl) {
     dvrTgl.className = 'tgl' + (settings.dvrCfg.remoteEnabled ? ' on' : '');
     if (dvrCfg2) dvrCfg2.style.display = settings.dvrCfg.remoteEnabled ? 'block' : 'none';
@@ -3969,6 +4002,314 @@ function triggerScheduledRecording(sched, autoMinutes) {
     toast('⏹ Scheduled recording complete: ' + ch.title);
   }, dur * 60000);
 }
+
+// ─── Sport League Smart Filtering (ESPN API) ────────────────────────────────
+
+// ESPN scoreboard slug map — key array matched against lowercased M3U group-title
+const ESPN_LEAGUE_MAP = [
+  { keys:['nfl','national football league'],              path:'football/nfl',                         label:'NFL' },
+  { keys:['mlb','major league baseball'],                 path:'baseball/mlb',                         label:'MLB' },
+  { keys:['nba','national basketball'],                   path:'basketball/nba',                       label:'NBA' },
+  { keys:['nhl','national hockey'],                       path:'hockey/nhl',                           label:'NHL' },
+  { keys:['mls','major league soccer'],                   path:'soccer/usa.1',                         label:'MLS' },
+  { keys:['wnba'],                                        path:'basketball/wnba',                      label:'WNBA' },
+  { keys:['premier league','epl','bpl'],                  path:'soccer/eng.1',                         label:'Premier League' },
+  { keys:['la liga','laliga','primera'],                  path:'soccer/esp.1',                         label:'La Liga' },
+  { keys:['bundesliga'],                                  path:'soccer/ger.1',                         label:'Bundesliga' },
+  { keys:['serie a'],                                     path:'soccer/ita.1',                         label:'Serie A' },
+  { keys:['ligue 1','ligue1'],                            path:'soccer/fra.1',                         label:'Ligue 1' },
+  { keys:['champions league','ucl'],                      path:'soccer/uefa.champions',                label:'Champions League' },
+  { keys:['europa league','uel'],                         path:'soccer/uefa.europa',                   label:'Europa League' },
+  { keys:['college football','ncaa football','cfb'],      path:'football/college-football',            label:'College Football' },
+  { keys:['college basketball','ncaa basketball','ncaab'],path:'basketball/mens-college-basketball',   label:'College Basketball (M)' },
+  { keys:['womens college','ncaaw'],                      path:'basketball/womens-college-basketball', label:'College Basketball (W)' },
+  { keys:['liga mx','mexican'],                           path:'soccer/mex.1',                         label:'Liga MX' },
+  { keys:['eredivisie','dutch'],                          path:'soccer/ned.1',                         label:'Eredivisie' },
+];
+
+const ESPN_SPORT_OPTIONS = ESPN_LEAGUE_MAP.map(e => ({ path: e.path, label: e.label }));
+
+function guessEspnPath(groupName) {
+  const gl = groupName.toLowerCase();
+  for (const e of ESPN_LEAGUE_MAP) {
+    if (e.keys.some(k => gl.includes(k))) return e.path;
+  }
+  return '';
+}
+
+const SPORT_KEYWORDS = ESPN_LEAGUE_MAP.flatMap(e => e.keys).concat([
+  'sport','sports','ufc','mma','boxing','rugby','cricket','tennis','golf','nascar',
+  'f1','formula','afl','cfl','lacrosse','softball','racing','wrestling','soccer','football','basketball','baseball','hockey'
+]);
+
+function detectSportLeagueGroups() {
+  const cats = new Set(items.map(m => m.category).filter(Boolean));
+  const detected = [];
+  cats.forEach(cat => {
+    if (SPORT_KEYWORDS.some(k => cat.toLowerCase().includes(k))) detected.push(cat);
+  });
+  return detected.sort();
+}
+
+function getSportLeagueConfig(category) {
+  if (!settings.sportLeagues) return null;
+  return settings.sportLeagues.find(lg => lg.groupName === category) || null;
+}
+
+function isSportLeagueGroup(category) {
+  return !!(category && getSportLeagueConfig(category));
+}
+
+// Fetch today's ESPN scoreboard for one league; cache team names + game times.
+// Cache entry: { teams:['Rangers','Texas Rangers','TEX',...], startTime:ms, state:'pre'|'in'|'post' }
+async function fetchLeagueSchedule(idx) {
+  const lg = settings.sportLeagues && settings.sportLeagues[idx];
+  if (!lg || !lg.espnPath) return;
+  const today = new Date().toISOString().slice(0, 10);
+  if (lg.cacheDate === today && Array.isArray(lg.cachedGames)) return; // already fresh
+  try {
+    const url = 'https://site.api.espn.com/apis/site/v2/sports/' + lg.espnPath + '/scoreboard';
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    const games = [];
+    for (const ev of (data.events || [])) {
+      const comp = ev.competitions && ev.competitions[0];
+      if (!comp) continue;
+      const state = (comp.status && comp.status.type && comp.status.type.state) || 'pre';
+      if (state === 'post') continue; // skip finished games
+      const startTime = new Date(comp.date || ev.date).getTime();
+      const teams = new Set();
+      for (const c of (comp.competitors || [])) {
+        const t = c.team || {};
+        [t.displayName, t.shortDisplayName, t.name, t.abbreviation, t.location, t.nickname]
+          .filter(Boolean).forEach(v => teams.add(v));
+      }
+      games.push({ teams: Array.from(teams), startTime, state });
+    }
+    lg.cachedGames = games;
+    lg.cacheDate = today;
+    saveSettings();
+  } catch(e) {
+    console.warn('[SportFilter] ESPN fetch failed:', lg.espnPath, e.message || e);
+  }
+}
+
+// Kick off fetches for all enabled leagues (non-blocking; re-renders when done)
+function fetchAllLeagueSchedules() {
+  if (!settings.sportLeagueFilterEnabled || !settings.sportLeagues) return;
+  settings.sportLeagues.forEach((lg, i) => {
+    if (lg.enabled && lg.espnPath) {
+      fetchLeagueSchedule(i).then(() => {
+        renderSportLeagueSettings(); renderCats(); renderLib();
+      });
+    }
+  });
+}
+
+// Find the cached ESPN game that matches this stream's title (title-only, no EPG)
+function findGameForItem(item) {
+  const cfg = getSportLeagueConfig(item.category);
+  if (!cfg || !Array.isArray(cfg.cachedGames)) return null;
+  const title = (item.title || '').toLowerCase();
+  return cfg.cachedGames.find(g =>
+    g.teams.some(t => t && title.includes(t.toLowerCase()))
+  ) || null;
+}
+
+// Returns true when stream should be visible under sport filter
+function shouldShowSportTeam(item) {
+  const cfg = getSportLeagueConfig(item.category);
+  if (!cfg || !cfg.enabled) return true;
+  if (!settings.sportLeagueFilterEnabled) return true;
+
+  // Pinned teams always show
+  const title = (item.title || '').toLowerCase();
+  if ((cfg.pinnedTeams || []).some(p => title.includes(p.toLowerCase()))) return true;
+
+  // No ESPN path configured → can't filter, show all
+  if (!cfg.espnPath) return true;
+
+  // Data not yet fetched → show all until we have results
+  if (!Array.isArray(cfg.cachedGames)) return true;
+
+  // ESPN returned 0 games → off-season / bye week → show all
+  if (cfg.cachedGames.length === 0) return true;
+
+  // Title must match a team playing today
+  return !!findGameForItem(item);
+}
+
+// Game time badge purely from ESPN cache — no EPG needed
+function getGameTimeLabel(item) {
+  if (!settings.sportLeagueFilterEnabled) return '';
+  const cfg = getSportLeagueConfig(item.category);
+  if (!cfg || !cfg.enabled || !cfg.espnPath) return '';
+  const game = findGameForItem(item);
+  if (!game) return '';
+  if (game.state === 'in') return '🔴 LIVE';
+  const d = new Date(game.startTime);
+  const h = d.getHours() % 12 || 12;
+  const m = d.getMinutes();
+  const ampm = d.getHours() >= 12 ? 'PM' : 'AM';
+  return '🏟 ' + h + (m ? ':' + String(m).padStart(2, '0') : '') + ' ' + ampm;
+}
+
+// ── Settings UI ───────────────────────────────────────────────────────────────
+
+function renderSportLeagueSettings() {
+  const tgl = $('s-sport-enable');
+  if (!tgl) return;
+  tgl.className = 'tgl' + (settings.sportLeagueFilterEnabled ? ' on' : '');
+  tgl.onclick = () => {
+    settings.sportLeagueFilterEnabled = !settings.sportLeagueFilterEnabled;
+    tgl.className = 'tgl' + (settings.sportLeagueFilterEnabled ? ' on' : '');
+    saveSettings();
+    if (settings.sportLeagueFilterEnabled) fetchAllLeagueSchedules();
+    renderSportLeagueSettings();
+    renderCats(); renderLib();
+  };
+  const cfgDiv = $('s-sport-cfg');
+  if (cfgDiv) cfgDiv.style.display = settings.sportLeagueFilterEnabled ? 'block' : 'none';
+
+  const grpSel = $('sport-grp-sel');
+  if (grpSel) {
+    const existing = (settings.sportLeagues || []).map(l => l.groupName);
+    const allCats = Array.from(new Set(items.map(m => m.category).filter(Boolean))).sort();
+    grpSel.innerHTML = '<option value="">— pick a group —</option>' +
+      allCats.filter(c => !existing.includes(c))
+             .map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  }
+
+  const addBtn = $('sport-grp-add');
+  if (addBtn) addBtn.onclick = () => {
+    const val = grpSel && grpSel.value;
+    if (!val) { toast('Select a group first'); return; }
+    if (!settings.sportLeagues) settings.sportLeagues = [];
+    if (settings.sportLeagues.find(l => l.groupName === val)) { toast('Already added'); return; }
+    const autoPath = guessEspnPath(val);
+    settings.sportLeagues.push({ groupName: val, enabled: true, espnPath: autoPath, pinnedTeams: [], cachedGames: undefined, cacheDate: '' });
+    saveSettings();
+    if (autoPath && settings.sportLeagueFilterEnabled) {
+      const idx = settings.sportLeagues.length - 1;
+      fetchLeagueSchedule(idx).then(() => { renderSportLeagueSettings(); renderCats(); renderLib(); });
+    }
+    renderSportLeagueSettings();
+    toast('League added' + (autoPath ? ' · ESPN auto-matched: ' + autoPath : ' · Set ESPN path to enable schedule filtering'));
+  };
+
+  const detectBtn = $('sport-grp-detect');
+  if (detectBtn) detectBtn.onclick = () => {
+    const found = detectSportLeagueGroups();
+    if (!found.length) { toast('No sport groups detected in library'); return; }
+    if (!settings.sportLeagues) settings.sportLeagues = [];
+    let added = 0;
+    found.forEach(g => {
+      if (!settings.sportLeagues.find(l => l.groupName === g)) {
+        settings.sportLeagues.push({ groupName: g, enabled: true, espnPath: guessEspnPath(g), pinnedTeams: [], cachedGames: undefined, cacheDate: '' });
+        added++;
+      }
+    });
+    saveSettings();
+    if (added && settings.sportLeagueFilterEnabled) fetchAllLeagueSchedules();
+    renderSportLeagueSettings(); renderCats(); renderLib();
+    toast(added ? added + ' league(s) detected & added' : 'All detected leagues already added');
+  };
+
+  const lst = $('sport-league-lst');
+  if (!lst) return;
+  if (!settings.sportLeagues || !settings.sportLeagues.length) {
+    lst.innerHTML = '<p style="font-size:8px;color:var(--t3);margin-bottom:4px">No leagues configured yet. Add one above or tap Auto-detect.</p>';
+    return;
+  }
+
+  const espnOpts = '<option value="">— no ESPN link —</option>' +
+    ESPN_SPORT_OPTIONS.map(o => `<option value="${esc(o.path)}">${esc(o.label)} (${esc(o.path)})</option>`).join('');
+
+  lst.innerHTML = settings.sportLeagues.map((lg, i) => {
+    const gc = Array.isArray(lg.cachedGames) ? lg.cachedGames.length : -1;
+    const cacheLabel = !lg.espnPath
+      ? '<span style="color:var(--t3)">No ESPN path — pinned teams only</span>'
+      : gc < 0
+        ? '<span style="color:var(--t3)">Schedule not fetched yet · tap ↻ Fetch</span>'
+        : gc === 0
+          ? '<span style="color:var(--or)">0 games today (off-season / bye?)</span>'
+          : `<span style="color:var(--gn)">${gc} game${gc!==1?'s':''} today ✓</span>`;
+
+    const pins = (lg.pinnedTeams || []).map((p, pi) =>
+      `<div class="li" style="padding:3px 0"><span class="lv" style="flex:1">${esc(p)}</span><button onclick="rmSportPin(${i},${pi})" style="color:var(--rd);background:none;border:none;cursor:pointer;font-size:10px">✕</button></div>`
+    ).join('') || '<p style="font-size:8px;color:var(--t3)">None. Team name keywords added here always show regardless of schedule.</p>';
+
+    return `<div style="border:1px solid var(--bd);border-radius:var(--rs);padding:8px;margin-bottom:8px">
+      <div class="sr" style="margin-bottom:6px">
+        <div style="flex:1"><div class="sl">${esc(lg.groupName)}</div><div class="sd">${cacheLabel}</div></div>
+        <div class="tgl${lg.enabled?' on':''}" id="sport-tgl-${i}" style="margin-right:8px"></div>
+        <button onclick="rmSportLeague(${i})" style="color:var(--rd);background:none;border:none;cursor:pointer;font-size:12px;padding:2px 6px" title="Remove">✕</button>
+      </div>
+      <div style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
+        <select id="sport-espn-${i}" style="flex:1;padding:5px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px">${espnOpts}</select>
+        <button class="bc" onclick="refreshSportLeague(${i})" style="padding:5px 8px;font-size:9px;border-radius:var(--rs)" title="Re-fetch today's schedule from ESPN">↻ Fetch</button>
+      </div>
+      <details>
+        <summary style="font-size:9px;color:var(--t2);cursor:pointer;margin-bottom:4px">📌 Pinned teams (${(lg.pinnedTeams||[]).length}) — always visible</summary>
+        <div style="padding-left:8px;margin-top:4px">${pins}</div>
+        <div style="display:flex;gap:4px;margin-top:6px;padding-left:8px">
+          <input id="sport-pin-in-${i}" placeholder="e.g. Texas Rangers, Cowboys, Stars…" style="flex:1;padding:5px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px">
+          <button class="bs" onclick="addSportPin(${i})" style="padding:5px 8px;font-size:9px;border-radius:var(--rs)">Add</button>
+        </div>
+      </details>
+    </div>`;
+  }).join('');
+
+  settings.sportLeagues.forEach((lg, i) => {
+    const togEl = $('sport-tgl-' + i);
+    if (togEl) togEl.onclick = () => {
+      settings.sportLeagues[i].enabled = !settings.sportLeagues[i].enabled;
+      saveSettings(); renderSportLeagueSettings(); renderCats(); renderLib();
+    };
+    const espnSel = $('sport-espn-' + i);
+    if (espnSel) {
+      espnSel.value = lg.espnPath || '';
+      espnSel.onchange = () => {
+        settings.sportLeagues[i].espnPath = espnSel.value;
+        settings.sportLeagues[i].cachedGames = undefined;
+        settings.sportLeagues[i].cacheDate = '';
+        saveSettings(); renderSportLeagueSettings();
+      };
+    }
+  });
+}
+
+window.refreshSportLeague = async (i) => {
+  const lg = settings.sportLeagues && settings.sportLeagues[i];
+  if (!lg) return;
+  if (!lg.espnPath) { toast('Set an ESPN league first'); return; }
+  toast('Fetching schedule…');
+  lg.cacheDate = ''; // force re-fetch
+  await fetchLeagueSchedule(i);
+  renderSportLeagueSettings(); renderCats(); renderLib();
+  const count = Array.isArray(lg.cachedGames) ? lg.cachedGames.length : 0;
+  toast(count + ' game' + (count !== 1 ? 's' : '') + ' today for ' + lg.groupName);
+};
+
+window.rmSportLeague = (i) => {
+  settings.sportLeagues.splice(i, 1);
+  saveSettings(); renderSportLeagueSettings(); renderCats(); renderLib();
+};
+window.addSportPin = (i) => {
+  const inp = $('sport-pin-in-' + i);
+  if (!inp || !inp.value.trim()) return;
+  if (!settings.sportLeagues[i].pinnedTeams) settings.sportLeagues[i].pinnedTeams = [];
+  settings.sportLeagues[i].pinnedTeams.push(inp.value.trim());
+  inp.value = '';
+  saveSettings(); renderSportLeagueSettings();
+};
+window.rmSportPin = (i, pi) => {
+  settings.sportLeagues[i].pinnedTeams.splice(pi, 1);
+  saveSettings(); renderSportLeagueSettings();
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function renderLocalities() {
   const list = $('loc-lst');
