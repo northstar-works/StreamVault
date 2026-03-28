@@ -328,16 +328,21 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
   </div>
   <div class="ss" id="ss-sport-leagues">
     <h3>Sport Leagues</h3>
-    <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Filter league tabs to only show teams with games today. Hides leagues with no local/pinned games scheduled.</p>
-    <div class="sr"><div><div class="sl">Enable sport filtering</div><div class="sd">Only show teams playing today in league tabs</div></div><div class="tgl" id="s-sport-enable"></div></div>
-    <div id="s-sport-cfg" style="display:none;margin-top:10px">
-      <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
-        <select id="sport-grp-sel" style="flex:1;padding:6px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px"><option value="">— pick a group —</option></select>
-        <button class="bs" id="sport-grp-add" style="padding:6px 10px;font-size:9px;border-radius:var(--rs)">Add League</button>
-        <button class="bc" id="sport-grp-detect" style="padding:6px 10px;font-size:9px;border-radius:var(--rs)" title="Auto-detect sport groups from your M3U">Auto-detect</button>
-      </div>
-      <div id="sport-league-lst"></div>
+    <p style="font-size:9px;color:var(--t2);margin-bottom:10px">Hides league tabs when none of your pinned/local teams are playing today. Uses ESPN schedule data matched against stream titles.</p>
+
+    <p style="font-size:9px;color:var(--ac);font-weight:600;margin-bottom:8px">① Register your leagues first</p>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+      <select id="sport-grp-sel" style="flex:1;padding:6px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px"><option value="">— pick a group from your M3U —</option></select>
+      <button class="bs" id="sport-grp-add" style="padding:6px 10px;font-size:9px;border-radius:var(--rs)">Add</button>
     </div>
+    <button class="bc" id="sport-grp-detect" style="padding:6px 12px;font-size:9px;border-radius:var(--rs);width:100%;margin-bottom:12px">Auto-detect sport groups from library</button>
+
+    <p style="font-size:9px;color:var(--ac);font-weight:600;margin-bottom:4px">② Configure each league (enable filter + pin your teams)</p>
+    <div id="sport-league-lst" style="margin-bottom:12px"></div>
+
+    <p style="font-size:9px;color:var(--ac);font-weight:600;margin-bottom:4px">③ Turn on the master filter</p>
+    <div class="sr"><div><div class="sl">Enable sport filtering</div><div class="sd">Filters all leagues that have per-league filtering enabled</div></div><div class="tgl" id="s-sport-enable" onclick="window.toggleSportFilter && window.toggleSportFilter()"></div></div>
+    <div id="s-sport-cfg" style="display:none"></div>
   </div>
 
   <div class="ss"><h3>Live TV — Timeshift &amp; DVR</h3>
@@ -3773,6 +3778,12 @@ function renderSettings() {
   if (!settings.dvrCfg) settings.dvrCfg = { remoteEnabled:false, proto:'ftp', host:'', port:'21', user:'', pass:'', path:'/recordings' };
   if (!settings.sportLeagues) settings.sportLeagues = [];
   if (settings.sportLeagueFilterEnabled === undefined) settings.sportLeagueFilterEnabled = false;
+  // Migrate: clear any EPG-based cachedGames from old B63 (they're ESPN objects now)
+  (settings.sportLeagues || []).forEach(lg => {
+    if (lg.cachedGames && lg.cachedGames[0] && lg.cachedGames[0].title !== undefined) {
+      lg.cachedGames = undefined; lg.cacheDate = ''; // was EPG format, not ESPN
+    }
+  });
   if (dvrTgl) {
     dvrTgl.className = 'tgl' + (settings.dvrCfg.remoteEnabled ? ' on' : '');
     if (dvrCfg2) dvrCfg2.style.display = settings.dvrCfg.remoteEnabled ? 'block' : 'none';
@@ -4161,17 +4172,8 @@ function renderSportLeagueSettings() {
   const tgl = $('s-sport-enable');
   if (!tgl) return;
   tgl.className = 'tgl' + (settings.sportLeagueFilterEnabled ? ' on' : '');
-  tgl.onclick = () => {
-    settings.sportLeagueFilterEnabled = !settings.sportLeagueFilterEnabled;
-    tgl.className = 'tgl' + (settings.sportLeagueFilterEnabled ? ' on' : '');
-    saveSettings();
-    if (settings.sportLeagueFilterEnabled) fetchAllLeagueSchedules();
-    renderSportLeagueSettings();
-    renderCats(); renderLib();
-  };
-  const cfgDiv = $('s-sport-cfg');
-  if (cfgDiv) cfgDiv.style.display = settings.sportLeagueFilterEnabled ? 'block' : 'none';
-
+  // onclick is handled by window.toggleSportFilter (defined below) via inline HTML attribute
+  // s-sport-cfg is now a dummy div (controls are always visible)
   const grpSel = $('sport-grp-sel');
   if (grpSel) {
     const existing = (settings.sportLeagues || []).map(l => l.groupName);
@@ -4188,7 +4190,7 @@ function renderSportLeagueSettings() {
     if (!settings.sportLeagues) settings.sportLeagues = [];
     if (settings.sportLeagues.find(l => l.groupName === val)) { toast('Already added'); return; }
     const autoPath = guessEspnPath(val);
-    settings.sportLeagues.push({ groupName: val, enabled: true, espnPath: autoPath, pinnedTeams: [], cachedGames: undefined, cacheDate: '' });
+    settings.sportLeagues.push({ groupName: val, enabled: false, espnPath: autoPath, pinnedTeams: [], cachedGames: undefined, cacheDate: '' });
     saveSettings();
     if (autoPath && settings.sportLeagueFilterEnabled) {
       const idx = settings.sportLeagues.length - 1;
@@ -4206,7 +4208,7 @@ function renderSportLeagueSettings() {
     let added = 0;
     found.forEach(g => {
       if (!settings.sportLeagues.find(l => l.groupName === g)) {
-        settings.sportLeagues.push({ groupName: g, enabled: true, espnPath: guessEspnPath(g), pinnedTeams: [], cachedGames: undefined, cacheDate: '' });
+        settings.sportLeagues.push({ groupName: g, enabled: false, espnPath: guessEspnPath(g), pinnedTeams: [], cachedGames: undefined, cacheDate: '' });
         added++;
       }
     });
@@ -4243,8 +4245,11 @@ function renderSportLeagueSettings() {
     return `<div style="border:1px solid var(--bd);border-radius:var(--rs);padding:8px;margin-bottom:8px">
       <div class="sr" style="margin-bottom:6px">
         <div style="flex:1"><div class="sl">${esc(lg.groupName)}</div><div class="sd">${cacheLabel}</div></div>
-        <div class="tgl${lg.enabled?' on':''}" id="sport-tgl-${i}" style="margin-right:8px"></div>
-        <button onclick="rmSportLeague(${i})" style="color:var(--rd);background:none;border:none;cursor:pointer;font-size:12px;padding:2px 6px" title="Remove">✕</button>
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font-size:8px;color:var(--t2)">${lg.enabled?'Filter ON':'Filter OFF'}</span>
+          <div class="tgl${lg.enabled?' on':''}" id="sport-tgl-${i}" style="margin-right:4px" onclick="window.toggleSportLeague && window.toggleSportLeague(${i})"></div>
+          <button onclick="rmSportLeague(${i})" style="color:var(--rd);background:none;border:none;cursor:pointer;font-size:12px;padding:2px 6px" title="Remove">✕</button>
+        </div>
       </div>
       <div style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
         <select id="sport-espn-${i}" style="flex:1;padding:5px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px">${espnOpts}</select>
@@ -4262,11 +4267,7 @@ function renderSportLeagueSettings() {
   }).join('');
 
   settings.sportLeagues.forEach((lg, i) => {
-    const togEl = $('sport-tgl-' + i);
-    if (togEl) togEl.onclick = () => {
-      settings.sportLeagues[i].enabled = !settings.sportLeagues[i].enabled;
-      saveSettings(); renderSportLeagueSettings(); renderCats(); renderLib();
-    };
+    // sport-tgl-${i} uses inline onclick → window.toggleSportLeague(i), no re-wiring needed
     const espnSel = $('sport-espn-' + i);
     if (espnSel) {
       espnSel.value = lg.espnPath || '';
@@ -4290,6 +4291,22 @@ window.refreshSportLeague = async (i) => {
   renderSportLeagueSettings(); renderCats(); renderLib();
   const count = Array.isArray(lg.cachedGames) ? lg.cachedGames.length : 0;
   toast(count + ' game' + (count !== 1 ? 's' : '') + ' today for ' + lg.groupName);
+};
+
+window.toggleSportLeague = (i) => {
+  if (!settings.sportLeagues || !settings.sportLeagues[i]) return;
+  settings.sportLeagues[i].enabled = !settings.sportLeagues[i].enabled;
+  saveSettings(); renderSportLeagueSettings(); renderCats(); renderLib();
+};
+
+window.toggleSportFilter = () => {
+  settings.sportLeagueFilterEnabled = !settings.sportLeagueFilterEnabled;
+  const tgl = $('s-sport-enable');
+  if (tgl) tgl.className = 'tgl' + (settings.sportLeagueFilterEnabled ? ' on' : '');
+  saveSettings();
+  if (settings.sportLeagueFilterEnabled) fetchAllLeagueSchedules();
+  renderSportLeagueSettings();
+  renderCats(); renderLib();
 };
 
 window.rmSportLeague = (i) => {
