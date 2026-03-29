@@ -1119,9 +1119,26 @@ function localityScore(item) {
   return 0;
 }
 
+// Sport game score: higher = more important to show first
+function sportGameScore(item) {
+  const cfg = getSportLeagueConfig(item.category);
+  if (!cfg) return 0;
+  const game = findGameForItem(item);
+  if (!game) return 0;
+  const isPinned = (cfg.pinnedTeams || []).some(p => p && (item.title || '').toLowerCase().includes(p.toLowerCase()));
+  if (game.state === 'in') return isPinned ? 400 : 200;  // LIVE: pinned=400, other=200
+  return isPinned ? 300 : 100;  // Upcoming: pinned=300, other=100
+}
+
 function localitySort(arr) {
-  if (!settings.localities || !settings.localities.length) return arr;
-  return [...arr].sort((a, b) => localityScore(b) - localityScore(a));
+  const hasSport = settings.sportLeagues && settings.sportLeagues.length > 0;
+  const hasLocality = settings.localities && settings.localities.length > 0;
+  if (!hasSport && !hasLocality) return arr;
+  return [...arr].sort((a, b) => {
+    const sa = sportGameScore(a), sb = sportGameScore(b);
+    if (sa !== sb) return sb - sa; // higher sport score first
+    return localityScore(b) - localityScore(a);
+  });
 }
 
 // ─── Failover List ───
@@ -1795,11 +1812,13 @@ function getCats() {
   const cats = new Set();
   getItemsForLibPage().forEach(m => { if (m.category) cats.add(m.category); });
   const sorted = Array.from(cats).sort();
+  // When master filter is ON, hide categories where filter is enabled but zero channels pass
   if (settings.sportLeagueFilterEnabled && settings.sportLeagues && settings.sportLeagues.length) {
+    const libItems = getItemsForLibPage();
     const visible = sorted.filter(cat => {
       const lg = getSportLeagueConfig(cat);
-      if (!lg || !lg.enabled) return true;
-      return getItemsForLibPage().some(m => m.category === cat && shouldShowSportTeam(m));
+      if (!lg || !lg.enabled) return true; // per-league OFF → always show category
+      return libItems.some(m => m.category === cat && shouldShowSportTeam(m));
     });
     return ['All', ...visible];
   }
@@ -1812,12 +1831,19 @@ function getFilteredItems() {
     const matchCat = activeCat === 'All' || m.category === activeCat;
     const matchQ = !q || m.title.toLowerCase().includes(q) || (m.epgTitle && m.epgTitle.toLowerCase().includes(q)) || (m.sourceKind === 'plex' && m.region && m.region.toLowerCase().includes(q));
     if (!matchCat || !matchQ) return false;
+    // Sport filter: only hides items when master filter ON + per-league filter ON
     if (settings.sportLeagueFilterEnabled && m.category && isSportLeagueGroup(m.category)) {
       const lg = getSportLeagueConfig(m.category);
-      if (lg && lg.enabled && !shouldShowSportTeam(m)) return false;
+      if (lg && lg.enabled) {
+        // Pinned teams are ALWAYS visible regardless of schedule
+        const title = (m.title || '').toLowerCase();
+        const isPinned = (lg.pinnedTeams || []).some(p => p && title.includes(p.toLowerCase()));
+        if (!isPinned && !shouldShowSportTeam(m)) return false;
+      }
     }
     return true;
   });
+  // Sort: LIVE pinned → upcoming pinned → LIVE other → upcoming other → locality → rest
   return localitySort(filtered);
 }
 
@@ -4151,12 +4177,11 @@ async function fetchLeagueSchedule(idx) {
   const paths = lg.espnPaths || (lg.espnPath ? [lg.espnPath] : []);
   if (!paths.length) return;
   const today = new Date().toISOString().slice(0, 10);
-  // Skip if all paths already cached for today
-  if (lg.cacheDate === today && lg.cachedGamesByPath &&
-      paths.every(p => Array.isArray(lg.cachedGamesByPath[p]))) return;
   if (!lg.cachedGamesByPath) lg.cachedGamesByPath = {};
-  for (const path of paths) {
-    if (!path) continue;
+  // Only fetch paths not already cached for today
+  const needsFetch = paths.filter(p => p && !(lg.cacheDate === today && Array.isArray(lg.cachedGamesByPath[p])));
+  if (!needsFetch.length) return; // all paths already fresh
+  for (const path of needsFetch) {
     try {
       lg.cachedGamesByPath[path] = await _fetchOnePath(path);
     } catch(e) {
@@ -4169,10 +4194,10 @@ async function fetchLeagueSchedule(idx) {
 }
 
 function fetchAllLeagueSchedules() {
-  if (!settings.sportLeagueFilterEnabled || !settings.sportLeagues) return;
+  if (!settings.sportLeagues || !settings.sportLeagues.length) return;
   settings.sportLeagues.forEach((lg, i) => {
     const paths = lg.espnPaths || (lg.espnPath ? [lg.espnPath] : []);
-    if (lg.enabled && paths.length) {
+    if (paths.length) { // fetch for ALL configured leagues, not just enabled ones
       fetchLeagueSchedule(i).then(() => {
         renderSportLeagueSettings(); renderCats(); renderLib();
       });
@@ -4261,11 +4286,11 @@ function shouldShowSportTeam(item) {
   return !!findGameForItem(item);
 }
 
-// Game-time badge label from ESPN cache
+// Game-time badge label from ESPN cache.
+// Shows whenever a game is cached and matches — does NOT require filter toggles to be on.
 function getGameTimeLabel(item) {
-  if (!settings.sportLeagueFilterEnabled) return '';
   const cfg = getSportLeagueConfig(item.category);
-  if (!cfg || !cfg.enabled) return '';
+  if (!cfg) return ''; // not a configured sport group
   const paths = cfg.espnPaths || (cfg.espnPath ? [cfg.espnPath] : []);
   if (!paths.length) return '';
   const game = findGameForItem(item);
@@ -4424,7 +4449,7 @@ window.toggleSportFilter = () => {
   const tgl = $('s-sport-enable');
   if (tgl) tgl.className = 'tgl' + (settings.sportLeagueFilterEnabled ? ' on' : '');
   saveSettings();
-  if (settings.sportLeagueFilterEnabled) fetchAllLeagueSchedules();
+  fetchAllLeagueSchedules(); // always refresh schedule on toggle
   renderSportLeagueSettings();
   renderCats(); renderLib();
 };
