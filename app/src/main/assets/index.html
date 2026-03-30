@@ -302,10 +302,21 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     <button class="ib" id="btn-sport-refresh" title="Refresh schedules" onclick="window.refreshAllSportData && window.refreshAllSportData()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg></button>
   </div></div>
   <div id="sport-filter-bar" style="padding:4px 12px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap"></div>
-  <div id="sport-section-tabs" style="padding:4px 12px 2px;display:flex;align-items:center;gap:6px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;-ms-overflow-style:none"></div>
-  <div id="sport-team-tabs" style="padding:2px 12px 4px;display:flex;align-items:center;gap:6px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;-ms-overflow-style:none"></div>
+  <div id="sport-section-tabs" data-tv-zone="sport-section-tabs" style="padding:4px 12px 2px;display:flex;align-items:center;gap:6px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;-ms-overflow-style:none"></div>
+  <div id="sport-team-tabs" data-tv-zone="sport-team-tabs" style="padding:2px 12px 4px;display:flex;align-items:center;gap:6px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;-ms-overflow-style:none"></div>
   <div class="lst" id="sport-lst" style="padding-top:4px"></div>
 </div>
+<script>
+// D-pad: Enter/Space on sport tab spans triggers their onclick
+document.addEventListener('keydown', function(e) {
+  const el = document.activeElement;
+  if (!el) return;
+  if ((e.key === 'Enter' || e.key === ' ') && el.dataset && (el.dataset.tvZone === 'sport-section-tabs' || el.dataset.tvZone === 'sport-team-tabs')) {
+    e.preventDefault();
+    el.click();
+  }
+}, true);
+</script>
 
 <!-- ═══ GUIDE ═══ -->
 <div id="guide-scr" class="scr">
@@ -980,13 +991,42 @@ function loadEpg() {
     if (!epgData.programs) epgData.programs = {};
   } catch(e) {}
 }
-function saveSettings() { try { localStorage.setItem(KEYS.settings, JSON.stringify(settings)); } catch(e) {} }
+function saveSettings() {
+  try {
+    // Strip large cached ESPN data before saving — it's re-fetched on startup.
+    // Without this, settings can exceed localStorage 5MB limit → silent failure
+    // → sportLeagueFilterEnabled, enabled flags, pinnedTeams all get lost on restart.
+    const toSave = { ...settings };
+    if (toSave.sportLeagues) {
+      toSave.sportLeagues = toSave.sportLeagues.map(lg => {
+        const { cachedGamesByPath, ...rest } = lg;
+        return rest; // cachedGamesByPath can be 100KB+ per league — strip it
+      });
+    }
+    localStorage.setItem(KEYS.settings, JSON.stringify(toSave));
+  } catch(e) {
+    console.warn('[SV] saveSettings failed:', e);
+  }
+}
 function loadSettings() {
   try {
     let d = localStorage.getItem(KEYS.settings);
     if (!d) d = localStorage.getItem('sv_settings') || localStorage.getItem('sv_settings_v2');
-    if (d) { settings = { ...settings, ...JSON.parse(d) }; localStorage.setItem(KEYS.settings, d); }
-  } catch(e) {}
+    if (d) {
+      const parsed = JSON.parse(d);
+      settings = { ...settings, ...parsed };
+      // Clear any stale cachedGamesByPath that may have been saved in older builds.
+      // Forcing cacheDate='' makes fetchLeagueSchedule re-fetch fresh today.
+      if (settings.sportLeagues) {
+        settings.sportLeagues.forEach(lg => {
+          lg.cachedGamesByPath = {}; // always start fresh — fetched at startup
+          lg.cacheDate = '';
+        });
+      }
+    }
+  } catch(e) {
+    console.warn('[SV] loadSettings failed:', e);
+  }
 }
 
 function refreshGuideOnly(msg) {
@@ -1434,7 +1474,14 @@ function showTab(id) {
   if (id !== 'lib-scr') plexAddMode = false;
   if (id === 'guide-scr') renderGuide();
   if (id === 'set-scr') renderSettings();
-  if (id === 'sport-scr') renderSportTab();
+  if (id === 'sport-scr') {
+    renderSportTab();
+    // D-pad: focus the first section tab so TV remote can navigate immediately
+    setTimeout(() => {
+      const firstTab = document.querySelector('#sport-section-tabs [tabindex]');
+      if (firstTab) firstTab.focus();
+    }, 60);
+  }
   setTimeout(refreshTvFocus, 40);
 }
 
@@ -3974,6 +4021,8 @@ function renderSettings() {
   // Schedules
   renderSchedules();
   setTimeout(refreshTvFocus, 40);
+
+  renderSportLeagueSettings(); // wire sport toggles
 }
 
 function renderSchedules() {
@@ -4184,8 +4233,16 @@ function getSportGroupItems(lg) {
 }
 
 // All sport channels across all configured leagues
+function _invalidateSportCache() {
+  _sportItemsCache = null;
+  _sportItemsCacheKey = '';
+}
+
 function getAllSportItems() {
   if (!settings.sportLeagues || !settings.sportLeagues.length) return [];
+  // Cache key: league groupNames + repoIds (fast string compare)
+  const cacheKey = settings.sportLeagues.map(lg => lg.groupName + '|' + (lg.repoId||'')).join(',');
+  if (_sportItemsCache && _sportItemsCacheKey === cacheKey) return _sportItemsCache;
   const seen = new Set();
   const out = [];
   settings.sportLeagues.forEach(lg => {
@@ -4194,6 +4251,8 @@ function getAllSportItems() {
       if (!seen.has(key)) { seen.add(key); out.push({ ...m, _lgGroupName: lg.groupName }); }
     });
   });
+  _sportItemsCache = out;
+  _sportItemsCacheKey = cacheKey;
   return out;
 }
 
@@ -4376,6 +4435,10 @@ function sportGameScore(item) {
 let sportActiveTeam = 'All'; // which pinned team tab is active
 let sportConfigOpen = false; // accordion open/close state
 let sportSectionTab = 'live'; // 'live' | league groupName | 'allgames'
+let _sportItemsCache = null;  // invalidated when leagues change
+let _sportItemsCacheKey = ''; // JSON key of sportLeagues for invalidation
+let _sportTabCache = null;    // getSportTabItems result cache
+let _sportTabCacheKey = '';   // key: filterOn+showPast+activeTeam+leagueEnabledFlags
 
 function getAllPinnedTeams() {
   if (!settings.sportLeagues) return [];
@@ -4386,15 +4449,22 @@ function getAllPinnedTeams() {
   return teams;
 }
 
+function _invalidateSportTabCache() { _sportTabCache = null; _sportTabCacheKey = ''; }
+
 function getSportTabItems() {
-  const allSport = getAllSportItems();
   const filterOn = settings.sportLeagueFilterEnabled;
   const showPast = settings.sportShowPastGames !== false;
+  const teamKey = sportActiveTeam;
+  const enabledKey = (settings.sportLeagues||[]).map(lg=>lg.groupName+':'+lg.enabled).join(',');
+  const cacheKey = [filterOn, showPast, teamKey, enabledKey].join('|');
+  if (_sportTabCache && _sportTabCacheKey === cacheKey) return _sportTabCache;
+
+  const allSport = getAllSportItems();
 
   // Non-game channel blocklist — always applied regardless of filter state
   const SPORT_SKIP = /cheerleader|america.?s.sweethearts|americas sweethearts|highlight reel|classic game|preview show|documentary|interview show|behind.the.scenes|talk show|press conference|cooking|travel|real house|bachelor|survivor|competition show/i;
 
-  return allSport.filter(m => {
+  const result = allSport.filter(m => {
     const title = m.title || '';
     const titleLower = title.toLowerCase();
     const cfg = getSportLeagueConfig(m.category || m._lgGroupName);
@@ -4439,6 +4509,9 @@ function getSportTabItems() {
     }
     return true;
   });
+  _sportTabCache = result;
+  _sportTabCacheKey = cacheKey;
+  return result;
 }
 // ── Sport channel playback ─────────────────────────────────────────────────
 // Handles both library items and repo-only streams.
@@ -4584,7 +4657,7 @@ function renderSportTab() {
     }
 
     secTabs.innerHTML = tabs.map(t =>
-      `<span style="font-size:9px;padding:3px 10px;border-radius:10px;cursor:pointer;flex-shrink:0;${t.id === sportSectionTab ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportSectionTab('${t.id.replace(/'/g,"\'")}')">
+      `<span tabindex="0" role="button" data-tv-zone="sport-section-tabs" style="font-size:9px;padding:3px 10px;border-radius:10px;cursor:pointer;flex-shrink:0;${t.id === sportSectionTab ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportSectionTab('${t.id.replace(/'/g,"\'")}')">
         ${esc(t.label)}${t.badge ? ' <span style="font-size:8px;opacity:.85">('+t.badge+')</span>' : ''}
       </span>`
     ).join('');
@@ -4599,7 +4672,7 @@ function renderSportTab() {
       const teams = getAllPinnedTeams();
       if (teams.length) {
         teamTabs.innerHTML = ['All', ...teams].map(t =>
-          `<span style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;${t === sportActiveTeam ? 'background:var(--ac);color:#fff' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportTeamTab('${t.replace(/'/g,"\'")}')">
+          `<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;${t === sportActiveTeam ? 'background:var(--ac);color:#fff' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportTeamTab('${t.replace(/'/g,"\'")}')">
             ${esc(t === 'All' ? '⚽ All' : t)}
           </span>`
         ).join('');
@@ -4784,6 +4857,7 @@ function _renderAllGamesTab(lst) {
 
 window.setSportTeamTab = (team) => {
   sportActiveTeam = team;
+  _invalidateSportTabCache();
   renderSportTab();
 };
 
@@ -4840,6 +4914,7 @@ function renderSportLeagueSettings() {
     const repoId = selOpt ? (selOpt.dataset.repo || '') : '';
     const autoPaths = guessEspnPaths(val);
     settings.sportLeagues.push({ groupName: val, repoId, enabled: false, espnPaths: autoPaths, pinnedTeams: [], cachedGamesByPath: {}, cacheDate: '' });
+    _invalidateSportCache();
     saveSettings();
     fetchLeagueSchedule(settings.sportLeagues.length - 1).then(() => { renderSportLeagueSettings(); renderCats(); renderLib(); renderSportTab(); updateSportNavVisibility(); });
     renderSportLeagueSettings();
@@ -4853,6 +4928,7 @@ function renderSportLeagueSettings() {
     detectSportLeagueGroups().forEach(g => {
       if (!settings.sportLeagues.find(l => l.groupName === g)) {
         settings.sportLeagues.push({ groupName: g, repoId: '', enabled: false, espnPaths: guessEspnPaths(g), pinnedTeams: [], cachedGamesByPath: {}, cacheDate: '' });
+        _invalidateSportCache();
         added++;
       }
     });
@@ -4952,6 +5028,7 @@ window.refreshSportLeague = async (i) => {
 window.toggleSportLeague = (i) => {
   if (!settings.sportLeagues || !settings.sportLeagues[i]) return;
   settings.sportLeagues[i].enabled = !settings.sportLeagues[i].enabled;
+  _invalidateSportTabCache();
   saveSettings(); renderSportLeagueSettings(); renderCats(); renderLib(); renderSportTab();
 };
 
@@ -4968,13 +5045,19 @@ function updateSportNavVisibility() {
 
 window.toggleSportFilter = () => {
   settings.sportLeagueFilterEnabled = !settings.sportLeagueFilterEnabled;
+  _invalidateSportTabCache();
   const tgl = $('s-sport-enable');
   if (tgl) tgl.className = 'tgl' + (settings.sportLeagueFilterEnabled ? ' on' : '');
   const tog2 = $('btn-sport-filter-tog');
   if (tog2) tog2.style.color = settings.sportLeagueFilterEnabled ? 'var(--ac)' : '';
   saveSettings();
   fetchAllLeagueSchedules();
-  renderSportLeagueSettings(); renderCats(); renderLib(); renderSportTab();
+  // Only re-render lib tab if currently on it (avoids full item scan when on Sports screen)
+  if ($('lib-scr') && $('lib-scr').classList.contains('on')) {
+    renderCats(); renderLib();
+  }
+  renderSportLeagueSettings();
+  renderSportTab();
 };
 
 window.toggleSportAccordion = () => {
@@ -4987,13 +5070,17 @@ window.toggleSportAccordion = () => {
 
 window.toggleSportPast = () => {
   settings.sportShowPastGames = !(settings.sportShowPastGames !== false);
+  _invalidateSportTabCache();
   const tgl = $('s-sport-past');
   if (tgl) tgl.className = 'tgl' + (settings.sportShowPastGames ? ' on' : '');
-  saveSettings(); renderSportTab();
+  saveSettings();
+  if ($('lib-scr') && $('lib-scr').classList.contains('on')) { renderCats(); renderLib(); }
+  renderSportTab();
 };
 
 window.rmSportLeague = (i) => {
   settings.sportLeagues.splice(i, 1);
+  _invalidateSportCache();
   saveSettings(); renderSportLeagueSettings(); renderCats(); renderLib(); renderSportTab(); updateSportNavVisibility();
 };
 
@@ -5022,11 +5109,13 @@ window.addSportPin = (i) => {
   if (!settings.sportLeagues[i].pinnedTeams) settings.sportLeagues[i].pinnedTeams = [];
   settings.sportLeagues[i].pinnedTeams.push(inp.value.trim());
   inp.value = '';
+  _invalidateSportTabCache();
   saveSettings(); renderSportLeagueSettings(); renderSportTab();
 };
 
 window.rmSportPin = (i, pi) => {
   settings.sportLeagues[i].pinnedTeams.splice(pi, 1);
+  _invalidateSportTabCache();
   saveSettings(); renderSportLeagueSettings(); renderSportTab();
 };
 
