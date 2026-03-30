@@ -355,14 +355,13 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     <hr style="border:none;border-top:1px solid var(--bd);margin:8px 0 12px">
 
     <!-- Accordioned config section -->
-    <details id="sport-config-details" style="margin-bottom:4px">
-      <summary style="font-size:10px;font-weight:700;color:var(--t1);cursor:pointer;padding:6px 0;list-style:none;display:flex;align-items:center;gap:6px">
+    <div id="sport-config-details" style="margin-bottom:4px">
+      <div onclick="window.toggleSportAccordion && window.toggleSportAccordion()" style="font-size:10px;font-weight:700;color:var(--t1);cursor:pointer;padding:6px 0;display:flex;align-items:center;gap:6px;user-select:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
         Configure Sport Groups &amp; Teams
-        <svg class="acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;margin-left:auto;transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
-      </summary>
-
-      <div style="padding-top:8px">
+        <svg id="sport-acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;margin-left:auto;transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div id="sport-acc-body" style="display:none;padding-top:8px">
 
         <p style="font-size:9px;color:var(--ac);font-weight:600;margin-bottom:6px">① Add sport channel groups from a repo</p>
         <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
@@ -379,8 +378,8 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
         <p style="font-size:9px;color:var(--ac);font-weight:600;margin-bottom:4px">② Configure leagues &amp; pin your teams</p>
         <div id="sport-league-lst" style="margin-bottom:4px"></div>
 
-      </div>
-    </details>
+      </div><!-- sport-acc-body -->
+    </div><!-- sport-config-details -->
     <div id="s-sport-cfg" style="display:none"></div>
   </div>
 
@@ -3855,7 +3854,7 @@ function renderSettings() {
     }
     // For multi-sport groups (e.g. "US Sports") that only had one old path,
     // upgrade to the full set of paths
-    if (lg.espnPaths.length === 1 && /sports?/i.test(lg.groupName)) {
+    if (lg.espnPaths.length === 1 && /\bsports?\b/i.test(lg.groupName)) {
       const fullPaths = ['baseball/mlb','football/nfl','hockey/nhl','basketball/nba'];
       const existing = lg.espnPaths[0];
       fullPaths.forEach(p => { if (!lg.espnPaths.includes(p)) lg.espnPaths.push(p); });
@@ -4371,6 +4370,7 @@ function sportGameScore(item) {
 // ── Sports Tab rendering ──────────────────────────────────────────────────────
 
 let sportActiveTeam = 'All'; // which pinned team tab is active
+let sportConfigOpen = false; // accordion open/close state
 
 function getAllPinnedTeams() {
   if (!settings.sportLeagues) return [];
@@ -4400,24 +4400,40 @@ function getSportTabItems() {
     }
 
     // Filter ON + per-league ON:
-    // Only show channels where a PINNED TEAM name appears in the channel title.
-    // This is the primary filter — it shows e.g. "MLB 01: Rangers Vs Phillies"
-    // when "Texas Rangers" or "Rangers" is a pinned team.
     const pinnedTeams = cfg.pinnedTeams || [];
+    const titleLower = (m.title || '').toLowerCase();
+
+    // Blocklist: skip channels that are clearly not games
+    const SPORT_SKIP = /cheerleader|highlight|classic|preview|documentary|interview|behind.the.scenes|magazine|talk.show|press.conference/i;
+    if (SPORT_SKIP.test(m.title || '')) return false;
+
     if (pinnedTeams.length > 0) {
-      const titleLower = (m.title || '').toLowerCase();
-      // Match if ANY word/phrase of any pinned team appears in the title.
-      // "Texas Rangers" → also match on "rangers" alone (last word of multi-word names).
+      // Only show channels where a pinned team name appears in the title.
+      // Word-split matching ("Texas Rangers" → "rangers") is only allowed when:
+      //   a) Channel has a sport prefix (NFL, MLB, NHL, NBA…), OR
+      //   b) Title contains game indicators (vs, @, " at ", home, away)
+      // Otherwise require the full team name phrase to reduce false positives.
+      const hasSportPrefix = !!detectSportPathFromTitle(titleLower);
+      const hasGameIndicator = / vs | vs$|^vs | @ | at | home| away|\(home\)|\(away\)/i.test(m.title || '');
+      const allowWordSplit = hasSportPrefix || hasGameIndicator;
+
       const isPinned = pinnedTeams.some(p => {
         if (!p) return false;
         const pl = p.toLowerCase();
-        if (titleLower.includes(pl)) return true;
-        // Also check individual significant words (3+ chars) of pinned team name
-        return pl.split(/\s+/).some(word => word.length >= 3 && titleLower.includes(word));
+        if (titleLower.includes(pl)) return true; // full phrase match always ok
+        if (!allowWordSplit) return false;         // no word-split for non-game titles
+        // Word-split: check significant words (4+ chars to avoid "the", "los", etc.)
+        return pl.split(/\s+/).some(word => word.length >= 4 && titleLower.includes(word));
       });
       if (!isPinned) return false;
+
+      // Apply past-games filter to pinned-team channels too
+      if (!showPast) {
+        const game = findGameForItem(m);
+        if (game && game.state === 'post') return false;
+      }
     } else {
-      // No pinned teams: fall back to showing channels with any game today
+      // No pinned teams: show channels with any game today
       const game = findGameForItem(m);
       if (!game) return false;
       if (!showPast && game.state === 'post') return false;
@@ -4544,6 +4560,11 @@ function renderSportLeagueSettings() {
   if (tgl) tgl.className = 'tgl' + (settings.sportLeagueFilterEnabled ? ' on' : '');
   const pastTgl = $('s-sport-past');
   if (pastTgl) pastTgl.className = 'tgl' + (settings.sportShowPastGames !== false ? ' on' : '');
+  // Restore accordion open/close state after re-render
+  const accBody = $('sport-acc-body');
+  const accChevron = $('sport-acc-chevron');
+  if (accBody) accBody.style.display = sportConfigOpen ? 'block' : 'none';
+  if (accChevron) accChevron.style.transform = sportConfigOpen ? 'rotate(180deg)' : '';
 
   // Repo picker
   const repoSel = $('sport-repo-sel');
@@ -4720,6 +4741,14 @@ window.toggleSportFilter = () => {
   saveSettings();
   fetchAllLeagueSchedules();
   renderSportLeagueSettings(); renderCats(); renderLib(); renderSportTab();
+};
+
+window.toggleSportAccordion = () => {
+  sportConfigOpen = !sportConfigOpen;
+  const body = $('sport-acc-body');
+  const chevron = $('sport-acc-chevron');
+  if (body) body.style.display = sportConfigOpen ? 'block' : 'none';
+  if (chevron) chevron.style.transform = sportConfigOpen ? 'rotate(180deg)' : '';
 };
 
 window.toggleSportPast = () => {
