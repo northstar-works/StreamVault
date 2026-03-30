@@ -10,13 +10,8 @@ android {
         applicationId "com.sidscri.streamvault"
         minSdk 24
         targetSdk 34
-<<<<<<< Updated upstream
-        versionCode 73
-        versionName "4.9.6"
-=======
         versionCode 74
         versionName "4.9.7"
->>>>>>> Stashed changes
     }
 
 
