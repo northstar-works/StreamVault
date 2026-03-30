@@ -4440,6 +4440,101 @@ function getSportTabItems() {
     return true;
   });
 }
+// ── Sport channel playback ─────────────────────────────────────────────────
+// Handles both library items and repo-only streams.
+// Builds home/away-prioritised failover list for the pinned team.
+window.playSportChannel = async (url, lgGroupName) => {
+  if (!url) return;
+
+  // 1. Find item in main library by URL
+  const libItem = items.find(m => m.url === url || m.url === decodeURIComponent(url));
+  if (libItem) {
+    // Item is in library — use normal playItem which handles full failover + timeshift
+    await playItem(libItem.id);
+    return;
+  }
+
+  // 2. Item is repo-only. Build failover list manually.
+  const cfg = lgGroupName ? getSportLeagueConfig(lgGroupName) : null;
+  const pinnedTeams = cfg ? (cfg.pinnedTeams || []) : [];
+
+  // Find the triggering stream across repos to get its title/base
+  let primaryTitle = url;
+  let primaryStream = null;
+  for (const r of repos) {
+    const s = (r.streams || []).find(s2 => s2.url === url);
+    if (s) { primaryStream = s; primaryTitle = s.name || s.title || url; break; }
+  }
+
+  const base = extractBase(primaryTitle);
+
+  // Gather all streams across repos that share the same base title (i.e. same game, different feeds)
+  const candidates = [];
+  for (const r of repos) {
+    for (const s of (r.streams || [])) {
+      const sb = extractBase(s.name || s.title || '');
+      if (sb === base) {
+        candidates.push({
+          url: extractUrl(s.url),
+          title: s.name || s.title || '',
+          region: s.region || '',
+          tag: (s.tags && s.tags[0]) || ''
+        });
+      }
+    }
+  }
+
+  // If only the primary stream found, just use it
+  if (!candidates.find(c => c.url === extractUrl(url))) {
+    candidates.unshift({ url: extractUrl(url), title: primaryTitle, region: '', tag: '' });
+  }
+
+  // Sort failover: pinned-team Home first, then pinned-team Away, then other Home, other Away
+  const pinnedLower = pinnedTeams.map(p => p.toLowerCase());
+  candidates.sort((a, b) => {
+    const at = (a.title || '').toLowerCase(), bt = (b.title || '').toLowerCase();
+    const aPin = pinnedLower.some(p => at.includes(p) || p.split(/\s+/).some(w => w.length>=4 && at.includes(w)));
+    const bPin = pinnedLower.some(p => bt.includes(p) || p.split(/\s+/).some(w => w.length>=4 && bt.includes(w)));
+    const aHome = / home |\(home\)/i.test(a.title), bHome = / home |\(home\)/i.test(b.title);
+    const aAway = / away |\(away\)/i.test(a.title), bAway = / away |\(away\)/i.test(b.title);
+    // Pinned+Home > Pinned+Away > Other Home > Other Away > neutral
+    const score = x => (x.pin ? 10 : 0) + (x.home ? 4 : x.away ? 2 : 0);
+    const sa = score({pin:aPin, home:aHome, away:aAway});
+    const sb = score({pin:bPin, home:bHome, away:bAway});
+    if (sa !== sb) return sb - sa;
+    return TAG_PRI.indexOf(a.tag||'') - TAG_PRI.indexOf(b.tag||'');
+  });
+
+  // Remove the primary from wherever it landed and put it first (user tapped it)
+  const primaryUrl = extractUrl(url);
+  const primaryIdx = candidates.findIndex(c => c.url === primaryUrl);
+  if (primaryIdx > 0) {
+    const [primary] = candidates.splice(primaryIdx, 1);
+    candidates.unshift(primary);
+  } else if (primaryIdx === -1) {
+    candidates.unshift({ url: primaryUrl, title: primaryTitle, region: '', tag: '' });
+  }
+
+  if (!candidates.length) { toast('No stream URL found'); return; }
+
+  const category = lgGroupName || primaryTitle;
+  const foTimeout = String(settings.foTimeout || 15);
+  const foAuto = String(settings.foAuto !== false);
+  const tsEnabled = String(settings.timeshiftEnabled !== false);
+
+  if (window.NativePlayer && typeof window.NativePlayer.isAvailable === 'function' && window.NativePlayer.isAvailable()) {
+    window.NativePlayer.playStreamExTs(
+      JSON.stringify(candidates), primaryTitle, category, '', foTimeout, foAuto, settings.savePath || '', '', '0', tsEnabled
+    );
+    return;
+  }
+
+  // Web fallback
+  showTab('player-scr');
+  $('p-title').textContent = primaryTitle;
+  if (typeof playWebStream === 'function') playWebStream(candidates[0].url, primaryTitle);
+};
+
 function renderSportTab() {
   if (!$('sport-scr')) return;
 
@@ -4469,8 +4564,17 @@ function renderSportTab() {
       sportSectionTab = leagues.length ? leagues[0].groupName : 'allgames';
     }
     leagues.forEach(lg => {
-      const cnt = getSportGroupItems(lg).length;
-      if (cnt > 0) tabs.push({ id: lg.groupName, label: lg.groupName, badge: null });
+      const lgItems = getSportGroupItems(lg);
+      if (!lgItems.length) return; // no channels in this group
+      // When filter ON: only show tab if it has passing channels
+      if (filterOn) {
+        const hasContent = lgItems.some(m => {
+          const sportM = { ...m, _lgGroupName: lg.groupName };
+          return getSportTabItems().some(si => si.url === m.url);
+        });
+        if (!hasContent) return;
+      }
+      tabs.push({ id: lg.groupName, label: lg.groupName, badge: null });
     });
     tabs.push({ id: 'allgames', label: '📅 All Games', badge: null });
 
@@ -4575,9 +4679,9 @@ function renderSportTab() {
       }
       const pinBadge = isPinned ? `<span class="tg2" style="background:rgba(255,200,0,.15);color:#f1c40f">📌</span>` : '';
       const catBadge = m.category ? `<span class="tg2" style="background:var(--acs);color:var(--ac)">${esc(m.category)}</span>` : '';
-      const mainItem = items.find(i => i.url === m.url);
-      const playId = mainItem ? mainItem.id : (m.id || m.url);
-      return `<div class="itm" data-tv-zone="channel-list" onclick="playItem('${esc(playId)}')">
+      const sportUrl = m.url || '';
+      const sportLg = m.category || m._lgGroupName || '';
+      return `<div class="itm" data-tv-zone="channel-list" onclick="window.playSportChannel && window.playSportChannel('${esc(sportUrl)}','${esc(sportLg)}')">
         <div class="th">${thumb}</div>
         <div class="nf">
           <div class="nm">${esc(m.title)}</div>
@@ -4645,7 +4749,9 @@ function _renderAllGamesTab(lst) {
     const chButtons = matchingChs.map(m => {
       const mainItem = items.find(i => i.url === m.url);
       const playId = mainItem ? mainItem.id : (m.id || m.url);
-      return `<button onclick="playItem('${esc(playId)}')" style="font-size:8px;padding:3px 8px;border-radius:6px;background:var(--ac);color:#fff;border:none;cursor:pointer;white-space:nowrap">${esc(m.title.replace(/\s*\(home\)|\s*\(away\)/i,'').trim().slice(0,30))}</button>`;
+      const sportUrl2 = m.url || '';
+      const sportLg2 = m.category || m._lgGroupName || '';
+      return `<button onclick="window.playSportChannel && window.playSportChannel('${esc(sportUrl2)}','${esc(sportLg2)}')" style="font-size:8px;padding:3px 8px;border-radius:6px;background:var(--ac);color:#fff;border:none;cursor:pointer;white-space:nowrap">${esc(m.title.replace(/\s*\(home\)|\s*\(away\)/i,'').trim().slice(0,30))}</button>`;
     }).join('');
     const leagueLabel = (ESPN_SPORT_OPTIONS.find(o => o.path === g._path) || {}).label || g._lgName;
     return `<div style="border:1px solid var(--bd);border-radius:var(--rs);margin:4px 12px;padding:8px">
