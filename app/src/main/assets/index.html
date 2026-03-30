@@ -1037,7 +1037,7 @@ function restoreBackupPayload(data) {
   refreshAltCache(true);
   renderCats(); renderLib(); renderRepos(); renderSettings(); renderEpgList(); renderGuide();
   fetchAllLeagueSchedules(); // Sport League: fetch ESPN schedules after library loads
-  renderSportTab();
+  renderSportTab(); updateSportNavVisibility();
 }
 
 // ─── M3U Parser ───
@@ -4313,7 +4313,13 @@ function findGameForItem(item) {
 // Is pinned team in item title?
 function itemMatchesPinnedTeam(item, cfg) {
   const title = (item.title || '').toLowerCase();
-  return (cfg.pinnedTeams || []).some(p => p && title.includes(p.toLowerCase()));
+  return (cfg.pinnedTeams || []).some(p => {
+    if (!p) return false;
+    const pl = p.toLowerCase();
+    if (title.includes(pl)) return true;
+    // Also match on individual significant words: "Texas Rangers" → "rangers"
+    return pl.split(/\s+/).some(word => word.length >= 3 && title.includes(word));
+  });
 }
 
 // Main visibility check for filter mode
@@ -4379,21 +4385,43 @@ function getSportTabItems() {
   const allSport = getAllSportItems();
   const filterOn = settings.sportLeagueFilterEnabled;
   const showPast = settings.sportShowPastGames !== false;
-  const now = Date.now();
 
   return allSport.filter(m => {
-    // Team tab filter
+    const cfg = getSportLeagueConfig(m.category || m._lgGroupName);
+    // Team tab filter (active pinned-team pill at top of Sports screen)
     if (sportActiveTeam !== 'All') {
       if (!m.title.toLowerCase().includes(sportActiveTeam.toLowerCase())) return false;
     }
-    if (!filterOn) return true; // filter OFF → show all in group
-    // Filter ON → must match a pinned team OR have a game
-    const cfg = getSportLeagueConfig(m.category || m._lgGroupName);
-    if (!cfg) return false;
-    const isPinned = itemMatchesPinnedTeam(m, cfg);
-    const game = findGameForItem(m);
-    if (!isPinned && !game) return false;
-    if (!showPast && game && game.state === 'post') return false;
+
+    if (!filterOn || !cfg || !cfg.enabled) {
+      // Filter OFF or per-league OFF: show all channels in the group
+      // but still cap to prevent rendering thousands of repo streams
+      return true;
+    }
+
+    // Filter ON + per-league ON:
+    // Only show channels where a PINNED TEAM name appears in the channel title.
+    // This is the primary filter — it shows e.g. "MLB 01: Rangers Vs Phillies"
+    // when "Texas Rangers" or "Rangers" is a pinned team.
+    const pinnedTeams = cfg.pinnedTeams || [];
+    if (pinnedTeams.length > 0) {
+      const titleLower = (m.title || '').toLowerCase();
+      // Match if ANY word/phrase of any pinned team appears in the title.
+      // "Texas Rangers" → also match on "rangers" alone (last word of multi-word names).
+      const isPinned = pinnedTeams.some(p => {
+        if (!p) return false;
+        const pl = p.toLowerCase();
+        if (titleLower.includes(pl)) return true;
+        // Also check individual significant words (3+ chars) of pinned team name
+        return pl.split(/\s+/).some(word => word.length >= 3 && titleLower.includes(word));
+      });
+      if (!isPinned) return false;
+    } else {
+      // No pinned teams: fall back to showing channels with any game today
+      const game = findGameForItem(m);
+      if (!game) return false;
+      if (!showPast && game.state === 'post') return false;
+    }
     return true;
   });
 }
@@ -4495,7 +4523,11 @@ function renderSportTab() {
 
   html += renderGroup('🔴 Live Now', live);
   html += renderGroup('🏟 Upcoming Today', upcoming);
-  if (other.length) html += renderGroup('📺 All Channels', other);
+  const MAX_ALL = 300;
+  if (other.length) {
+    const capped = other.length > MAX_ALL ? other.slice(0, MAX_ALL) : other;
+    html += renderGroup('📺 All Channels' + (other.length > MAX_ALL ? ' (showing ' + MAX_ALL + ' of ' + other.length + ')' : ''), capped);
+  }
 
   lst.innerHTML = html || '<div class="emp"><h3>No sport channels</h3></div>';
 }
@@ -4554,7 +4586,7 @@ function renderSportLeagueSettings() {
     const autoPaths = guessEspnPaths(val);
     settings.sportLeagues.push({ groupName: val, repoId, enabled: false, espnPaths: autoPaths, pinnedTeams: [], cachedGamesByPath: {}, cacheDate: '' });
     saveSettings();
-    fetchLeagueSchedule(settings.sportLeagues.length - 1).then(() => { renderSportLeagueSettings(); renderCats(); renderLib(); renderSportTab(); });
+    fetchLeagueSchedule(settings.sportLeagues.length - 1).then(() => { renderSportLeagueSettings(); renderCats(); renderLib(); renderSportTab(); updateSportNavVisibility(); });
     renderSportLeagueSettings();
     toast('Added: ' + val + (autoPaths.length ? ' · ESPN: ' + autoPaths.join(', ') : ''));
   };
@@ -4571,7 +4603,7 @@ function renderSportLeagueSettings() {
     });
     saveSettings();
     if (added) fetchAllLeagueSchedules();
-    renderSportLeagueSettings(); renderCats(); renderLib(); renderSportTab();
+    renderSportLeagueSettings(); renderCats(); renderLib(); renderSportTab(); updateSportNavVisibility();
     toast(added ? added + ' league(s) detected' : 'All detected leagues already added');
   };
 
@@ -4644,6 +4676,7 @@ function renderSportLeagueSettings() {
     const espnSel = $('sport-path-add-' + i);
     // dynamic wiring done via inline onclick
   });
+  updateSportNavVisibility();
 }
 
 // ── Window functions ─────────────────────────────────────────────────────────
@@ -4667,6 +4700,17 @@ window.toggleSportLeague = (i) => {
   saveSettings(); renderSportLeagueSettings(); renderCats(); renderLib(); renderSportTab();
 };
 
+function updateSportNavVisibility() {
+  const navBtn = document.querySelector('.ni[data-t="sport-scr"]');
+  if (!navBtn) return;
+  const hasLeagues = settings.sportLeagues && settings.sportLeagues.length > 0;
+  navBtn.style.display = hasLeagues ? '' : 'none';
+  // If Sports tab is currently active but leagues removed, switch to Home
+  if (!hasLeagues && $('sport-scr') && $('sport-scr').classList.contains('on')) {
+    showTab('lib-scr');
+  }
+}
+
 window.toggleSportFilter = () => {
   settings.sportLeagueFilterEnabled = !settings.sportLeagueFilterEnabled;
   const tgl = $('s-sport-enable');
@@ -4687,7 +4731,7 @@ window.toggleSportPast = () => {
 
 window.rmSportLeague = (i) => {
   settings.sportLeagues.splice(i, 1);
-  saveSettings(); renderSportLeagueSettings(); renderCats(); renderLib(); renderSportTab();
+  saveSettings(); renderSportLeagueSettings(); renderCats(); renderLib(); renderSportTab(); updateSportNavVisibility();
 };
 
 window.addSportPath = (i) => {
