@@ -368,7 +368,7 @@ document.addEventListener('keydown', function(e) {
 
     <!-- Accordioned config section -->
     <div id="sport-config-details" style="margin-bottom:4px">
-      <div onclick="window.toggleSportAccordion && window.toggleSportAccordion()" style="font-size:10px;font-weight:700;color:var(--t1);cursor:pointer;padding:6px 0;display:flex;align-items:center;gap:6px;user-select:none">
+      <div onclick="window.toggleSportAccordion && window.toggleSportAccordion()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.toggleSportAccordion&&window.toggleSportAccordion();}" tabindex="0" role="button" style="font-size:10px;font-weight:700;color:var(--t1);cursor:pointer;padding:6px 0;display:flex;align-items:center;gap:6px;user-select:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
         Configure Sport Groups &amp; Teams
         <svg id="sport-acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;margin-left:auto;transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
@@ -377,13 +377,13 @@ document.addEventListener('keydown', function(e) {
 
         <p style="font-size:9px;color:var(--ac);font-weight:600;margin-bottom:6px">① Add sport channel groups from a repo</p>
         <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
-          <select id="sport-repo-sel" style="flex:1;padding:6px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px"><option value="">— pick a repo —</option></select>
+          <select id="sport-repo-sel" tabindex="0" style="flex:1;padding:6px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px"><option value="">— pick a repo —</option></select>
         </div>
         <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
-          <select id="sport-grp-sel" style="flex:1;padding:6px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px"><option value="">— pick a group —</option></select>
-          <button class="bs" id="sport-grp-add" style="padding:6px 10px;font-size:9px;border-radius:var(--rs)">Add</button>
+          <select id="sport-grp-sel" tabindex="0" style="flex:1;padding:6px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px"><option value="">— pick a group —</option></select>
+          <button class="bs" id="sport-grp-add" tabindex="0" style="padding:6px 10px;font-size:9px;border-radius:var(--rs)">Add</button>
         </div>
-        <button class="bc" id="sport-grp-detect" style="padding:6px 12px;font-size:9px;border-radius:var(--rs);width:100%;margin-bottom:12px">Auto-detect from current library</button>
+        <button class="bc" id="sport-grp-detect" tabindex="0" style="padding:6px 12px;font-size:9px;border-radius:var(--rs);width:100%;margin-bottom:12px">Auto-detect from current library</button>
 
         <hr style="border:none;border-top:1px solid var(--bd);margin:4px 0 12px">
 
@@ -398,7 +398,7 @@ document.addEventListener('keydown', function(e) {
   <div class="ss"><h3>Live TV — Timeshift &amp; DVR</h3>
     <div class="sr"><div><div class="sl">Enable Timeshift (pause live TV)</div><div class="sd">Pause live TV and resume from where you left off</div></div><div class="tgl on" id="s-ts-enable"></div></div>
     <div class="sr"><div><div class="sl">Max buffer duration</div><div class="sd">How many minutes to keep in the live buffer</div></div>
-      <select id="s-ts-maxbuf">
+      <select id="s-ts-maxbuf" tabindex="0">
         <option value="10">10 min</option>
         <option value="30" selected>30 min</option>
         <option value="60">1 hour</option>
@@ -408,10 +408,10 @@ document.addEventListener('keydown', function(e) {
     <div class="sr"><div><div class="sl">DVR remote storage</div><div class="sd">Save recordings to a network device instead of this one</div></div><div class="tgl" id="s-dvr-remote-enable"></div></div>
     <div id="s-dvr-remote-cfg" style="display:none;margin-top:8px">
       <div class="sr"><div><div class="sl">Protocol</div><div class="sd">Connection for remote DVR</div></div>
-        <select id="s-dvr-proto"><option value="ftp">FTP</option><option value="ftps">FTPS</option><option value="smb">Samba/SMB</option></select>
+        <select id="s-dvr-proto" tabindex="0"><option value="ftp">FTP</option><option value="ftps">FTPS</option><option value="smb">Samba/SMB</option></select>
       </div>
       <div class="rw" style="margin-top:6px">
-        <div><label>Host / IP</label><input id="s-dvr-host" placeholder="192.168.1.50"></div>
+        <div><label>Host / IP</label><input id="s-dvr-host" tabindex="0" placeholder="192.168.1.50"></div>
         <div><label>Port</label><input id="s-dvr-port" placeholder="21" type="number" style="max-width:80px"></div>
       </div>
       <div class="rw">
@@ -2147,15 +2147,20 @@ function populateEpgDropdown(selected) {
   }
 
   // Mouse/touch: open on focus
-  searchInput.onfocus = () => openEpgList();
+  // On TV, DPad focus must NOT auto-open the list — wait for a keypress
+  searchInput.onfocus = isTvDevice ? () => {} : () => openEpgList();
 
-  // TV DPad Enter on search input opens the list
+  // TV: open list on navigation keys; for printable chars let the value
+  // settle first (50ms) so renderEpgOptions sees the updated input text
   searchInput.onkeydown = (e) => {
-    if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
-      e.preventDefault();
-      openEpgList();
-    } else if (e.key === 'Escape') {
+    if (e.key === 'Escape') {
       closeEpgList();
+    } else if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      setTimeout(() => openEpgList(), 50);
+    } else if (e.key.length === 1) {
+      // Printable character — let it be inserted, then open/refresh list
+      setTimeout(() => { if (!_epgDropdownOpen) openEpgList(); }, 50);
     }
   };
 
