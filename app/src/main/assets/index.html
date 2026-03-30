@@ -302,8 +302,8 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     <button class="ib" id="btn-sport-refresh" title="Refresh schedules" onclick="window.refreshAllSportData && window.refreshAllSportData()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg></button>
   </div></div>
   <div id="sport-filter-bar" style="padding:4px 12px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap"></div>
-  <div id="sport-section-tabs" data-tv-zone="sport-section-tabs" style="padding:4px 12px 2px;display:flex;align-items:center;gap:6px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;-ms-overflow-style:none"></div>
-  <div id="sport-team-tabs" data-tv-zone="sport-team-tabs" style="padding:2px 12px 4px;display:flex;align-items:center;gap:6px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;-ms-overflow-style:none"></div>
+  <div id="sport-section-tabs" data-tv-zone="sport-section-tabs" style="padding:2px 12px 2px;display:flex;align-items:center;gap:6px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;-ms-overflow-style:none"></div>
+  <div id="sport-team-tabs" data-tv-zone="sport-team-tabs" style="padding:1px 12px 3px;display:flex;align-items:center;gap:6px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;-ms-overflow-style:none"></div>
   <div class="lst" id="sport-lst" style="padding-top:4px"></div>
 </div>
 <script>
@@ -4643,15 +4643,9 @@ function renderSportTab() {
     }
     leagues.forEach(lg => {
       const lgItems = getSportGroupItems(lg);
-      if (!lgItems.length) return; // no channels in this group
-      // When filter ON: only show tab if it has passing channels
-      if (filterOn) {
-        const hasContent = lgItems.some(m => {
-          const sportM = { ...m, _lgGroupName: lg.groupName };
-          return getSportTabItems().some(si => si.url === m.url);
-        });
-        if (!hasContent) return;
-      }
+      if (!lgItems.length) return; // no channels configured in this group
+      // Always show the league tab — hiding it based on filter state causes
+      // tabs to disappear unexpectedly when team pills are selected
       tabs.push({ id: lg.groupName, label: lg.groupName, badge: null });
     });
     tabs.push({ id: 'allgames', label: '📅 All Games', badge: null });
@@ -4662,7 +4656,7 @@ function renderSportTab() {
     }
 
     secTabs.innerHTML = tabs.map(t =>
-      `<span tabindex="0" role="button" data-tv-zone="sport-section-tabs" style="font-size:9px;padding:3px 10px;border-radius:10px;cursor:pointer;flex-shrink:0;${t.id === sportSectionTab ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportSectionTab('${t.id.replace(/'/g,"\'")}')">
+      `<span tabindex="0" role="button" data-tv-zone="sport-section-tabs" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;${t.id === sportSectionTab ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportSectionTab('${t.id.replace(/'/g,"\'")}')">
         ${esc(t.label)}${t.badge ? ' <span style="font-size:8px;opacity:.85">('+t.badge+')</span>' : ''}
       </span>`
     ).join('');
@@ -4829,7 +4823,7 @@ function _renderAllGamesTab(lst) {
       const playId = mainItem ? mainItem.id : (m.id || m.url);
       const sportUrl2 = m.url || '';
       const sportLg2 = m.category || m._lgGroupName || '';
-      return `<button onclick="window.playSportChannel && window.playSportChannel('${esc(sportUrl2)}','${esc(sportLg2)}')" style="font-size:8px;padding:3px 8px;border-radius:6px;background:var(--ac);color:#fff;border:none;cursor:pointer;white-space:nowrap">${esc(m.title.replace(/\s*\(home\)|\s*\(away\)/i,'').trim().slice(0,30))}</button>`;
+      return `<button tabindex="0" onclick="window.playSportChannel && window.playSportChannel('${esc(sportUrl2)}','${esc(sportLg2)}')" style="font-size:8px;padding:3px 8px;border-radius:6px;background:var(--ac);color:#fff;border:none;cursor:pointer;white-space:nowrap">${esc(m.title.replace(/\s*\(home\)|\s*\(away\)/i,'').trim().slice(0,30))}</button>`;
     }).join('');
     const leagueLabel = (ESPN_SPORT_OPTIONS.find(o => o.path === g._path) || {}).label || g._lgName;
     return `<div style="border:1px solid var(--bd);border-radius:var(--rs);margin:4px 12px;padding:8px">
@@ -4859,6 +4853,14 @@ function _renderAllGamesTab(lst) {
     (showPast ? renderSection('✓ Completed', post) : '');
 }
 
+
+window.setSportSectionTab = (id) => {
+  sportSectionTab = id;
+  // Reset team pill to "All" when switching league tabs
+  sportActiveTeam = 'All';
+  _invalidateSportTabCache();
+  renderSportTab();
+};
 
 window.setSportTeamTab = (team) => {
   sportActiveTeam = team;
