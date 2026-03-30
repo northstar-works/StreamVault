@@ -302,7 +302,8 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     <button class="ib" id="btn-sport-refresh" title="Refresh schedules" onclick="window.refreshAllSportData && window.refreshAllSportData()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg></button>
   </div></div>
   <div id="sport-filter-bar" style="padding:4px 12px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap"></div>
-  <div id="sport-team-tabs" style="padding:4px 12px 0;display:flex;align-items:center;gap:6px;overflow-x:auto;white-space:nowrap;scrollbar-width:none"></div>
+  <div id="sport-section-tabs" style="padding:4px 12px 2px;display:flex;align-items:center;gap:6px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;-ms-overflow-style:none"></div>
+  <div id="sport-team-tabs" style="padding:2px 12px 4px;display:flex;align-items:center;gap:6px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;-ms-overflow-style:none"></div>
   <div class="lst" id="sport-lst" style="padding-top:4px"></div>
 </div>
 
@@ -4167,15 +4168,18 @@ function isSportLeagueGroup(category) { return !!(category && getSportLeagueConf
 
 // Get all configured sport groups' source items (from repos or library)
 function getSportGroupItems(lg) {
-  // If sourced from a repo, pull from there
   if (lg.repoId) {
     const repo = repos.find(r => r.id === lg.repoId);
-    if (repo) return (repo.streams || []).map(s => ({
-      id: s.url, title: s.name || s.title || '', url: s.url, category: s.category || lg.groupName,
-      icon: s.icon || '', epgTitle: s.epgTitle || '', region: s.region || ''
-    }));
+    if (repo) {
+      return (repo.streams || [])
+        .filter(s => s.category === lg.groupName)  // ONLY streams in this group
+        .map(s => ({
+          id: s.url, title: s.name || s.title || '', url: s.url,
+          category: lg.groupName, icon: s.icon || '',
+          epgTitle: s.epgTitle || '', region: s.region || ''
+        }));
+    }
   }
-  // Otherwise pull from main items library
   return items.filter(m => m.category === lg.groupName);
 }
 
@@ -4371,6 +4375,7 @@ function sportGameScore(item) {
 
 let sportActiveTeam = 'All'; // which pinned team tab is active
 let sportConfigOpen = false; // accordion open/close state
+let sportSectionTab = 'live'; // 'live' | league groupName | 'allgames'
 
 function getAllPinnedTeams() {
   if (!settings.sportLeagues) return [];
@@ -4386,48 +4391,42 @@ function getSportTabItems() {
   const filterOn = settings.sportLeagueFilterEnabled;
   const showPast = settings.sportShowPastGames !== false;
 
+  // Non-game channel blocklist — always applied regardless of filter state
+  const SPORT_SKIP = /cheerleader|america.?s.sweethearts|americas sweethearts|highlight reel|classic game|preview show|documentary|interview show|behind.the.scenes|talk show|press conference|cooking|travel|real house|bachelor|survivor|competition show/i;
+
   return allSport.filter(m => {
+    const title = m.title || '';
+    const titleLower = title.toLowerCase();
     const cfg = getSportLeagueConfig(m.category || m._lgGroupName);
-    // Team tab filter (active pinned-team pill at top of Sports screen)
+
+    // Always block non-game content
+    if (SPORT_SKIP.test(title)) return false;
+
+    // Team tab filter (pill at top of Sports screen)
     if (sportActiveTeam !== 'All') {
-      if (!m.title.toLowerCase().includes(sportActiveTeam.toLowerCase())) return false;
+      if (!titleLower.includes(sportActiveTeam.toLowerCase())) return false;
     }
 
-    if (!filterOn || !cfg || !cfg.enabled) {
-      // Filter OFF or per-league OFF: show all channels in the group
-      // but still cap to prevent rendering thousands of repo streams
-      return true;
-    }
+    // Filter OFF or per-league toggle OFF: show all sport channels in group
+    if (!filterOn || !cfg || !cfg.enabled) return true;
 
-    // Filter ON + per-league ON:
+    // Filter ON + per-league ON: pinned-team matching
     const pinnedTeams = cfg.pinnedTeams || [];
-    const titleLower = (m.title || '').toLowerCase();
-
-    // Blocklist: skip channels that are clearly not games
-    const SPORT_SKIP = /cheerleader|highlight|classic|preview|documentary|interview|behind.the.scenes|magazine|talk.show|press.conference/i;
-    if (SPORT_SKIP.test(m.title || '')) return false;
-
     if (pinnedTeams.length > 0) {
-      // Only show channels where a pinned team name appears in the title.
-      // Word-split matching ("Texas Rangers" → "rangers") is only allowed when:
-      //   a) Channel has a sport prefix (NFL, MLB, NHL, NBA…), OR
-      //   b) Title contains game indicators (vs, @, " at ", home, away)
-      // Otherwise require the full team name phrase to reduce false positives.
       const hasSportPrefix = !!detectSportPathFromTitle(titleLower);
-      const hasGameIndicator = / vs | vs$|^vs | @ | at | home| away|\(home\)|\(away\)/i.test(m.title || '');
+      const hasGameIndicator = / vs | @ | home| away|\(home\)|\(away\)/i.test(title);
       const allowWordSplit = hasSportPrefix || hasGameIndicator;
 
       const isPinned = pinnedTeams.some(p => {
         if (!p) return false;
         const pl = p.toLowerCase();
-        if (titleLower.includes(pl)) return true; // full phrase match always ok
-        if (!allowWordSplit) return false;         // no word-split for non-game titles
-        // Word-split: check significant words (4+ chars to avoid "the", "los", etc.)
+        if (titleLower.includes(pl)) return true;
+        if (!allowWordSplit) return false;
         return pl.split(/\s+/).some(word => word.length >= 4 && titleLower.includes(word));
       });
       if (!isPinned) return false;
 
-      // Apply past-games filter to pinned-team channels too
+      // Respect past-games setting for pinned channels
       if (!showPast) {
         const game = findGameForItem(m);
         if (game && game.state === 'post') return false;
@@ -4441,52 +4440,104 @@ function getSportTabItems() {
     return true;
   });
 }
-
 function renderSportTab() {
   if (!$('sport-scr')) return;
 
-  // Filter status bar
+  const filterOn = settings.sportLeagueFilterEnabled;
+  const leagues = settings.sportLeagues || [];
+  const allSportItems = getAllSportItems();
+
+  // ── Filter bar ──
   const filterBar = $('sport-filter-bar');
   if (filterBar) {
-    const filterOn = settings.sportLeagueFilterEnabled;
-    filterBar.innerHTML = `<span style="font-size:8px;color:var(--t2)">Filter:</span>
-      <span style="font-size:8px;padding:2px 8px;border-radius:10px;cursor:pointer;${filterOn ? 'background:var(--ac);color:#fff' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.toggleSportFilter && window.toggleSportFilter()">
+    filterBar.innerHTML =
+      `<span style="font-size:8px;padding:2px 10px;border-radius:10px;cursor:pointer;${filterOn ? 'background:var(--ac);color:#fff' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.toggleSportFilter && window.toggleSportFilter()">
         ${filterOn ? '● My Teams Only' : '○ All Sport Channels'}
       </span>
-      <span style="font-size:8px;color:var(--t3)">${getAllSportItems().length} channels</span>`;
+      <span style="font-size:8px;color:var(--t3)">${allSportItems.length} channels configured</span>`;
   }
 
-  // Pinned team tabs
+  // ── Section tabs: [Live Now?] [League...] [All Games] ──
+  const secTabs = $('sport-section-tabs');
+  if (secTabs) {
+    // Count live games across all configured leagues
+    const liveGames = _getAllTodayGames().filter(g => g.state === 'in');
+    const tabs = [];
+    if (liveGames.length > 0) {
+      tabs.push({ id: 'live', label: '🔴 Live Now', badge: liveGames.length });
+    } else if (sportSectionTab === 'live') {
+      sportSectionTab = leagues.length ? leagues[0].groupName : 'allgames';
+    }
+    leagues.forEach(lg => {
+      const cnt = getSportGroupItems(lg).length;
+      if (cnt > 0) tabs.push({ id: lg.groupName, label: lg.groupName, badge: null });
+    });
+    tabs.push({ id: 'allgames', label: '📅 All Games', badge: null });
+
+    // Ensure sportSectionTab is valid
+    if (!tabs.find(t => t.id === sportSectionTab)) {
+      sportSectionTab = tabs[0] ? tabs[0].id : 'allgames';
+    }
+
+    secTabs.innerHTML = tabs.map(t =>
+      `<span style="font-size:9px;padding:3px 10px;border-radius:10px;cursor:pointer;flex-shrink:0;${t.id === sportSectionTab ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportSectionTab('${t.id.replace(/'/g,"\'")}')">
+        ${esc(t.label)}${t.badge ? ' <span style="font-size:8px;opacity:.85">('+t.badge+')</span>' : ''}
+      </span>`
+    ).join('');
+  }
+
+  // ── Team filter pills (only for channel tabs, not All Games) ──
   const teamTabs = $('sport-team-tabs');
   if (teamTabs) {
-    const teams = getAllPinnedTeams();
-    if (teams.length) {
-      teamTabs.innerHTML = ['All', ...teams].map(t =>
-        `<span style="font-size:9px;padding:3px 10px;border-radius:10px;cursor:pointer;flex-shrink:0;${t === sportActiveTeam ? 'background:var(--ac);color:#fff' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportTeamTab('${t.replace(/'/g,"\\'")}')">
-          ${t === 'All' ? '⚽ All' : t}
-        </span>`
-      ).join('');
+    if (sportSectionTab === 'allgames') {
+      teamTabs.innerHTML = '';
     } else {
-      teamTabs.innerHTML = `<span style="font-size:8px;color:var(--t3)">Add pinned teams in Settings → Live Sports to see your team filter tabs</span>`;
+      const teams = getAllPinnedTeams();
+      if (teams.length) {
+        teamTabs.innerHTML = ['All', ...teams].map(t =>
+          `<span style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;${t === sportActiveTeam ? 'background:var(--ac);color:#fff' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportTeamTab('${t.replace(/'/g,"\'")}')">
+            ${esc(t === 'All' ? '⚽ All' : t)}
+          </span>`
+        ).join('');
+      } else {
+        teamTabs.innerHTML = '';
+      }
     }
   }
 
   const lst = $('sport-lst');
   if (!lst) return;
 
-  const sportItems = getSportTabItems();
+  // ── All Games tab: show ESPN schedule cards ──
+  if (sportSectionTab === 'allgames') {
+    _renderAllGamesTab(lst);
+    return;
+  }
+
+  // ── Live Now tab: channels with active games ──
+  // ── League tab: channels for that specific league group ──
+  const isLiveTab = sportSectionTab === 'live';
+  const leagueFilter = isLiveTab ? null : sportSectionTab; // null = all leagues
+
+  // Get filtered channels for this section
+  const sportItems = getSportTabItems().filter(m => {
+    if (leagueFilter && (m.category || m._lgGroupName) !== leagueFilter) return false;
+    if (isLiveTab) {
+      const g = findGameForItem(m);
+      return g && g.state === 'in';
+    }
+    return true;
+  });
 
   if (!sportItems.length) {
-    const filterOn = settings.sportLeagueFilterEnabled;
-    const hasPinned = getAllPinnedTeams().length > 0;
-    if (!settings.sportLeagues || !settings.sportLeagues.length) {
-      lst.innerHTML = '<div class="emp"><h3>No sport groups configured</h3><p>Go to Settings → Live Sports → Configure Sport Groups to add groups from your repos.</p></div>';
-    } else if (filterOn && !hasPinned) {
-      lst.innerHTML = '<div class="emp"><h3>No pinned teams</h3><p>Add team names in Settings → Live Sports → Configure to enable team filtering.</p></div>';
-    } else if (filterOn) {
-      lst.innerHTML = '<div class="emp"><h3>No channels found</h3><p>None of your pinned teams have channels in the configured sport groups, or schedule data hasn\'t been fetched yet.</p></div>';
+    if (!leagues.length) {
+      lst.innerHTML = '<div class="emp"><h3>No sport groups configured</h3><p>Go to Settings → Live Sports → Configure Sport Groups to add leagues from your repos.</p></div>';
+    } else if (isLiveTab) {
+      lst.innerHTML = '<div class="emp"><h3>No live games right now</h3><p>Check back when a game starts.</p></div>';
+    } else if (filterOn && getAllPinnedTeams().length === 0) {
+      lst.innerHTML = '<div class="emp"><h3>No pinned teams</h3><p>Add teams in Settings → Live Sports to filter channels.</p></div>';
     } else {
-      lst.innerHTML = '<div class="emp"><h3>No sport channels found</h3><p>Check that your configured sport groups have channels loaded.</p></div>';
+      lst.innerHTML = '<div class="emp"><h3>No channels found</h3><p>Add more sport groups or check that your repo is loaded.</p></div>';
     }
     return;
   }
@@ -4494,38 +4545,39 @@ function renderSportTab() {
   // Sort: LIVE pinned → upcoming pinned → LIVE other → upcoming other → rest
   const sorted = [...sportItems].sort((a, b) => sportGameScore(b) - sportGameScore(a));
 
-  // Group by game state for section headers
+  // Group by game state
   const live = sorted.filter(m => { const g = findGameForItem(m); return g && g.state === 'in'; });
   const upcoming = sorted.filter(m => { const g = findGameForItem(m); return g && g.state === 'pre'; });
   const other = sorted.filter(m => { const g = findGameForItem(m); return !g || (g.state !== 'in' && g.state !== 'pre'); });
 
-  let html = '';
-
-  const renderGroup = (title, itemsList) => {
+  const renderGroup = (title, itemsList, cap) => {
     if (!itemsList.length) return '';
+    const show = cap ? itemsList.slice(0, cap) : itemsList;
+    const overflow = cap && itemsList.length > cap ? `<div style="padding:4px 12px 6px;font-size:8px;color:var(--t3)">(${itemsList.length - cap} more hidden — use team filter to narrow)</div>` : '';
     let h = `<div style="padding:6px 12px 2px;font-size:8px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em">${title}</div>`;
-    h += itemsList.map(m => {
+    h += show.map(m => {
       const game = findGameForItem(m);
       const cfg = getSportLeagueConfig(m.category || m._lgGroupName);
       const isPinned = cfg && itemMatchesPinnedTeam(m, cfg);
-      const thumb = m.icon ? `<img src="${esc(m.icon)}" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><svg style="display:none" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>`
-                           : `<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>`;
+      const thumb = m.icon
+        ? `<img src="${esc(m.icon)}" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><svg style="display:none" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>`
+        : `<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>`;
       let gameLine = '';
       if (game) {
         const t1 = game.teamObjects[0] || {}, t2 = game.teamObjects[1] || {};
-        const teams = game.shortName || game.name || [t1.name, t2.name].filter(Boolean).join(' vs ');
+        const teams = game.shortName || [t1.name, t2.name].filter(Boolean).join(' vs ');
         const timeStr = game.state === 'in' ? '🔴 LIVE' : (() => {
           const d = new Date(game.startTime), h = d.getHours() % 12 || 12, mi = d.getMinutes();
-          return '🏟 ' + h + (mi ? ':' + String(mi).padStart(2,'0') : '') + (d.getHours()>=12?'PM':'AM');
+          return '🏟 ' + h + (mi ? ':' + String(mi).padStart(2,'0') : '') + (d.getHours() >= 12 ? 'PM' : 'AM');
         })();
-        const scoreStr = (game.state === 'in' || game.state === 'post') && t1.score && t2.score
-          ? ` ${t1.score}-${t2.score}` : '';
+        const scoreStr = (game.state === 'in' || game.state === 'post') && t1.score && t2.score ? ` ${t1.score}-${t2.score}` : '';
         gameLine = `<div style="font-size:8px;color:var(--t2);margin-top:1px">${timeStr}${scoreStr} · ${esc(teams)}</div>`;
       }
-      const catBadge = m.category ? `<span class="tg2" style="background:var(--acs);color:var(--ac)">${esc(m.category)}</span>` : '';
       const pinBadge = isPinned ? `<span class="tg2" style="background:rgba(255,200,0,.15);color:#f1c40f">📌</span>` : '';
-      const mainItem = items.find(i => i.url === m.url) || m;
-      return `<div class="itm" data-tv-zone="channel-list" onclick="playItem('${mainItem.id || m.id || m.url}')">
+      const catBadge = m.category ? `<span class="tg2" style="background:var(--acs);color:var(--ac)">${esc(m.category)}</span>` : '';
+      const mainItem = items.find(i => i.url === m.url);
+      const playId = mainItem ? mainItem.id : (m.id || m.url);
+      return `<div class="itm" data-tv-zone="channel-list" onclick="playItem('${esc(playId)}')">
         <div class="th">${thumb}</div>
         <div class="nf">
           <div class="nm">${esc(m.title)}</div>
@@ -4533,20 +4585,96 @@ function renderSportTab() {
           ${gameLine}
         </div>
       </div>`;
-    }).join('');
+    }).join('') + overflow;
     return h;
   };
 
-  html += renderGroup('🔴 Live Now', live);
-  html += renderGroup('🏟 Upcoming Today', upcoming);
-  const MAX_ALL = 300;
-  if (other.length) {
-    const capped = other.length > MAX_ALL ? other.slice(0, MAX_ALL) : other;
-    html += renderGroup('📺 All Channels' + (other.length > MAX_ALL ? ' (showing ' + MAX_ALL + ' of ' + other.length + ')' : ''), capped);
+  let html = '';
+  if (!isLiveTab) {
+    html += renderGroup('🔴 Live Now', live);
+    html += renderGroup('🏟 Upcoming Today', upcoming);
+    html += renderGroup('📺 Channels', other, 150);
+  } else {
+    html += renderGroup('🔴 Live Now', live);
+  }
+  lst.innerHTML = html || '<div class="emp"><h3>Nothing here</h3></div>';
+}
+
+// ── All Games tab: ESPN schedule cards ───────────────────────────────────────
+function _getAllTodayGames() {
+  const seen = new Set();
+  const out = [];
+  (settings.sportLeagues || []).forEach(lg => {
+    const paths = lg.espnPaths || (lg.espnPath ? [lg.espnPath] : []);
+    paths.forEach(path => {
+      const games = lg.cachedGamesByPath && lg.cachedGamesByPath[path];
+      if (!Array.isArray(games)) return;
+      games.forEach(g => {
+        const key = g.shortName + '|' + g.startTime;
+        if (!seen.has(key)) { seen.add(key); out.push({ ...g, _path: path, _lgName: lg.groupName }); }
+      });
+    });
+  });
+  return out.sort((a, b) => a.startTime - b.startTime);
+}
+
+function _renderAllGamesTab(lst) {
+  const showPast = settings.sportShowPastGames !== false;
+  const games = _getAllTodayGames().filter(g => showPast || g.state !== 'post');
+
+  if (!games.length) {
+    lst.innerHTML = '<div class="emp"><h3>No games scheduled today</h3><p>Fetch schedules using the ↻ button, or check Settings → Live Sports.</p></div>';
+    return;
   }
 
-  lst.innerHTML = html || '<div class="emp"><h3>No sport channels</h3></div>';
+  const live = games.filter(g => g.state === 'in');
+  const pre = games.filter(g => g.state === 'pre');
+  const post = games.filter(g => g.state === 'post');
+
+  const renderGameCard = (g) => {
+    const t1 = g.teamObjects[0] || {}, t2 = g.teamObjects[1] || {};
+    const name = g.shortName || g.name || (t1.name && t2.name ? t1.name + ' vs ' + t2.name : 'Game');
+    const d = new Date(g.startTime), h = d.getHours() % 12 || 12, mi = d.getMinutes();
+    const timeStr = g.state === 'in' ? '🔴 LIVE' : g.state === 'post' ? '✓ Final' : h + (mi ? ':' + String(mi).padStart(2,'0') : '') + (d.getHours()>=12?'PM':'AM');
+    const scoreStr = (g.state === 'in' || g.state === 'post') && t1.score && t2.score ? t1.score + ' – ' + t2.score : '';
+    // Find channels that match this game
+    const matchingChs = getAllSportItems().filter(m => {
+      const games2 = findGamesForItem(m);
+      return games2.some(gg => gg.startTime === g.startTime && gg.shortName === g.shortName);
+    }).slice(0, 4);
+    const chButtons = matchingChs.map(m => {
+      const mainItem = items.find(i => i.url === m.url);
+      const playId = mainItem ? mainItem.id : (m.id || m.url);
+      return `<button onclick="playItem('${esc(playId)}')" style="font-size:8px;padding:3px 8px;border-radius:6px;background:var(--ac);color:#fff;border:none;cursor:pointer;white-space:nowrap">${esc(m.title.replace(/\s*\(home\)|\s*\(away\)/i,'').trim().slice(0,30))}</button>`;
+    }).join('');
+    const leagueLabel = (ESPN_SPORT_OPTIONS.find(o => o.path === g._path) || {}).label || g._lgName;
+    return `<div style="border:1px solid var(--bd);border-radius:var(--rs);margin:4px 12px;padding:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--t1)">${esc(name)}</div>
+          <div style="font-size:8px;color:var(--t3)">${esc(leagueLabel)}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:10px;font-weight:700;color:${g.state==='in'?'var(--rd)':g.state==='post'?'var(--t3)':'var(--gn)'}">${timeStr}</div>
+          ${scoreStr ? `<div style="font-size:11px;font-weight:700;color:var(--t1)">${scoreStr}</div>` : ''}
+        </div>
+      </div>
+      ${chButtons ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${chButtons}</div>` : '<div style="font-size:8px;color:var(--t3)">No matching channels found in your groups</div>'}
+    </div>`;
+  };
+
+  const renderSection = (title, list) => {
+    if (!list.length) return '';
+    return `<div style="padding:6px 12px 2px;font-size:8px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em">${title}</div>` +
+      list.map(renderGameCard).join('');
+  };
+
+  lst.innerHTML =
+    renderSection('🔴 Live Now', live) +
+    renderSection('🏟 Upcoming', pre) +
+    (showPast ? renderSection('✓ Completed', post) : '');
 }
+
 
 window.setSportTeamTab = (team) => {
   sportActiveTeam = team;
