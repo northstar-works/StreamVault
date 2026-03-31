@@ -284,6 +284,103 @@ public class MainActivity extends Activity {
         public void pickBackupFile() {
             runOnUiThread(() -> openBackupFilePicker());
         }
+
+        @JavascriptInterface
+        public void scanInjectFile() {
+            // Scan all external storage volumes for inject/*.json
+            // Called by the "Inject from USB" button in Settings
+            runOnUiThread(() -> scanUsbInjectFile());
+        }
+    }
+
+    /**
+     * Scan all external storage volumes (USB drives, SD cards) for inject/*.json
+     * and call window.onInjectFileFound / window.onInjectFileNotFound in JS.
+     * Fire TV USB drives mount under /storage/ as non-"emulated" volumes.
+     */
+    private void scanUsbInjectFile() {
+        new Thread(() -> {
+            try {
+                // Strategy 1: getExternalFilesDirs gives us app dirs on all volumes.
+                // Navigate up 4 levels (app/files → Android/data → Android → volume root)
+                // to reach the USB root, then look for inject/.json
+                java.io.File[] appDirs = getExternalFilesDirs(null);
+                java.util.List<java.io.File> volumeRoots = new java.util.ArrayList<>();
+
+                if (appDirs != null) {
+                    for (java.io.File d : appDirs) {
+                        if (d == null) continue;
+                        // Navigate: files/ → app-package/ → data/ → Android/ → volume root
+                        java.io.File vol = d;
+                        for (int i = 0; i < 4 && vol != null; i++) vol = vol.getParentFile();
+                        if (vol != null && !volumeRoots.contains(vol)) {
+                            volumeRoots.add(vol);
+                        }
+                    }
+                }
+
+                // Strategy 2: direct /storage/ scan for non-emulated entries
+                java.io.File storageDir = new java.io.File("/storage");
+                if (storageDir.exists()) {
+                    java.io.File[] entries = storageDir.listFiles();
+                    if (entries != null) {
+                        for (java.io.File e : entries) {
+                            if (!e.getName().equalsIgnoreCase("emulated") &&
+                                !e.getName().equalsIgnoreCase("self") &&
+                                e.isDirectory() && !volumeRoots.contains(e)) {
+                                volumeRoots.add(e);
+                            }
+                        }
+                    }
+                }
+
+                // Search each volume root for inject/*.json
+                java.io.File foundFile = null;
+                outer:
+                for (java.io.File root : volumeRoots) {
+                    java.io.File injectDir = new java.io.File(root, "inject");
+                    if (!injectDir.exists() || !injectDir.isDirectory()) continue;
+                    java.io.File[] jsonFiles = injectDir.listFiles(
+                        f -> f.isFile() && f.getName().toLowerCase().endsWith(".json"));
+                    if (jsonFiles != null && jsonFiles.length > 0) {
+                        // Sort by name descending so newest backup (by timestamp in name) wins
+                        java.util.Arrays.sort(jsonFiles, (a, b) -> b.getName().compareToIgnoreCase(a.getName()));
+                        foundFile = jsonFiles[0];
+                        break outer;
+                    }
+                }
+
+                if (foundFile == null) {
+                    final String msg = "No inject/*.json found on USB drive";
+                    runOnUiThread(() -> {
+                        String js = "window.onInjectFileNotFound && window.onInjectFileNotFound(" + quoteJs(msg) + ");";
+                        webView.evaluateJavascript(js, null);
+                    });
+                    return;
+                }
+
+                // Read it and send to JS
+                final java.io.File injectFile = foundFile;
+                String jsonText = new String(
+                    java.nio.file.Files.readAllBytes(injectFile.toPath()),
+                    java.nio.charset.StandardCharsets.UTF_8);
+                final String jt = jsonText;
+                final String label = injectFile.getName();
+                runOnUiThread(() -> {
+                    String js = "window.onInjectFileFound && window.onInjectFileFound("
+                        + quoteJs(jt) + "," + quoteJs(label) + ");";
+                    webView.evaluateJavascript(js, null);
+                });
+
+            } catch (Exception e) {
+                final String msg = e.getMessage() != null ? e.getMessage() : String.valueOf(e);
+                runOnUiThread(() -> {
+                    String js = "window.onInjectFileNotFound && window.onInjectFileNotFound(" + quoteJs(msg) + ");";
+                    webView.evaluateJavascript(js, null);
+                    toastNative("USB inject scan failed: " + msg);
+                });
+            }
+        }).start();
     }
 
     private void openLocalFilePicker() {

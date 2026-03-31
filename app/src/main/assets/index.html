@@ -499,6 +499,14 @@ document.addEventListener('keydown', function(e) {
       <button class="bc" id="bk-imp-btn" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Restore Backup</button>
       <input type="file" id="bk-imp" accept=".json,application/json" style="display:none">
     </div>
+    <div style="margin-top:10px;padding:10px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs)">
+      <div style="font-size:9px;font-weight:700;color:var(--ac);margin-bottom:4px">⚡ USB Inject</div>
+      <p style="font-size:8px;color:var(--t2);margin-bottom:8px">Instantly mirror settings from another StreamVault install. Place a StreamVault backup .json in an <code style="font-size:8px;background:var(--c2);padding:1px 4px;border-radius:3px">inject/</code> folder on a USB drive, plug it in, then tap below.</p>
+      <div class="tv-row" data-tv-group="inject-action">
+        <button class="bs" id="bk-inject-btn" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">⚡ Inject from USB Drive</button>
+        <div id="bk-inject-status" style="font-size:8px;color:var(--t3);padding:4px 0;align-self:center"></div>
+      </div>
+    </div>
   </div>
   <div class="ss"><h3>Plex / PlexStr</h3>
     <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Step 1: connect to your Plex server here. After a successful test, use Add Plex Stream to open the PlexStr add page with library and title pickers.</p>
@@ -3823,6 +3831,48 @@ function renderSettings() {
       toast('Backup saved: ' + filename);
     }
   };
+  $('bk-inject-btn').onclick = () => {
+    const statusEl = $('bk-inject-status');
+    if (statusEl) statusEl.textContent = 'Scanning USB…';
+    if (window.NativePlayer && typeof window.NativePlayer.scanInjectFile === 'function') {
+      window.NativePlayer.scanInjectFile();
+    } else {
+      // Web fallback: prompt for file (dev/test mode)
+      const inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = '.json,application/json';
+      inp.onchange = async () => {
+        if (!inp.files[0]) return;
+        try {
+          const text = await inp.files[0].text();
+          window.onInjectFileFound(text, inp.files[0].name);
+        } catch(e) { toast('Inject read error: ' + e.message); }
+      };
+      inp.click();
+    }
+  };
+
+  window.onInjectFileFound = (jsonText, label) => {
+    const statusEl = $('bk-inject-status');
+    try {
+      const data = JSON.parse(jsonText);
+      if (!data || typeof data !== 'object') throw new Error('Not a valid JSON object');
+      if (data.type !== 'streamvault-backup') throw new Error('Not a StreamVault backup file');
+      restoreBackupPayload(data);
+      if (statusEl) statusEl.textContent = '✓ Injected from ' + (label || 'USB');
+      toast('✓ Settings injected from USB');
+    } catch(e) {
+      if (statusEl) statusEl.textContent = '✗ ' + e.message;
+      toast('Inject failed: ' + e.message);
+    }
+  };
+
+  window.onInjectFileNotFound = (reason) => {
+    const statusEl = $('bk-inject-status');
+    const msg = reason || 'No inject/*.json found on USB drive';
+    if (statusEl) statusEl.textContent = '✗ ' + msg;
+    toast(msg);
+  };
+
   $('bk-imp-btn').onclick = () => {
     if (window.NativePlayer && typeof window.NativePlayer.pickBackupFile === 'function') {
       // pickBackupFile on TV opens in-app list; on mobile opens system picker
@@ -4525,93 +4575,130 @@ window.playSportChannel = async (url, lgGroupName) => {
   if (!url) return;
 
   try {
-  // 1. Find item in main library by URL
-  const libItem = items.find(m => m.url === url || m.url === decodeURIComponent(url));
-  if (libItem) {
-    // Item is in library — use normal playItem which handles full failover + timeshift
-    await window.playItem(libItem.id);
-    return;
-  }
+    // 1. Library item — use full playItem with built-in failover
+    const libItem = items.find(m => m.url === url || m.url === decodeURIComponent(url));
+    if (libItem) {
+      await window.playItem(libItem.id);
+      return;
+    }
 
-  // 2. Item is repo-only. Build failover list manually.
-  const cfg = lgGroupName ? getSportLeagueConfig(lgGroupName) : null;
-  const pinnedTeams = cfg ? (cfg.pinnedTeams || []) : [];
+    // 2. Repo-only stream — build smart failover list
+    const cfg = lgGroupName ? getSportLeagueConfig(lgGroupName) : null;
+    const pinnedTeams = cfg ? (cfg.pinnedTeams || []) : [];
+    const pinnedLower = pinnedTeams.map(p => p.toLowerCase());
 
-  // Find the triggering stream across repos to get its title/base
-  let primaryTitle = url;
-  let primaryStream = null;
-  for (const r of repos) {
-    const s = (r.streams || []).find(s2 => s2.url === url);
-    if (s) { primaryStream = s; primaryTitle = s.name || s.title || url; break; }
-  }
+    // Resolve primary stream title
+    let primaryTitle = url;
+    for (const r of repos) {
+      const s = (r.streams || []).find(s2 => s2.url === url);
+      if (s) { primaryTitle = s.name || s.title || url; break; }
+    }
+    const base = extractBase(primaryTitle);
 
-  const base = extractBase(primaryTitle);
-
-  // Gather all streams across repos that share the same base title (i.e. same game, different feeds)
-  const candidates = [];
-  for (const r of repos) {
-    for (const s of (r.streams || [])) {
-      const sb = extractBase(s.name || s.title || '');
-      if (sb === base) {
-        candidates.push({
-          url: extractUrl(s.url),
-          title: s.name || s.title || '',
-          region: s.region || '',
-          tag: (s.tags && s.tags[0]) || ''
-        });
+    // Gather all streams that share the same game base title across all repos
+    const seen = new Set();
+    const candidates = [];
+    for (const r of repos) {
+      for (const s of (r.streams || [])) {
+        const sUrl = extractUrl(s.url);
+        if (seen.has(sUrl)) continue; // true URL duplicates dropped silently
+        if (extractBase(s.name || s.title || '') === base) {
+          seen.add(sUrl);
+          candidates.push({
+            url: sUrl,
+            title: s.name || s.title || '',
+            region: s.region || '',
+            tag: (s.tags && s.tags[0]) || ''
+          });
+        }
       }
     }
-  }
+    // Ensure primary is present even if base didn't match
+    const primaryUrl = extractUrl(url);
+    if (!seen.has(primaryUrl)) {
+      candidates.unshift({ url: primaryUrl, title: primaryTitle, region: '', tag: '' });
+    }
 
-  // If only the primary stream found, just use it
-  if (!candidates.find(c => c.url === extractUrl(url))) {
-    candidates.unshift({ url: extractUrl(url), title: primaryTitle, region: '', tag: '' });
-  }
+    if (!candidates.length) { toast('No stream URL found'); return; }
 
-  // Sort failover: pinned-team Home first, then pinned-team Away, then other Home, other Away
-  const pinnedLower = pinnedTeams.map(p => p.toLowerCase());
-  candidates.sort((a, b) => {
-    const at = (a.title || '').toLowerCase(), bt = (b.title || '').toLowerCase();
-    const aPin = pinnedLower.some(p => at.includes(p) || p.split(/\s+/).some(w => w.length>=4 && at.includes(w)));
-    const bPin = pinnedLower.some(p => bt.includes(p) || p.split(/\s+/).some(w => w.length>=4 && bt.includes(w)));
-    const aHome = / home |\(home\)/i.test(a.title), bHome = / home |\(home\)/i.test(b.title);
-    const aAway = / away |\(away\)/i.test(a.title), bAway = / away |\(away\)/i.test(b.title);
-    // Pinned+Home > Pinned+Away > Other Home > Other Away > neutral
-    const score = x => (x.pin ? 10 : 0) + (x.home ? 4 : x.away ? 2 : 0);
-    const sa = score({pin:aPin, home:aHome, away:aAway});
-    const sb = score({pin:bPin, home:bHome, away:bAway});
-    if (sa !== sb) return sb - sa;
-    return TAG_PRI.indexOf(a.tag||'') - TAG_PRI.indexOf(b.tag||'');
-  });
+    // ── Determine if pinned team is HOME or AWAY for this game ──────────────
+    // ESPN teamObjects[0] = home team, teamObjects[1] = away team (standard convention)
+    let pinnedIsHome = null; // true=home, false=away, null=unknown
+    if (pinnedLower.length && cfg && cfg.cachedGamesByPath) {
+      const titleLower = primaryTitle.toLowerCase();
+      outer: for (const path of Object.keys(cfg.cachedGamesByPath)) {
+        for (const g of (cfg.cachedGamesByPath[path] || [])) {
+          const matchesGame = g.teams.some(t => t && titleLower.includes(t.toLowerCase()));
+          if (!matchesGame) continue;
+          // teamObjects[0] is home, [1] is away
+          const homeTeam = (g.teamObjects[0] || {}).name || '';
+          const awayTeam = (g.teamObjects[1] || {}).name || '';
+          const homeLower = homeTeam.toLowerCase();
+          const awayLower = awayTeam.toLowerCase();
+          const pinnedMatchesHome = pinnedLower.some(p =>
+            homeLower.includes(p) || p.split(/\s+/).some(w => w.length >= 3 && homeLower.includes(w))
+          );
+          const pinnedMatchesAway = pinnedLower.some(p =>
+            awayLower.includes(p) || p.split(/\s+/).some(w => w.length >= 3 && awayLower.includes(w))
+          );
+          if (pinnedMatchesHome) { pinnedIsHome = true; break outer; }
+          if (pinnedMatchesAway) { pinnedIsHome = false; break outer; }
+        }
+      }
+    }
 
-  // Remove the primary from wherever it landed and put it first (user tapped it)
-  const primaryUrl = extractUrl(url);
-  const primaryIdx = candidates.findIndex(c => c.url === primaryUrl);
-  if (primaryIdx > 0) {
-    const [primary] = candidates.splice(primaryIdx, 1);
-    candidates.unshift(primary);
-  } else if (primaryIdx === -1) {
-    candidates.unshift({ url: primaryUrl, title: primaryTitle, region: '', tag: '' });
-  }
+    // ── Score each candidate ────────────────────────────────────────────────
+    // Tier 0 (best): pinned team + correct side (home if home, away if away)
+    // Tier 1:        pinned team + wrong side (still ours, just different feed)
+    // Tier 2:        opponent team + correct side (good backup quality)
+    // Tier 3:        opponent team + wrong side
+    // Tier 4:        neutral / no home-away marker
+    const streamScore = (cand) => {
+      const t = (cand.title || '').toLowerCase();
+      const isPin = pinnedLower.length > 0 && pinnedLower.some(p =>
+        t.includes(p) || p.split(/\s+/).some(w => w.length >= 3 && t.includes(w))
+      );
+      const hasHome = / home |\(home\)/i.test(cand.title);
+      const hasAway = / away |\(away\)/i.test(cand.title);
+      const hasSide = hasHome || hasAway;
 
-  if (!candidates.length) { toast('No stream URL found'); return; }
+      let tier;
+      if (isPin) {
+        if (!hasSide) tier = 1; // pinned but no side marker — treat as preferred
+        else if (pinnedIsHome === true  && hasHome) tier = 0;
+        else if (pinnedIsHome === false && hasAway) tier = 0;
+        else if (pinnedIsHome === null)             tier = 0; // unknown → treat as preferred
+        else                                        tier = 1; // pinned wrong side
+      } else {
+        if (!hasSide) tier = 4;
+        else if (pinnedIsHome === true  && hasAway) tier = 2; // opponent home feed
+        else if (pinnedIsHome === false && hasHome) tier = 2; // opponent away feed
+        else                                        tier = 3;
+      }
+      // Sub-sort by tag priority within tier
+      const tagScore = TAG_PRI.indexOf(cand.tag || '');
+      return tier * 10 + (tagScore >= 0 ? tagScore : TAG_PRI.length);
+    };
 
-  const category = lgGroupName || primaryTitle;
-  const foTimeout = String(settings.foTimeout || 15);
-  const foAuto = String(settings.foAuto !== false);
-  const tsEnabled = String(settings.timeshiftEnabled !== false);
+    candidates.sort((a, b) => streamScore(a) - streamScore(b));
 
-  if (window.NativePlayer && typeof window.NativePlayer.isAvailable === 'function' && window.NativePlayer.isAvailable()) {
-    window.NativePlayer.playStreamExTs(
-      JSON.stringify(candidates), primaryTitle, category, '', foTimeout, foAuto, settings.savePath || '', '', '0', tsEnabled
-    );
-    return;
-  }
+    const category = lgGroupName || primaryTitle;
+    const foTimeout = String(settings.foTimeout || 15);
+    const foAuto = String(settings.foAuto !== false);
+    const tsEnabled = String(settings.timeshiftEnabled !== false);
 
-  // Web fallback
-  showTab('player-scr');
-  $('p-title').textContent = primaryTitle;
-  if (typeof playWebStream === 'function') playWebStream(candidates[0].url, primaryTitle);
+    if (window.NativePlayer && typeof window.NativePlayer.isAvailable === 'function' && window.NativePlayer.isAvailable()) {
+      window.NativePlayer.playStreamExTs(
+        JSON.stringify(candidates), candidates[0].title || primaryTitle,
+        category, '', foTimeout, foAuto, settings.savePath || '', '', '0', tsEnabled
+      );
+      return;
+    }
+
+    // Web fallback
+    showTab('player-scr');
+    if ($('p-title')) $('p-title').textContent = candidates[0].title || primaryTitle;
+    if (typeof playWebStream === 'function') playWebStream(candidates[0].url, candidates[0].title || primaryTitle);
   } catch(err) {
     console.error('[SV] playSportChannel error:', err);
     toast('Sport channel error: ' + (err.message || String(err)));
