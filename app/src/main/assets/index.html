@@ -4622,9 +4622,18 @@ function renderSportTab() {
   if (!$('sport-scr')) return;
   window._svSportItems = []; // reset click registry each render
 
-  const filterOn = settings.sportLeagueFilterEnabled;
-  const leagues = settings.sportLeagues || [];
-  const allSportItems = getAllSportItems();
+  // Always flush both caches — repo streams load async, stale cache = blank content
+  _invalidateSportCache();
+  _invalidateSportTabCache();
+
+  const filterOn   = settings.sportLeagueFilterEnabled;
+  const leagues    = settings.sportLeagues || [];
+  const showPast   = settings.sportShowPastGames !== false;
+  const allGames   = _getAllTodayGames();
+  const liveGames  = allGames.filter(g => g.state === 'in');
+
+  // Channel count for status bar (may be 0 if repos haven't loaded yet — that's OK)
+  const allChs = getAllSportItems();
 
   // ── Filter bar ──
   const filterBar = $('sport-filter-bar');
@@ -4633,156 +4642,184 @@ function renderSportTab() {
       `<span style="font-size:8px;padding:2px 10px;border-radius:10px;cursor:pointer;${filterOn ? 'background:var(--ac);color:#fff' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.toggleSportFilter && window.toggleSportFilter()">
         ${filterOn ? '● My Teams Only' : '○ All Sport Channels'}
       </span>
-      <span style="font-size:8px;color:var(--t3)">${allSportItems.length} channels configured</span>`;
+      <span style="font-size:8px;color:var(--t3)">${allGames.length} games today</span>`;
   }
 
-  // ── Section tabs: [Live Now?] [League...] [All Games] ──
+  // ── Section tabs ──
+  // Show Live Now only when ESPN reports live games.
+  // Show league tabs when the league has ESPN paths OR loaded channels.
+  // Always show All Games.
   const secTabs = $('sport-section-tabs');
+  const tabs = [];
+
+  if (liveGames.length > 0) {
+    tabs.push({ id: 'live', label: '🔴 Live Now', badge: liveGames.length });
+  } else if (sportSectionTab === 'live') {
+    sportSectionTab = leagues.length ? leagues[0].groupName : 'allgames';
+  }
+
+  leagues.forEach(lg => {
+    const hasPaths = (lg.espnPaths || (lg.espnPath ? [lg.espnPath] : [])).length > 0;
+    const hasChs   = getSportGroupItems(lg).length > 0;
+    if (!hasPaths && !hasChs) return; // nothing to show for this league
+    tabs.push({ id: lg.groupName, label: lg.groupName, badge: null });
+  });
+  tabs.push({ id: 'allgames', label: '📅 All Games', badge: null });
+
+  // Ensure active tab is valid
+  if (!tabs.find(t => t.id === sportSectionTab)) {
+    sportSectionTab = tabs[0] ? tabs[0].id : 'allgames';
+  }
+
   if (secTabs) {
-    // Count live games across all configured leagues
-    const liveGames = _getAllTodayGames().filter(g => g.state === 'in');
-    const tabs = [];
-    if (liveGames.length > 0) {
-      tabs.push({ id: 'live', label: '🔴 Live Now', badge: liveGames.length });
-    } else if (sportSectionTab === 'live') {
-      sportSectionTab = leagues.length ? leagues[0].groupName : 'allgames';
-    }
-    leagues.forEach(lg => {
-      const lgItems = getSportGroupItems(lg);
-      if (!lgItems.length) return; // no channels configured in this group
-      // Always show the league tab — hiding it based on filter state causes
-      // tabs to disappear unexpectedly when team pills are selected
-      tabs.push({ id: lg.groupName, label: lg.groupName, badge: null });
-    });
-    tabs.push({ id: 'allgames', label: '📅 All Games', badge: null });
-
-    // Ensure sportSectionTab is valid
-    if (!tabs.find(t => t.id === sportSectionTab)) {
-      sportSectionTab = tabs[0] ? tabs[0].id : 'allgames';
-    }
-
     secTabs.innerHTML = tabs.map(t =>
-      `<span tabindex="0" role="button" data-tv-zone="sport-section-tabs" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;${t.id === sportSectionTab ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportSectionTab('${t.id.replace(/'/g,"\'")}')">
+      `<span tabindex="0" role="button" data-tv-zone="sport-section-tabs" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;${t.id === sportSectionTab ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportSectionTab('${t.id.replace(/'/g,"\\'")}')">
         ${esc(t.label)}${t.badge ? ' <span style="font-size:8px;opacity:.85">('+t.badge+')</span>' : ''}
       </span>`
     ).join('');
   }
 
-  // ── Team filter pills (only for channel tabs, not All Games) ──
+  // ── Team pills ──
   const teamTabs = $('sport-team-tabs');
   if (teamTabs) {
     if (sportSectionTab === 'allgames') {
       teamTabs.innerHTML = '';
     } else {
       const teams = getAllPinnedTeams();
-      if (teams.length) {
-        teamTabs.innerHTML = ['All', ...teams].map(t =>
-          `<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;${t === sportActiveTeam ? 'background:var(--ac);color:#fff' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportTeamTab('${t.replace(/'/g,"\'")}')">
-            ${esc(t === 'All' ? '⚽ All' : t)}
-          </span>`
-        ).join('');
-      } else {
-        teamTabs.innerHTML = '';
-      }
+      teamTabs.innerHTML = teams.length
+        ? ['All', ...teams].map(t =>
+            `<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;${t === sportActiveTeam ? 'background:var(--ac);color:#fff' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportTeamTab('${t.replace(/'/g,"\\'")}')">
+              ${esc(t === 'All' ? '⚽ All' : t)}
+            </span>`
+          ).join('')
+        : '';
     }
   }
 
   const lst = $('sport-lst');
   if (!lst) return;
 
-  // ── All Games tab: show ESPN schedule cards ──
+  // ── All Games tab ──
   if (sportSectionTab === 'allgames') {
     _renderAllGamesTab(lst);
     return;
   }
 
-  // ── Live Now tab: channels with active games ──
-  // ── League tab: channels for that specific league group ──
-  const isLiveTab = sportSectionTab === 'live';
-  const leagueFilter = isLiveTab ? null : sportSectionTab; // null = all leagues
+  // ── Live Now / League tabs — game card approach ──
+  // Primary content = ESPN game cards (no repo dependency).
+  // Channel play buttons appear on each card when repos are loaded.
+  // My Teams Only filter: show only games involving a pinned team.
+  // Team pill: further narrow to a specific team.
 
-  // Get filtered channels for this section
-  const sportItems = getSportTabItems().filter(m => {
-    if (leagueFilter && (m.category || m._lgGroupName) !== leagueFilter) return false;
-    if (isLiveTab) {
-      const g = findGameForItem(m);
-      return g && g.state === 'in';
-    }
+  const isLiveTab   = sportSectionTab === 'live';
+  const lgName      = isLiveTab ? null : sportSectionTab;
+
+  // Get pinned teams for filtering
+  const pinnedTeams = getAllPinnedTeams().map(t => t.toLowerCase());
+
+  // Build a shared renderGameCard with registry (reused from _renderAllGamesTab logic)
+  const renderGameCard = (g) => {
+    const t1 = g.teamObjects[0] || {}, t2 = g.teamObjects[1] || {};
+    const name = g.shortName || g.name || (t1.name && t2.name ? t1.name + ' vs ' + t2.name : 'Game');
+    const d = new Date(g.startTime), hh = d.getHours() % 12 || 12, mi = d.getMinutes();
+    const timeStr = g.state === 'in' ? '🔴 LIVE'
+      : g.state === 'post' ? '✓ Final'
+      : hh + (mi ? ':' + String(mi).padStart(2,'0') : '') + (d.getHours() >= 12 ? 'PM' : 'AM');
+    const scoreStr = (g.state === 'in' || g.state === 'post') && t1.score && t2.score
+      ? t1.score + ' – ' + t2.score : '';
+    // Match channels for this game
+    const matchingChs = allChs.filter(m => {
+      const gms = findGamesForItem(m);
+      return gms.some(gg => gg.startTime === g.startTime && gg.shortName === g.shortName);
+    }).slice(0, 6);
+    const chButtons = matchingChs.map(m => {
+      const sUrl = m.url || '';
+      const sLg  = m.category || m._lgGroupName || '';
+      const si   = window._svSportItems.length;
+      window._svSportItems.push([sUrl, sLg]);
+      return `<button tabindex="0" onclick="window._svPlaySport(${si})" style="font-size:8px;padding:3px 8px;border-radius:6px;background:var(--ac);color:#fff;border:none;cursor:pointer;white-space:nowrap">${esc(m.title.replace(/\s*\(home\)|\s*\(away\)/i,'').trim().slice(0,30))}</button>`;
+    }).join('');
+    const leagueLabel = (ESPN_SPORT_OPTIONS.find(o => o.path === g._path) || {}).label || g._lgName || '';
+    return `<div style="border:1px solid var(--bd);border-radius:var(--rs);margin:4px 12px;padding:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--t1)">${esc(name)}</div>
+          ${!isLiveTab && lgName ? '' : `<div style="font-size:8px;color:var(--t3)">${esc(leagueLabel)}</div>`}
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:10px;font-weight:700;color:${g.state==='in'?'var(--rd)':g.state==='post'?'var(--t3)':'var(--gn)'}">${timeStr}</div>
+          ${scoreStr ? `<div style="font-size:11px;font-weight:700;color:var(--t1)">${scoreStr}</div>` : ''}
+        </div>
+      </div>
+      ${chButtons
+        ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${chButtons}</div>`
+        : '<div style="font-size:8px;color:var(--t3)">No matching channels in your groups</div>'}
+    </div>`;
+  };
+
+  const renderSection = (title, list) => {
+    if (!list.length) return '';
+    return `<div style="padding:6px 12px 2px;font-size:8px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em">${title}</div>`
+      + list.map(renderGameCard).join('');
+  };
+
+  // Filter games for this tab
+  let tabGames = allGames.filter(g => {
+    // Live tab: only live games
+    if (isLiveTab && g.state !== 'in') return false;
+    // League tab: only this league's games
+    if (lgName && g._lgName !== lgName) return false;
+    // Hide past games if setting off
+    if (!showPast && g.state === 'post') return false;
     return true;
   });
 
-  if (!sportItems.length) {
-    if (!leagues.length) {
-      lst.innerHTML = '<div class="emp"><h3>No sport groups configured</h3><p>Go to Settings → Live Sports → Configure Sport Groups to add leagues from your repos.</p></div>';
-    } else if (isLiveTab) {
-      lst.innerHTML = '<div class="emp"><h3>No live games right now</h3><p>Check back when a game starts.</p></div>';
-    } else if (filterOn && getAllPinnedTeams().length === 0) {
-      lst.innerHTML = '<div class="emp"><h3>No pinned teams</h3><p>Add teams in Settings → Live Sports to filter channels.</p></div>';
-    } else {
-      lst.innerHTML = '<div class="emp"><h3>No channels found</h3><p>Add more sport groups or check that your repo is loaded.</p></div>';
-    }
+  // My Teams Only filter — filter to games involving a pinned team
+  if (filterOn && pinnedTeams.length > 0) {
+    tabGames = tabGames.filter(g => {
+      const names = (g.teams || []).map(t => t.toLowerCase());
+      return pinnedTeams.some(p =>
+        names.some(n => n.includes(p) || p.split(/\s+/).some(w => w.length >= 4 && n.includes(w)))
+      );
+    });
+  }
+
+  // Team pill filter
+  if (sportActiveTeam !== 'All') {
+    const ta = sportActiveTeam.toLowerCase();
+    tabGames = tabGames.filter(g => {
+      const names = (g.teams || []).map(t => t.toLowerCase());
+      return names.some(n => n.includes(ta) || ta.split(/\s+/).some(w => w.length >= 4 && n.includes(w)));
+    });
+  }
+
+  if (!tabGames.length) {
+    const noGamesMsg = !allGames.length
+      ? '<h3>No schedule data</h3><p>Tap ↻ to fetch today\'s schedules, or check Settings → Live Sports.</p>'
+      : isLiveTab
+        ? '<h3>No live games right now</h3><p>Check back when a game starts.</p>'
+        : filterOn && pinnedTeams.length
+          ? '<h3>No games for your teams today</h3><p>None of your pinned teams are playing right now.</p>'
+          : `<h3>No games scheduled for ${esc(lgName || 'this league')} today</h3>`;
+    lst.innerHTML = `<div class="emp">${noGamesMsg}</div>`;
     return;
   }
 
-  // Sort: LIVE pinned → upcoming pinned → LIVE other → upcoming other → rest
-  const sorted = [...sportItems].sort((a, b) => sportGameScore(b) - sportGameScore(a));
-
-  // Group by game state
-  const live = sorted.filter(m => { const g = findGameForItem(m); return g && g.state === 'in'; });
-  const upcoming = sorted.filter(m => { const g = findGameForItem(m); return g && g.state === 'pre'; });
-  const other = sorted.filter(m => { const g = findGameForItem(m); return !g || (g.state !== 'in' && g.state !== 'pre'); });
-
-  const renderGroup = (title, itemsList, cap) => {
-    if (!itemsList.length) return '';
-    const show = cap ? itemsList.slice(0, cap) : itemsList;
-    const overflow = cap && itemsList.length > cap ? `<div style="padding:4px 12px 6px;font-size:8px;color:var(--t3)">(${itemsList.length - cap} more hidden — use team filter to narrow)</div>` : '';
-    let h = `<div style="padding:6px 12px 2px;font-size:8px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em">${title}</div>`;
-    h += show.map(m => {
-      const game = findGameForItem(m);
-      const cfg = getSportLeagueConfig(m.category || m._lgGroupName);
-      const isPinned = cfg && itemMatchesPinnedTeam(m, cfg);
-      const thumb = m.icon
-        ? `<img src="${esc(m.icon)}" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><svg style="display:none" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>`
-        : `<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>`;
-      let gameLine = '';
-      if (game) {
-        const t1 = game.teamObjects[0] || {}, t2 = game.teamObjects[1] || {};
-        const teams = game.shortName || [t1.name, t2.name].filter(Boolean).join(' vs ');
-        const timeStr = game.state === 'in' ? '🔴 LIVE' : (() => {
-          const d = new Date(game.startTime), h = d.getHours() % 12 || 12, mi = d.getMinutes();
-          return '🏟 ' + h + (mi ? ':' + String(mi).padStart(2,'0') : '') + (d.getHours() >= 12 ? 'PM' : 'AM');
-        })();
-        const scoreStr = (game.state === 'in' || game.state === 'post') && t1.score && t2.score ? ` ${t1.score}-${t2.score}` : '';
-        gameLine = `<div style="font-size:8px;color:var(--t2);margin-top:1px">${timeStr}${scoreStr} · ${esc(teams)}</div>`;
-      }
-      const pinBadge = isPinned ? `<span class="tg2" style="background:rgba(255,200,0,.15);color:#f1c40f">📌</span>` : '';
-      const catBadge = m.category ? `<span class="tg2" style="background:var(--acs);color:var(--ac)">${esc(m.category)}</span>` : '';
-      const sportUrl = m.url || '';
-      const sportLg = m.category || m._lgGroupName || '';
-      const _si = window._svSportItems.length;
-      window._svSportItems.push([sportUrl, sportLg]);
-      return `<div class="itm" data-tv-zone="channel-list" onclick="window._svPlaySport(${_si})">
-        <div class="th">${thumb}</div>
-        <div class="nf">
-          <div class="nm">${esc(m.title)}</div>
-          <div class="mt">${pinBadge}${catBadge}</div>
-          ${gameLine}
-        </div>
-      </div>`;
-    }).join('') + overflow;
-    return h;
-  };
-
-  let html = '';
-  if (!isLiveTab) {
-    html += renderGroup('🔴 Live Now', live);
-    html += renderGroup('🏟 Upcoming Today', upcoming);
-    html += renderGroup('📺 Channels', other, 150);
+  // Group by state
+  if (isLiveTab) {
+    // Live tab: just live games, no need to sub-section
+    lst.innerHTML = renderSection('🔴 Live Now', tabGames) || '<div class="emp"><h3>No live games</h3></div>';
   } else {
-    html += renderGroup('🔴 Live Now', live);
+    const live    = tabGames.filter(g => g.state === 'in');
+    const pre     = tabGames.filter(g => g.state === 'pre');
+    const post    = showPast ? tabGames.filter(g => g.state === 'post') : [];
+    lst.innerHTML = (renderSection('🔴 Live Now', live) +
+                     renderSection('🏟 Upcoming Today', pre) +
+                     renderSection('✓ Completed', post)) ||
+                    '<div class="emp"><h3>Nothing here</h3></div>';
   }
-  lst.innerHTML = html || '<div class="emp"><h3>Nothing here</h3></div>';
 }
+
 
 // ── All Games tab: ESPN schedule cards ───────────────────────────────────────
 function _getAllTodayGames() {
@@ -4831,7 +4868,9 @@ function _renderAllGamesTab(lst) {
       const playId = mainItem ? mainItem.id : (m.id || m.url);
       const sportUrl2 = m.url || '';
       const sportLg2 = m.category || m._lgGroupName || '';
-      return `<button tabindex="0" onclick="window.playSportChannel && window.playSportChannel('${esc(sportUrl2)}','${esc(sportLg2)}')" style="font-size:8px;padding:3px 8px;border-radius:6px;background:var(--ac);color:#fff;border:none;cursor:pointer;white-space:nowrap">${esc(m.title.replace(/\s*\(home\)|\s*\(away\)/i,'').trim().slice(0,30))}</button>`;
+      const _si2 = window._svSportItems.length;
+      window._svSportItems.push([sportUrl2, sportLg2]);
+      return `<button tabindex="0" onclick="window._svPlaySport(${_si2})" style="font-size:8px;padding:3px 8px;border-radius:6px;background:var(--ac);color:#fff;border:none;cursor:pointer;white-space:nowrap">${esc(m.title.replace(/\s*\(home\)|\s*\(away\)/i,'').trim().slice(0,30))}</button>`;
     }).join('');
     const leagueLabel = (ESPN_SPORT_OPTIONS.find(o => o.path === g._path) || {}).label || g._lgName;
     return `<div style="border:1px solid var(--bd);border-radius:var(--rs);margin:4px 12px;padding:8px">
@@ -4872,8 +4911,8 @@ window._svPlaySport = (idx) => {
 
 window.setSportSectionTab = (id) => {
   sportSectionTab = id;
-  // Reset team pill to "All" when switching league tabs
   sportActiveTeam = 'All';
+  _invalidateSportCache();
   _invalidateSportTabCache();
   renderSportTab();
 };
@@ -5068,10 +5107,7 @@ function updateSportNavVisibility() {
 
 window.toggleSportFilter = () => {
   settings.sportLeagueFilterEnabled = !settings.sportLeagueFilterEnabled;
-  // When turning filter ON, auto-enable all leagues so filtering takes effect immediately
-  if (settings.sportLeagueFilterEnabled && settings.sportLeagues) {
-    settings.sportLeagues.forEach(lg => { lg.enabled = true; });
-  }
+  _invalidateSportCache();
   _invalidateSportTabCache();
   const tgl = $('s-sport-enable');
   if (tgl) tgl.className = 'tgl' + (settings.sportLeagueFilterEnabled ? ' on' : '');
