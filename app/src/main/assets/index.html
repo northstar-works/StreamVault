@@ -4327,12 +4327,23 @@ async function _fetchOnePath(path) {
     const endTime = startTime + 3 * 3600000; // estimate 3h if no end
     const teams = new Set();
     const teamObjects = [];
+    // Separate home/away before pushing — ESPN marks each competitor with homeAway
+    let homeComp = null, awayComp = null;
     for (const c of (comp.competitors || [])) {
+      if (c.homeAway === 'home') homeComp = c;
+      else awayComp = c;
       const t = c.team || {};
-      const names = [t.displayName, t.shortDisplayName, t.name, t.abbreviation, t.location, t.nickname].filter(Boolean);
-      names.forEach(v => teams.add(v));
-      teamObjects.push({ name: t.displayName || t.name || '', abbr: t.abbreviation || '', score: c.score || '' });
+      [t.displayName, t.shortDisplayName, t.name, t.abbreviation, t.location, t.nickname]
+        .filter(Boolean).forEach(v => teams.add(v));
     }
+    // Guarantee teamObjects[0]=home, teamObjects[1]=away (ESPN standard)
+    const pushCompetitor = (comp, side) => {
+      if (!comp) return;
+      const t = comp.team || {};
+      teamObjects.push({ name: t.displayName || t.name || '', abbr: t.abbreviation || '', score: comp.score || '', homeAway: side });
+    };
+    pushCompetitor(homeComp || (comp.competitors||[])[0], 'home');
+    pushCompetitor(awayComp || (comp.competitors||[])[1], 'away');
     games.push({ teams: Array.from(teams), teamObjects, startTime, endTime, state, name: ev.name || '', shortName: ev.shortName || '' });
   }
   return games;
@@ -4504,6 +4515,16 @@ function getAllPinnedTeams() {
   return teams;
 }
 
+// Return only the pinned teams for a specific league tab name.
+// Used for team pills + "My Teams Only" filter so "Texas Rangers" (MLB)
+// cannot bleed into NHL and match "New York Rangers".
+function getPinnedTeamsForLeague(lgName) {
+  if (!lgName || lgName === 'live' || lgName === 'allgames') return getAllPinnedTeams();
+  if (!settings.sportLeagues) return [];
+  const lg = settings.sportLeagues.find(l => l.groupName === lgName);
+  return lg ? (lg.pinnedTeams || []) : [];
+}
+
 function _invalidateSportTabCache() { _sportTabCache = null; _sportTabCacheKey = ''; }
 
 function getSportTabItems() {
@@ -4517,7 +4538,7 @@ function getSportTabItems() {
   const allSport = getAllSportItems();
 
   // Non-game channel blocklist — always applied regardless of filter state
-  const SPORT_SKIP = /cheerleader|america.?s.sweethearts|americas sweethearts|highlight reel|classic game|preview show|documentary|interview show|behind.the.scenes|talk show|press conference|cooking|travel|real house|bachelor|survivor|competition show/i;
+  const SPORT_SKIP = /cheerleader|america.?s.sweethearts|americas sweethearts|highlight reel|classic game|preview show|documentary|interview show|behind.the.scenes|talk show|press conference|cooking|travel|real house|bachelor|survivor|competition show|no event today|no game today|off day/i;
 
   const result = allSport.filter(m => {
     const title = m.title || '';
@@ -4772,7 +4793,7 @@ function renderSportTab() {
     if (sportSectionTab === 'allgames') {
       teamTabs.innerHTML = '';
     } else {
-      const teams = getAllPinnedTeams();
+      const teams = getPinnedTeamsForLeague(sportSectionTab);
       teamTabs.innerHTML = teams.length
         ? ['All', ...teams].map(t =>
             `<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;${t === sportActiveTeam ? 'background:var(--ac);color:#fff' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportTeamTab('${t.replace(/'/g,"\\'")}')">
@@ -4801,12 +4822,59 @@ function renderSportTab() {
   const isLiveTab   = sportSectionTab === 'live';
   const lgName      = isLiveTab ? null : sportSectionTab;
 
-  // Get pinned teams for filtering
-  const pinnedTeams = getAllPinnedTeams().map(t => t.toLowerCase());
+  // Get pinned teams scoped to this league (prevents cross-league contamination)
+  const pinnedTeams = getPinnedTeamsForLeague(sportSectionTab).map(t => t.toLowerCase());
+
+  // ── Smart stream classifier for a single channel item ──────────────────────
+  // Returns: { isMyTeam, isHome, isAway, isBroadcast }
+  const _classifyStream = (m, pinnedLower) => {
+    const t = (m.title || '').toLowerCase();
+    const isMyTeam = pinnedLower.length > 0 && pinnedLower.some(p =>
+      t.includes(p) || p.split(/\s+/).some(w => w.length >= 3 && t.includes(w))
+    );
+    const isHome = /\(home\)|\ home\ |\ home\)|\ home,|\|\s*home\s*(stream|feed|broadcast)?/i.test(m.title);
+    const isAway = /\(away\)|\ away\ |\ away\)|\ away,|\|\s*away\s*(stream|feed|broadcast)?/i.test(m.title);
+    const isBroadcast = !isHome && !isAway; // no side marker — national/generic feed
+    return { isMyTeam, isHome, isAway, isBroadcast };
+  };
+
+  // ── Build a prioritised failover list from all game channels ─────────────
+  // Tier 0: My team, correct side (home if home game, away if away)
+  // Tier 1: My team, wrong side or no side marker
+  // Tier 2: Opponent, correct side
+  // Tier 3: Opponent, wrong side or no side marker
+  // Tier 4: Broadcast (no side marker, no team pin)
+  const _buildGameFailover = (channels, pinnedLower, pinnedIsHome) => {
+    const tiers = [[], [], [], [], []];
+    const seenUrls = new Set();
+    channels.forEach(m => {
+      const u = m.url || '';
+      if (!u || seenUrls.has(u)) return;
+      seenUrls.add(u);
+      const { isMyTeam, isHome, isAway, isBroadcast } = _classifyStream(m, pinnedLower);
+      let tier;
+      if (isMyTeam) {
+        if (isBroadcast) { tier = 1; } // pinned team, no side — treat as acceptable
+        else if (pinnedIsHome === true  && isHome) tier = 0;
+        else if (pinnedIsHome === false && isAway) tier = 0;
+        else if (pinnedIsHome === null)             tier = 0;
+        else                                        tier = 1;
+      } else if (isBroadcast) {
+        tier = 4;
+      } else {
+        // Opponent stream
+        if (pinnedIsHome === true  && isAway) tier = 2; // opponent away feed (home game)
+        else if (pinnedIsHome === false && isHome) tier = 2; // opponent home feed (away game)
+        else                                        tier = 3;
+      }
+      tiers[tier].push({ url: m.url, title: m.title, region: m.region || '', tag: (m.tags && m.tags[0]) || '', category: m.category || m._lgGroupName || '' });
+    });
+    return tiers.flat();
+  };
 
   // Build a shared renderGameCard with registry (reused from _renderAllGamesTab logic)
   const renderGameCard = (g) => {
-    const t1 = g.teamObjects[0] || {}, t2 = g.teamObjects[1] || {};
+    const t1 = g.teamObjects[0] || {}, t2 = g.teamObjects[1] || {}; // t1=home, t2=away
     const name = g.shortName || g.name || (t1.name && t2.name ? t1.name + ' vs ' + t2.name : 'Game');
     const d = new Date(g.startTime), hh = d.getHours() % 12 || 12, mi = d.getMinutes();
     const timeStr = g.state === 'in' ? '🔴 LIVE'
@@ -4814,18 +4882,92 @@ function renderSportTab() {
       : hh + (mi ? ':' + String(mi).padStart(2,'0') : '') + (d.getHours() >= 12 ? 'PM' : 'AM');
     const scoreStr = (g.state === 'in' || g.state === 'post') && t1.score && t2.score
       ? t1.score + ' – ' + t2.score : '';
-    // Match channels for this game
+
+    // All channels matching this game
     const matchingChs = allChs.filter(m => {
       const gms = findGamesForItem(m);
       return gms.some(gg => gg.startTime === g.startTime && gg.shortName === g.shortName);
-    }).slice(0, 6);
-    const chButtons = matchingChs.map(m => {
-      const sUrl = m.url || '';
-      const sLg  = m.category || m._lgGroupName || '';
-      const si   = window._svSportItems.length;
-      window._svSportItems.push([sUrl, sLg]);
-      return `<button tabindex="0" onclick="window._svPlaySport(${si})" style="font-size:8px;padding:3px 8px;border-radius:6px;background:var(--ac);color:#fff;border:none;cursor:pointer;white-space:nowrap">${esc(m.title.replace(/\s*\(home\)|\s*\(away\)/i,'').trim().slice(0,30))}</button>`;
-    }).join('');
+    });
+
+    // Determine if pinned team is home or away for THIS game using ESPN homeAway data
+    const lgName2 = g._lgName || lgName || '';
+    const lgCfg = lgName2 ? settings.sportLeagues && settings.sportLeagues.find(l => l.groupName === lgName2) : null;
+    const lgPinned = lgCfg ? (lgCfg.pinnedTeams || []).map(p => p.toLowerCase()) : pinnedTeams;
+    let gamePin = null; // true=home, false=away, null=unknown
+    if (lgPinned.length) {
+      const homeName = (t1.name || '').toLowerCase();
+      const awayName = (t2.name || '').toLowerCase();
+      const homeMobile = t1.abbr ? t1.abbr.toLowerCase() : '';
+      const awayMobile = t2.abbr ? t2.abbr.toLowerCase() : '';
+      const pinMatchesHome = lgPinned.some(p =>
+        homeName.includes(p) || (homeMobile && homeMobile.includes(p)) ||
+        p.split(/\s+/).some(w => w.length >= 3 && homeName.includes(w))
+      );
+      const pinMatchesAway = lgPinned.some(p =>
+        awayName.includes(p) || (awayMobile && awayMobile.includes(p)) ||
+        p.split(/\s+/).some(w => w.length >= 3 && awayName.includes(w))
+      );
+      if (pinMatchesHome) gamePin = true;
+      else if (pinMatchesAway) gamePin = false;
+    }
+
+    // Build full sorted failover list
+    const allFailover = _buildGameFailover(matchingChs, lgPinned, gamePin);
+
+    // Group failover by button type for display:
+    //   My Team button: tiers 0+1 streams
+    //   Opponent button: tiers 2+3 streams
+    //   Broadcast button: tier 4 streams (if no my team streams exist)
+    const myTeamStreams   = allFailover.filter(s => {
+      const cl = _classifyStream({ title: s.title }, lgPinned);
+      return cl.isMyTeam;
+    });
+    const opponentStreams = allFailover.filter(s => {
+      const cl = _classifyStream({ title: s.title }, lgPinned);
+      return !cl.isMyTeam && !cl.isBroadcast;
+    });
+    const broadcastStreams = allFailover.filter(s => {
+      const cl = _classifyStream({ title: s.title }, lgPinned);
+      return cl.isBroadcast;
+    });
+
+    // Helper: register a button that plays buttonPrimary first, then fallthrough to rest
+    const makeBtn = (label, buttonPrimary, fullFailover, color) => {
+      if (!buttonPrimary) return '';
+      // Put button's primary stream first, then the rest of the full failover list (deduped)
+      const primaryUrl = buttonPrimary.url;
+      const orderedFo = [
+        buttonPrimary,
+        ...fullFailover.filter(s => s.url !== primaryUrl)
+      ];
+      const si = window._svSportItems.length;
+      window._svSportItems.push(orderedFo);
+      return `<button tabindex="0" onclick="window._svPlaySport(${si})" style="font-size:8px;padding:3px 10px;border-radius:6px;background:${color};color:#fff;border:none;cursor:pointer;white-space:nowrap">${esc(label)}</button>`;
+    };
+
+    let chButtons = '';
+    if (allFailover.length === 0) {
+      // No channels at all
+    } else if (lgPinned.length === 0) {
+      // No pinned teams — show first 2 streams generically
+      allFailover.slice(0, 2).forEach(s => {
+        const si = window._svSportItems.length;
+        window._svSportItems.push([s, ...allFailover.filter(f => f.url !== s.url)]);
+        chButtons += `<button tabindex="0" onclick="window._svPlaySport(${si})" style="font-size:8px;padding:3px 10px;border-radius:6px;background:var(--ac);color:#fff;border:none;cursor:pointer;white-space:nowrap">${esc((s.title||'').slice(0,28))}</button>`;
+      });
+    } else {
+      // My Team button: best stream from myTeamStreams
+      const myBest = myTeamStreams[0] || null;
+      // Opponent button: best stream from opponentStreams
+      const opBest = opponentStreams[0] || null;
+      // Broadcast button: only show if no my team streams at all
+      const bcBest = (!myBest && !opBest && broadcastStreams[0]) ? broadcastStreams[0] : null;
+
+      chButtons += makeBtn('📺 My Team', myBest, allFailover, 'var(--ac)');
+      chButtons += makeBtn('🆚 Opponent', opBest, allFailover, '#555');
+      chButtons += makeBtn('📡 Broadcast', bcBest, allFailover, '#666');
+    }
+
     const leagueLabel = (ESPN_SPORT_OPTIONS.find(o => o.path === g._path) || {}).label || g._lgName || '';
     return `<div style="border:1px solid var(--bd);border-radius:var(--rs);margin:4px 12px;padding:8px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
@@ -4950,14 +5092,14 @@ function _renderAllGamesTab(lst) {
       const games2 = findGamesForItem(m);
       return games2.some(gg => gg.startTime === g.startTime && gg.shortName === g.shortName);
     }).slice(0, 4);
+    // All Games tab uses simplified buttons (no pinned-team context available here)
     const chButtons = matchingChs.map(m => {
-      const mainItem = items.find(i => i.url === m.url);
-      const playId = mainItem ? mainItem.id : (m.id || m.url);
-      const sportUrl2 = m.url || '';
-      const sportLg2 = m.category || m._lgGroupName || '';
-      const _si2 = window._svSportItems.length;
-      window._svSportItems.push([sportUrl2, sportLg2]);
-      return `<button tabindex="0" onclick="window._svPlaySport(${_si2})" style="font-size:8px;padding:3px 8px;border-radius:6px;background:var(--ac);color:#fff;border:none;cursor:pointer;white-space:nowrap">${esc(m.title.replace(/\s*\(home\)|\s*\(away\)/i,'').trim().slice(0,30))}</button>`;
+      const si2 = window._svSportItems.length;
+      // Build a minimal failover entry per stream (others in matchingChs become alts)
+      const primaryEntry = { url: m.url || '', title: m.title || '', region: m.region || '', tag: (m.tags && m.tags[0]) || '', category: m.category || m._lgGroupName || '' };
+      const restEntries  = matchingChs.filter(x => x.url !== m.url).map(x => ({ url: x.url || '', title: x.title || '', region: x.region || '', tag: (x.tags && x.tags[0]) || '', category: x.category || x._lgGroupName || '' }));
+      window._svSportItems.push([primaryEntry, ...restEntries]);
+      return `<button tabindex="0" onclick="window._svPlaySport(${si2})" style="font-size:8px;padding:3px 8px;border-radius:6px;background:var(--ac);color:#fff;border:none;cursor:pointer;white-space:nowrap">${esc(m.title.replace(/\s*\(home\)|\s*\(away\)/i,'').trim().slice(0,30))}</button>`;
     }).join('');
     const leagueLabel = (ESPN_SPORT_OPTIONS.find(o => o.path === g._path) || {}).label || g._lgName;
     return `<div style="border:1px solid var(--bd);border-radius:var(--rs);margin:4px 12px;padding:8px">
@@ -4988,12 +5130,49 @@ function _renderAllGamesTab(lst) {
 }
 
 
-// Sport channel click dispatcher — index into _svSportItems set at render time
+// Sport channel click dispatcher — index into _svSportItems set at render time.
+// Each entry is either:
+//   new format: array of {url, title, region, tag, category} objects (pre-built failover)
+//   old format: [urlString, lgString] tuple (All Games tab legacy)
 window._svSportItems = [];
 window._svPlaySport = (idx) => {
   const e = window._svSportItems && window._svSportItems[idx];
-  if (e && e[0]) window.playSportChannel(e[0], e[1]);
-  else console.warn('[SV] _svPlaySport: bad idx', idx);
+  if (!e) { console.warn('[SV] _svPlaySport: bad idx', idx); return; }
+
+  // New format: array of stream objects with .url property
+  if (Array.isArray(e) && e.length > 0 && typeof e[0] === 'object' && e[0].url) {
+    const candidates = e.map(s => ({
+      url: extractUrl(s.url || ''),
+      title: s.title || '',
+      region: s.region || '',
+      tag: s.tag || ''
+    })).filter(s => s.url);
+    if (!candidates.length) { toast('No stream URL found'); return; }
+    const primaryTitle = candidates[0].title || 'Sport';
+    const category = candidates[0].category || '';
+    const foTimeout = String(settings.foTimeout || 15);
+    const foAuto    = String(settings.foAuto !== false);
+    const tsEnabled = String(settings.timeshiftEnabled !== false);
+    if (window.NativePlayer && typeof window.NativePlayer.isAvailable === 'function' && window.NativePlayer.isAvailable()) {
+      window.NativePlayer.playStreamExTs(
+        JSON.stringify(candidates), primaryTitle, category, '', foTimeout, foAuto,
+        settings.savePath || '', '', '0', tsEnabled
+      );
+    } else {
+      showTab('player-scr');
+      if ($('p-title')) $('p-title').textContent = primaryTitle;
+      if (typeof playWebStream === 'function') playWebStream(candidates[0].url, primaryTitle);
+    }
+    return;
+  }
+
+  // Legacy format: [urlString, lgString]
+  if (typeof e[0] === 'string') {
+    window.playSportChannel(e[0], e[1]);
+    return;
+  }
+
+  console.warn('[SV] _svPlaySport: unrecognised entry format', e);
 };
 
 window.setSportSectionTab = (id) => {
