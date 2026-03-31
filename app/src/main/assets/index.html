@@ -4392,7 +4392,7 @@ function itemMatchesPinnedTeam(item, cfg) {
 // Main visibility check for filter mode
 function shouldShowSportTeam(item) {
   const cfg = getSportLeagueConfig(item.category || item._lgGroupName);
-  if (!cfg || !cfg.enabled) return true;
+  if (!cfg) return true;
   if (!settings.sportLeagueFilterEnabled) return true;
   // Pinned teams always visible
   if (itemMatchesPinnedTeam(item, cfg)) return true;
@@ -4482,10 +4482,10 @@ function getSportTabItems() {
       if (!titleLower.includes(sportActiveTeam.toLowerCase())) return false;
     }
 
-    // Filter OFF or per-league toggle OFF: show all sport channels in group
-    if (!filterOn || !cfg || !cfg.enabled) return true;
+    // Filter OFF: show everything
+    if (!filterOn || !cfg) return true;
 
-    // Filter ON + per-league ON: pinned-team matching
+    // Filter ON: pinned-team matching (per-league enabled flag refines pinned vs game-day mode)
     const pinnedTeams = cfg.pinnedTeams || [];
     if (pinnedTeams.length > 0) {
       const hasSportPrefix = !!detectSportPathFromTitle(titleLower);
@@ -4524,11 +4524,12 @@ function getSportTabItems() {
 window.playSportChannel = async (url, lgGroupName) => {
   if (!url) return;
 
+  try {
   // 1. Find item in main library by URL
   const libItem = items.find(m => m.url === url || m.url === decodeURIComponent(url));
   if (libItem) {
     // Item is in library — use normal playItem which handles full failover + timeshift
-    await playItem(libItem.id);
+    await window.playItem(libItem.id);
     return;
   }
 
@@ -4611,10 +4612,15 @@ window.playSportChannel = async (url, lgGroupName) => {
   showTab('player-scr');
   $('p-title').textContent = primaryTitle;
   if (typeof playWebStream === 'function') playWebStream(candidates[0].url, primaryTitle);
+  } catch(err) {
+    console.error('[SV] playSportChannel error:', err);
+    toast('Sport channel error: ' + (err.message || String(err)));
+  }
 };
 
 function renderSportTab() {
   if (!$('sport-scr')) return;
+  window._svSportItems = []; // reset click registry each render
 
   const filterOn = settings.sportLeagueFilterEnabled;
   const leagues = settings.sportLeagues || [];
@@ -4753,7 +4759,9 @@ function renderSportTab() {
       const catBadge = m.category ? `<span class="tg2" style="background:var(--acs);color:var(--ac)">${esc(m.category)}</span>` : '';
       const sportUrl = m.url || '';
       const sportLg = m.category || m._lgGroupName || '';
-      return `<div class="itm" data-tv-zone="channel-list" onclick="window.playSportChannel && window.playSportChannel('${esc(sportUrl)}','${esc(sportLg)}')">
+      const _si = window._svSportItems.length;
+      window._svSportItems.push([sportUrl, sportLg]);
+      return `<div class="itm" data-tv-zone="channel-list" onclick="window._svPlaySport(${_si})">
         <div class="th">${thumb}</div>
         <div class="nf">
           <div class="nm">${esc(m.title)}</div>
@@ -4853,6 +4861,14 @@ function _renderAllGamesTab(lst) {
     (showPast ? renderSection('✓ Completed', post) : '');
 }
 
+
+// Sport channel click dispatcher — index into _svSportItems set at render time
+window._svSportItems = [];
+window._svPlaySport = (idx) => {
+  const e = window._svSportItems && window._svSportItems[idx];
+  if (e && e[0]) window.playSportChannel(e[0], e[1]);
+  else console.warn('[SV] _svPlaySport: bad idx', idx);
+};
 
 window.setSportSectionTab = (id) => {
   sportSectionTab = id;
@@ -5052,6 +5068,10 @@ function updateSportNavVisibility() {
 
 window.toggleSportFilter = () => {
   settings.sportLeagueFilterEnabled = !settings.sportLeagueFilterEnabled;
+  // When turning filter ON, auto-enable all leagues so filtering takes effect immediately
+  if (settings.sportLeagueFilterEnabled && settings.sportLeagues) {
+    settings.sportLeagues.forEach(lg => { lg.enabled = true; });
+  }
   _invalidateSportTabCache();
   const tgl = $('s-sport-enable');
   if (tgl) tgl.className = 'tgl' + (settings.sportLeagueFilterEnabled ? ' on' : '');
@@ -5396,8 +5416,12 @@ applyTvMode();
 renderCats();
 renderLib();
 renderRepos();
+renderSportTab();
+updateSportNavVisibility();
 refreshTvFocus();
 queueStartupAltCheck();
+// Fetch ESPN schedules after a short delay (non-blocking startup)
+setTimeout(() => fetchAllLeagueSchedules(), 800);
 
 // Auto-fetch EPG if stale (older than 1 hour)
 if (epgSrc.length) {
