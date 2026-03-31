@@ -176,6 +176,7 @@ body.tv-mode .hd{padding-top:10px}
 .gpr.now{background:rgba(108,92,231,.18);border-left:3px solid var(--ac)}
 .gpr.past{opacity:.4}
 .gpr:hover,.gpr:active,.gpr:focus{background:rgba(255,255,255,.1)!important;outline:none}
+.sport-gc:focus,.sport-gc.tv-f{border-color:var(--ac)!important;background:rgba(108,92,231,.08)}
 .gnl{position:absolute;top:0;bottom:0;width:2px;background:var(--rd);z-index:4;pointer-events:none}
 .gnl-hdr{position:absolute;top:0;bottom:0;width:2px;background:var(--rd);z-index:14;pointer-events:none}
 .gnl-time{position:absolute;top:2px;left:50%;transform:translateX(-50%);background:var(--rd);color:#fff;font-size:7px;font-weight:700;padding:1px 4px;border-radius:3px;white-space:nowrap;pointer-events:none;line-height:1.2}
@@ -376,14 +377,16 @@ document.addEventListener('keydown', function(e) {
       <div id="sport-acc-body" style="display:none;padding-top:8px">
 
         <p style="font-size:9px;color:var(--ac);font-weight:600;margin-bottom:6px">① Add sport channel groups from a repo</p>
-        <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+        <div class="tv-row" data-tv-group="sport-repo-row" style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
           <select id="sport-repo-sel" tabindex="0" style="flex:1;padding:6px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px"><option value="">— pick a repo —</option></select>
         </div>
-        <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+        <div class="tv-row" data-tv-group="sport-grp-row" style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
           <select id="sport-grp-sel" tabindex="0" style="flex:1;padding:6px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px"><option value="">— pick a group —</option></select>
           <button class="bs" id="sport-grp-add" tabindex="0" style="padding:6px 10px;font-size:9px;border-radius:var(--rs)">Add</button>
         </div>
-        <button class="bc" id="sport-grp-detect" tabindex="0" style="padding:6px 12px;font-size:9px;border-radius:var(--rs);width:100%;margin-bottom:12px">Auto-detect from current library</button>
+        <div class="tv-row" data-tv-group="sport-detect-row" style="margin-bottom:12px">
+          <button class="bc" id="sport-grp-detect" tabindex="0" style="padding:6px 12px;font-size:9px;border-radius:var(--rs);width:100%">Auto-detect from current library</button>
+        </div>
 
         <hr style="border:none;border-top:1px solid var(--bd);margin:4px 0 12px">
 
@@ -3474,6 +3477,67 @@ function moveTvFocusSpatial(dirCode) {
 
   if ((dirCode === 21 || dirCode === 22) && focusWithinGroupRow(current, dirCode)) return true;
 
+  // ── Sport game cards: DPad down enters buttons inside card ──────────────
+  if (currentZone === 'sport-game-card' || (current.classList && current.classList.contains('sport-gc'))) {
+    if (dirCode === 20) { // down — enter channel buttons inside this card
+      const btns = Array.from(current.querySelectorAll('button[tabindex]'));
+      if (btns.length) {
+        const i = els.indexOf(btns[0]);
+        if (i >= 0) return focusElementAtIndex(i);
+      }
+    }
+    if (dirCode === 19) { // up — go to league/section tabs
+      return focusNearestInSelector('#sport-section-tabs [tabindex], #sport-team-tabs [tabindex]', current, false) ||
+             moveTvFocusLinear(-1);
+    }
+    // Left/Right between cards
+    const allCards = Array.from(document.querySelectorAll('.sport-gc'));
+    const ci = allCards.indexOf(current);
+    if (dirCode === 22 && ci >= 0 && ci < allCards.length - 1) {
+      const nx = allCards[ci + 1];
+      nx.scrollIntoView({block:'nearest'});
+      const i = els.indexOf(nx); if (i >= 0) return focusElementAtIndex(i);
+    }
+    if (dirCode === 21 && ci > 0) {
+      const pv = allCards[ci - 1];
+      pv.scrollIntoView({block:'nearest'});
+      const i = els.indexOf(pv); if (i >= 0) return focusElementAtIndex(i);
+    }
+  }
+
+  // ── Sport channel buttons inside game cards ───────────────────────────────
+  const sportCard = current && current.closest && current.closest('.sport-gc');
+  if (sportCard && !current.classList.contains('sport-gc')) {
+    const btns = Array.from(sportCard.querySelectorAll('button[tabindex]'));
+    const bi = btns.indexOf(current);
+    if (dirCode === 22 && bi >= 0 && bi < btns.length - 1) {
+      const i = els.indexOf(btns[bi + 1]); if (i >= 0) return focusElementAtIndex(i);
+      return false;
+    }
+    if (dirCode === 21 && bi > 0) {
+      const i = els.indexOf(btns[bi - 1]); if (i >= 0) return focusElementAtIndex(i);
+      return false;
+    }
+    if (dirCode === 21 && bi === 0) { // Left from first button → back to card
+      const i = els.indexOf(sportCard); if (i >= 0) return focusElementAtIndex(i);
+      return false;
+    }
+    if (dirCode === 19) { // up from button → back to card
+      const i = els.indexOf(sportCard); if (i >= 0) return focusElementAtIndex(i);
+      return false;
+    }
+    if (dirCode === 20) { // down from button → next card or nav
+      const allCards = Array.from(document.querySelectorAll('.sport-gc'));
+      const ci = allCards.indexOf(sportCard);
+      if (ci >= 0 && ci < allCards.length - 1) {
+        const nx = allCards[ci + 1];
+        nx.scrollIntoView({block:'nearest'});
+        const i = els.indexOf(nx); if (i >= 0) return focusElementAtIndex(i);
+      }
+      return pickClosestNav();
+    }
+  }
+
   if (currentZone === 'group-bar') {
     if (dirCode === 22) {
       const next = current.nextElementSibling;
@@ -3488,6 +3552,17 @@ function moveTvFocusSpatial(dirCode) {
     if (dirCode === 20) return focusNearestInSelector('.itm[data-tv-zone=\"channel-list\"]', current, true);
   }
   // ── Channel list (home grid): index-based navigation ──────────────────────
+  // ── Sport section/team tabs → DPad down to first game card ─────────────
+  if (currentZone === 'sport-section-tabs' || currentZone === 'sport-team-tabs') {
+    if (dirCode === 20) {
+      const firstCard = document.querySelector('.sport-gc');
+      if (firstCard) {
+        firstCard.scrollIntoView({block:'nearest'});
+        const i = els.indexOf(firstCard); if (i >= 0) return focusElementAtIndex(i);
+      }
+    }
+  }
+
   if (currentZone === 'channel-list' || (current && current.closest && current.closest('.ab'))) {
     const inAb = !!(current.closest && current.closest('.ab'));
     const itemEl = inAb ? current.closest('.itm') : current;
@@ -4983,7 +5058,7 @@ function renderSportTab() {
     }
 
     const leagueLabel = (ESPN_SPORT_OPTIONS.find(o => o.path === g._path) || {}).label || g._lgName || '';
-    return `<div style="border:1px solid var(--bd);border-radius:var(--rs);margin:4px 12px;padding:8px">
+    return `<div tabindex="0" role="listitem" data-tv-zone="sport-game-card" class="sport-gc" style="border:1px solid var(--bd);border-radius:var(--rs);margin:4px 12px;padding:8px;outline:none">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
         <div>
           <div style="font-size:10px;font-weight:700;color:var(--t1)">${esc(name)}</div>
@@ -5116,7 +5191,7 @@ function _renderAllGamesTab(lst) {
       return `<button tabindex="0" onclick="window._svPlaySport(${si2})" style="font-size:8px;padding:3px 8px;border-radius:6px;background:var(--ac);color:#fff;border:none;cursor:pointer;white-space:nowrap">${esc(m.title.replace(/\s*\(home\)|\s*\(away\)/i,'').trim().slice(0,30))}</button>`;
     }).join('');
     const leagueLabel = (ESPN_SPORT_OPTIONS.find(o => o.path === g._path) || {}).label || g._lgName;
-    return `<div style="border:1px solid var(--bd);border-radius:var(--rs);margin:4px 12px;padding:8px">
+    return `<div tabindex="0" role="listitem" data-tv-zone="sport-game-card" class="sport-gc" style="border:1px solid var(--bd);border-radius:var(--rs);margin:4px 12px;padding:8px;outline:none">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
         <div>
           <div style="font-size:10px;font-weight:700;color:var(--t1)">${esc(name)}</div>
@@ -5226,6 +5301,15 @@ function renderSportLeagueSettings() {
     repoSel.onchange = () => {
       const grpSel = $('sport-grp-sel');
       if (!grpSel) return;
+      // On TV: automatically advance focus to group selector after picking a repo
+      if (isTvDevice) {
+        setTimeout(() => {
+          const els2 = getTvFocusableElements();
+          const gi = els2.indexOf(grpSel);
+          if (gi >= 0) focusElementAtIndex(gi);
+          else grpSel.focus();
+        }, 80);
+      }
       const repo = repos.find(r => r.id === repoSel.value);
       const existing = (settings.sportLeagues || []).map(l => l.groupName);
       if (!repo) {
@@ -5241,6 +5325,27 @@ function renderSportLeagueSettings() {
         grpSel.innerHTML = '<option value="">— pick a group —</option>' +
           (sportCats.length ? '<optgroup label="Sport groups">' + sportCats.map(c => `<option value="${esc(c)}" data-repo="${esc(repo.id)}">${esc(c)}</option>`).join('') + '</optgroup>' : '') +
           (otherCats.length ? '<optgroup label="Other groups">' + otherCats.map(c => `<option value="${esc(c)}" data-repo="${esc(repo.id)}">${esc(c)}</option>`).join('') + '</optgroup>' : '');
+      }
+    };
+  }
+
+  // On TV: grp-sel change → auto-advance to Add button
+  const grpSelEl = $('sport-grp-sel');
+  if (grpSelEl && isTvDevice) {
+    grpSelEl.onchange = (grpSelEl.onchange) || (() => {});
+    const _origGrpChange = grpSelEl.onchange;
+    grpSelEl.onchange = (e) => {
+      if (_origGrpChange) _origGrpChange.call(grpSelEl, e);
+      if (grpSelEl.value) {
+        setTimeout(() => {
+          const addBtnEl = $('sport-grp-add');
+          if (addBtnEl) {
+            const els2 = getTvFocusableElements();
+            const ai = els2.indexOf(addBtnEl);
+            if (ai >= 0) focusElementAtIndex(ai);
+            else addBtnEl.focus();
+          }
+        }, 80);
       }
     };
   }
@@ -5334,14 +5439,17 @@ function renderSportLeagueSettings() {
           <button class="bc" onclick="refreshSportLeague(${i})" style="padding:5px 8px;font-size:9px;border-radius:var(--rs)" title="Fetch schedule">↻</button>
         </div>
       </div>
-      <details>
-        <summary style="font-size:9px;color:var(--t2);cursor:pointer;margin-bottom:4px">📌 Pinned teams (${(lg.pinnedTeams||[]).length}) — team filter tabs &amp; always visible when filter ON</summary>
-        <div style="padding-left:8px;margin-top:4px">${pins}</div>
-        <div style="display:flex;gap:4px;margin-top:6px;padding-left:8px">
-          <input id="sport-pin-in-${i}" placeholder="e.g. Stars, Rangers, Cowboys…" style="flex:1;padding:5px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px">
-          <button class="bs" onclick="addSportPin(${i})" style="padding:5px 8px;font-size:9px;border-radius:var(--rs)">Add</button>
+      <div style="margin-top:6px">
+        <div style="font-size:9px;color:var(--t2);margin-bottom:4px">📌 Pinned teams (${(lg.pinnedTeams||[]).length})</div>
+        <div style="padding-left:4px">${pins}</div>
+        <div class="tv-row" data-tv-group="sport-pin-row-${i}" style="display:flex;gap:4px;margin-top:6px">
+          <input id="sport-pin-in-${i}" tabindex="0" placeholder="Team name…" autocomplete="off"
+            style="flex:1;padding:5px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();addSportPin(${i});}"
+          >
+          <button class="bs" tabindex="0" onclick="addSportPin(${i})" style="padding:5px 8px;font-size:9px;border-radius:var(--rs)">Add</button>
         </div>
-      </details>
+      </div>
     </div>`;
   }).join('');
 
@@ -5448,12 +5556,26 @@ window.rmSportPath = (i, pi) => {
 
 window.addSportPin = (i) => {
   const inp = $('sport-pin-in-' + i);
-  if (!inp || !inp.value.trim()) return;
+  if (!inp) return;
+  const val = inp.value.trim();
+  if (!val) { toast('Enter a team name'); return; }
   if (!settings.sportLeagues[i].pinnedTeams) settings.sportLeagues[i].pinnedTeams = [];
-  settings.sportLeagues[i].pinnedTeams.push(inp.value.trim());
+  if (settings.sportLeagues[i].pinnedTeams.includes(val)) { toast('Already pinned'); inp.value = ''; return; }
+  settings.sportLeagues[i].pinnedTeams.push(val);
   inp.value = '';
   _invalidateSportTabCache();
   saveSettings(); renderSportLeagueSettings(); renderSportTab();
+  // Refocus the pin input for this league so user can add another or keep navigating
+  setTimeout(() => {
+    const newInp = $('sport-pin-in-' + i);
+    if (newInp) {
+      const els = getTvFocusableElements();
+      const idx = els.indexOf(newInp);
+      if (idx >= 0) focusElementAtIndex(idx);
+      else newInp.focus();
+    }
+  }, 60);
+  toast('📌 Pinned: ' + val);
 };
 
 window.rmSportPin = (i, pi) => {
