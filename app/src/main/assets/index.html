@@ -855,7 +855,10 @@ let items = [];
 let repos = [];
 let epgSrc = [];
 let epgData = { channels: {}, programs: {} };
-let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [], tabOrder: ['itv','plex','icam','local','network'], tvMode: 'auto', plex: { server: '', token: '', section: '', sections: [] }, timeshiftEnabled: true, timeshiftMaxMin: 30, dvrCfg: { remoteEnabled: false, proto: 'ftp', host: '', port: '21', user: '', pass: '', path: '/recordings' }, sportLeagueFilterEnabled: false, sportLeagues: [], sportShowPastGames: true };
+let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [], tabOrder: ['itv','plex','icam','local','network'], tvMode: 'auto', plex: { server: '', token: '', section: '', sections: [] }, timeshiftEnabled: true, timeshiftMaxMin: 30, dvrCfg: { remoteEnabled: false, proto: 'ftp', host: '', port: '21', user: '', pass: '', path: '/recordings' }, sportLeagueFilterEnabled: false, sportLeagues: [], sportShowPastGames: true,
+  localEnable: true, localPath: '',
+  icamCfg: {},
+  networkCfg: {} };
 let plexAddMode = false;
 
 let editId = null;
@@ -1054,6 +1057,15 @@ function applyDefaultEpgSource(data) {
   return data;
 }
 function makeBackupPayload() {
+  // Strip large ESPN cache from sportLeagues before backup — same as saveSettings.
+  // cachedGamesByPath can be 100KB+ per league and is re-fetched at startup anyway.
+  const cleanSettings = { ...settings };
+  if (cleanSettings.sportLeagues) {
+    cleanSettings.sportLeagues = cleanSettings.sportLeagues.map(lg => {
+      const { cachedGamesByPath, cacheDate, ...rest } = lg;
+      return rest;
+    });
+  }
   return {
     type: 'streamvault-backup',
     version: VERSION,
@@ -1063,7 +1075,7 @@ function makeBackupPayload() {
     repos: repos,
     epgSrc: epgSrc,
     epgData: epgData,
-    settings: settings
+    settings: cleanSettings
   };
 }
 function restoreBackupPayload(data) {
@@ -1083,9 +1095,11 @@ function restoreBackupPayload(data) {
   });
   saveItems(); saveRepos(); saveEpg(); saveSettings();
   refreshAltCache(true);
+  applyTvMode(); // re-apply TV mode class after settings restored
   renderCats(); renderLib(); renderRepos(); renderSettings(); renderEpgList(); renderGuide();
   fetchAllLeagueSchedules(); // Sport League: fetch ESPN schedules after library loads
   renderSportTab(); updateSportNavVisibility();
+  refreshTvFocus();
 }
 
 // ─── M3U Parser ───
@@ -3998,7 +4012,7 @@ function renderSettings() {
   function wireConfigModals() {
     // Local Videos modal
     const openLocal = () => {
-      if (!settings.localEnable === undefined) settings.localEnable = true;
+      if (settings.localEnable === undefined) settings.localEnable = true;
       const tgl = $('s-local-enable');
       if (tgl) { tgl.className = 'tgl' + (settings.localEnable !== false ? ' on' : ''); tgl.onclick = () => { settings.localEnable = !settings.localEnable; tgl.className = 'tgl'+(settings.localEnable?' on':''); saveSettings(); }; }
       const lp = $('s-local-path'); if (lp) lp.value = settings.localPath || '';
