@@ -1148,18 +1148,12 @@ function restoreBackupPayload(data) {
 }
 
 // ─── M3U Parser ───
-async function parseM3U(text) {
-  // Async with yields every 500 lines to keep UI/D-pad responsive on Fire TV.
-  // A 60k-stream M3U parsed synchronously blocks the thread for 20+ minutes.
-  const CHUNK = 500;
-  const yield_ = () => new Promise(r => setTimeout(r, 0));
+function parseM3U(text) {
   const lines = text.split(/\r?\n/);
   const streams = [];
   let cur = null;
 
-  for (let _i = 0; _i < lines.length; _i++) {
-    if (_i > 0 && _i % CHUNK === 0) await yield_();
-    const raw = lines[_i];
+  for (const raw of lines) {
     const line = raw.trim();
     if (!line || line === '#EXTM3U') continue;
 
@@ -1184,7 +1178,7 @@ async function parseM3U(text) {
       }
 
       // Variant tag: "CNN (S)" -> tags=["S"]
-      const tagMatch = cur.name.match(/\(([A-Z])\s*$/);
+      const tagMatch = cur.name.match(/\(([A-Z])\)\s*$/);
       if (tagMatch) {
         cur.tags = [tagMatch[1]];
         cur.name = cur.name.replace(/\s*\([A-Z]\)\s*$/, '').trim();
@@ -1192,8 +1186,10 @@ async function parseM3U(text) {
 
       cur.baseName = extractBase(cur.name);
     } else if (line.startsWith('#')) {
+      // Skip other directives
       continue;
     } else if (line.match(/^(https?|rtmp|rtsp|rtsps|ftp|ftps|file|content|udp|smb):\/\//i)) {
+      // URL line
       if (cur) {
         cur.url = line;
         streams.push(cur);
@@ -1334,10 +1330,9 @@ function buildFailoverList(item) {
 }
 
 function getAltCount(item) {
-  // Cache-only during render — buildFailoverList iterates all 60k repo streams
-  // per item which freezes Fire TV. refreshAltCache() builds the cache async.
-  return (settings.altCache && typeof settings.altCache[item.id] === 'number')
-    ? settings.altCache[item.id] : 0;
+  const live = Math.max(0, buildFailoverList(item).length - 1);
+  const cached = settings.altCache && typeof settings.altCache[item.id] === 'number' ? settings.altCache[item.id] : null;
+  return live || cached || 0;
 }
 async function ensureRepoStreamsLoaded(repo) {
   if (!repo) return [];
@@ -1348,7 +1343,7 @@ async function ensureRepoStreamsLoaded(repo) {
     const resp = await fetch(repo.sourceUrl);
     if (!resp.ok) throw new Error('HTTP ' + resp.status + ' for ' + (repo.name || 'repo'));
     const text = await resp.text();
-    repo.streams = (await parseM3U(text)).filter(d => d.name && d.url);
+    repo.streams = parseM3U(text).filter(d => d.name && d.url);
     repo.lastRefresh = Date.now();
     saveRepos();
     return repo.streams;
@@ -1379,11 +1374,9 @@ async function refreshAltCache(silent) {
 }
 function queueStartupAltCheck() {
   if (settings.autoAltCheck === false) return;
-  // Delay 8s: give EPG fetch, renderLib, and first paint time to complete
-  // before kicking off the repo stream fetch + M3U parse (which is heavy).
   setTimeout(() => {
     refreshAltCache(true).catch(e => console.error('alt refresh failed', e));
-  }, 8000);
+  }, 700);
 }
 
 // ─── EPG ───
@@ -2416,7 +2409,7 @@ function validateImport(text) {
 
     if (isM3U(trimmed)) {
       fmt = 'M3U';
-      valid = (await parseM3U(trimmed)).filter(d => d.name && d.url);
+      valid = parseM3U(trimmed).filter(d => d.name && d.url);
     } else {
       fmt = 'JSON';
       let data = JSON.parse(trimmed);
@@ -2570,7 +2563,7 @@ function validateRepo(text) {
   const t = text.trim();
   if (!t) return;
   try {
-    const streams = (await parseM3U(t)).filter(d => d.name && d.url);
+    const streams = parseM3U(t).filter(d => d.name && d.url);
     if (!streams.length) throw new Error('No streams found');
     const regions = new Set(streams.map(s => s.region).filter(Boolean));
     const cats = new Set(streams.map(s => s.category).filter(Boolean));
@@ -2593,7 +2586,7 @@ $('rp-ok').onclick = () => {
   const sourceUrl = $('rp-url').value.trim();
   if (!name) { toast('Name is required'); return; }
   if (!text) { toast('Fetch a URL, upload, or paste an M3U file'); return; }
-  const streams = (await parseM3U(text)).filter(d => d.name && d.url);
+  const streams = parseM3U(text).filter(d => d.name && d.url);
   if (!streams.length) { toast('No valid streams found'); return; }
   repos.push({ id: gid(), name: name, streams: streams, sourceUrl: sourceUrl, addedAt: Date.now() });
   saveRepos();
@@ -2611,7 +2604,7 @@ window.refreshRepo = async (id) => {
     const resp = await fetch(repo.sourceUrl);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const text = await resp.text();
-    const streams = (await parseM3U(text)).filter(d => d.name && d.url);
+    const streams = parseM3U(text).filter(d => d.name && d.url);
     if (!streams.length) throw new Error('No streams in response');
     const oldCount = repo.streams.length;
     repo.streams = streams;
@@ -2666,7 +2659,7 @@ window.openRepo = async (id) => {
       const resp = await fetch(r.sourceUrl);
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       const text = await resp.text();
-      r.streams = (await parseM3U(text)).filter(d => d.name && d.url);
+      r.streams = parseM3U(text).filter(d => d.name && d.url);
       if (!r.streams.length) throw new Error('No streams found');
       toast(r.name + ': ' + r.streams.length + ' streams loaded');
     } catch(e) {
