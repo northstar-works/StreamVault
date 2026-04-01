@@ -858,7 +858,7 @@ let items = [];
 let repos = [];
 let epgSrc = [];
 let epgData = { channels: {}, programs: {} };
-let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [], tabOrder: ['itv','plex','icam','local','network'], tvMode: 'auto', plex: { server: '', token: '', section: '', sections: [] }, timeshiftEnabled: true, timeshiftMaxMin: 30, dvrCfg: { remoteEnabled: false, proto: 'ftp', host: '', port: '21', user: '', pass: '', path: '/recordings' }, sportLeagueFilterEnabled: false, sportLeagues: [], sportShowPastGames: true,
+let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [], tabOrder: ['itv','plex','icam','local','network'], tvMode: 'auto', plex: { server: '', token: '', section: '', sections: [] }, timeshiftEnabled: true, timeshiftMaxMin: 30, dvrCfg: { remoteEnabled: false, proto: 'ftp', host: '', port: '21', user: '', pass: '', path: '/recordings' }, sportLeagueFilterEnabled: true, sportLeagues: [], sportShowPastGames: true,
   localEnable: true, localPath: '',
   icamCfg: {},
   networkCfg: {} };
@@ -1037,6 +1037,12 @@ function loadSettings() {
           lg.cacheDate = '';
         });
       }
+    }
+    // One-time migration: if leagues are configured, default filter ON
+    // (older installs saved sportLeagueFilterEnabled: false as default)
+    if (settings.sportLeagues && settings.sportLeagues.length > 0 &&
+        !parsed.hasOwnProperty('sportLeagueFilterEnabled')) {
+      settings.sportLeagueFilterEnabled = true;
     }
   } catch(e) {
     console.warn('[SV] loadSettings failed:', e);
@@ -1492,6 +1498,8 @@ function fmtTime(ts) {
 
 // ─── Navigation ───
 function showTab(id) {
+  // Stop live score refresh when leaving sport tab
+  if (id !== 'sport-scr') _stopSportScoreRefresh();
   document.querySelectorAll('.scr').forEach(s => s.classList.remove('on'));
   $(id).classList.add('on');
   document.querySelectorAll('.ni').forEach(n => n.classList.toggle('on', n.dataset.t === id));
@@ -1501,6 +1509,7 @@ function showTab(id) {
   if (id === 'set-scr') renderSettings();
   if (id === 'sport-scr') {
     renderSportTab();
+    _startSportScoreRefresh(); // begin live score polling
     // D-pad: focus the first section tab so TV remote can navigate immediately
     setTimeout(() => {
       const firstTab = document.querySelector('#sport-section-tabs [tabindex]');
@@ -5234,11 +5243,12 @@ window._svPlaySport = (idx) => {
       url: extractUrl(s.url || ''),
       title: s.title || '',
       region: s.region || '',
-      tag: s.tag || ''
+      tag: s.tag || '',
+      category: s.category || ''
     })).filter(s => s.url);
     if (!candidates.length) { toast('No stream URL found'); return; }
     const primaryTitle = candidates[0].title || 'Sport';
-    const category = candidates[0].category || '';
+    const category = candidates[0].category || primaryTitle;
     const foTimeout = String(settings.foTimeout || 15);
     const foAuto    = String(settings.foAuto !== false);
     const tsEnabled = String(settings.timeshiftEnabled !== false);
@@ -5860,6 +5870,50 @@ refreshTvFocus();
 queueStartupAltCheck();
 // Fetch ESPN schedules after a short delay (non-blocking startup)
 setTimeout(() => fetchAllLeagueSchedules(), 800);
+
+// ── Live score auto-refresh ───────────────────────────────────────────────
+// Re-polls the ESPN scoreboard every 30s when the Sport tab is active.
+// Only leagues that have a live or soon-starting game are re-fetched
+// (typically 1–2 API calls per poll instead of all leagues).
+// The scoreboard endpoint is very lightweight (~10KB per league).
+let _sportScoreTimer = null;
+
+async function _refreshLiveScores() {
+  if (!$('sport-scr') || !$('sport-scr').classList.contains('on')) return;
+  const now = Date.now();
+  const soonMs = 10 * 60 * 1000; // 10 min window for "imminent" games
+  const leagues = settings.sportLeagues || [];
+  let anyFetched = false;
+  for (let i = 0; i < leagues.length; i++) {
+    const lg = leagues[i];
+    const paths = lg.espnPaths || (lg.espnPath ? [lg.espnPath] : []);
+    if (!paths.length) continue;
+    // Check if this league has any live or imminent game
+    const hasLiveOrSoon = paths.some(p => {
+      const games = lg.cachedGamesByPath && lg.cachedGamesByPath[p];
+      if (!Array.isArray(games)) return false;
+      return games.some(g => g.state === 'in' ||
+        (g.state === 'pre' && g.startTime - now < soonMs && g.startTime > now - 60000));
+    });
+    if (!hasLiveOrSoon) continue;
+    // Re-fetch: force cacheDate to '' so fetchLeagueSchedule re-polls
+    const savedDate = lg.cacheDate;
+    lg.cacheDate = '';
+    try { await fetchLeagueSchedule(i); anyFetched = true; }
+    catch(e) { lg.cacheDate = savedDate; } // restore on error
+  }
+  if (anyFetched && $('sport-scr') && $('sport-scr').classList.contains('on')) {
+    renderSportTab();
+  }
+}
+
+function _startSportScoreRefresh() {
+  _stopSportScoreRefresh();
+  _sportScoreTimer = setInterval(_refreshLiveScores, 30000);
+}
+function _stopSportScoreRefresh() {
+  if (_sportScoreTimer) { clearInterval(_sportScoreTimer); _sportScoreTimer = null; }
+}
 
 // Auto-fetch EPG if stale (older than 1 hour)
 if (epgSrc.length) {
