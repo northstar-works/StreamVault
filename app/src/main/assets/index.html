@@ -1075,13 +1075,18 @@ function makeBackupPayload() {
       return rest;
     });
   }
+  // Strip cached streams from repos — can be 10MB+ and are re-fetched from sourceUrl on load.
+  const cleanRepos = repos.map(r => {
+    const { streams, _loadingPromise, ...rest } = r;
+    return rest;
+  });
   return {
     type: 'streamvault-backup',
     version: VERSION,
     build: BUILD,
     exportedAt: Date.now(),
     items: items,
-    repos: repos,
+    repos: cleanRepos,
     epgSrc: epgSrc,
     epgData: epgData,
     settings: cleanSettings
