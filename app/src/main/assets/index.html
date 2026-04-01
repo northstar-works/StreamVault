@@ -1184,7 +1184,7 @@ async function parseM3U(text) {
       }
 
       // Variant tag: "CNN (S)" -> tags=["S"]
-      const tagMatch = cur.name.match(/\(([A-Z])\s*$/);
+      const tagMatch = cur.name.match(/\(([A-Z])\)\s*$/);
       if (tagMatch) {
         cur.tags = [tagMatch[1]];
         cur.name = cur.name.replace(/\s*\([A-Z]\)\s*$/, '').trim();
@@ -2407,7 +2407,7 @@ $('imp-f').onchange = (e) => {
 // Paste
 $('imp-txt').addEventListener('input', () => validateImport($('imp-txt').value));
 
-function validateImport(text) {
+async function validateImport(text) {
   const trimmed = text.trim();
   if (!trimmed) { pendingImport = null; $('imp-pv').style.display = 'none'; $('imp-st').style.display = 'none'; return; }
 
@@ -2566,7 +2566,7 @@ $('rp-f').onchange = (e) => {
 
 $('rp-txt').addEventListener('input', () => validateRepo($('rp-txt').value));
 
-function validateRepo(text) {
+async function validateRepo(text) {
   const t = text.trim();
   if (!t) return;
   try {
@@ -2587,7 +2587,7 @@ function validateRepo(text) {
   }
 }
 
-$('rp-ok').onclick = () => {
+$('rp-ok').onclick = async () => {
   const name = $('rp-name').value.trim();
   const text = $('rp-txt').value.trim();
   const sourceUrl = $('rp-url').value.trim();
