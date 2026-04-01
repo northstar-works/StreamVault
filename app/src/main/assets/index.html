@@ -952,7 +952,18 @@ function loadRepos() {
     if (d) { repos = JSON.parse(d); localStorage.setItem(KEYS.repos, d); }
   } catch(e) {}
 }
-function saveEpg() { try { localStorage.setItem(KEYS.epgSrc, JSON.stringify(epgSrc)); localStorage.setItem(KEYS.epgData, JSON.stringify(epgData)); } catch(e) {} }
+function saveEpg() {
+  try {
+    localStorage.setItem(KEYS.epgSrc, JSON.stringify(epgSrc));
+    // Skip serializing large EPG datasets — JSON.stringify on 9000+ channels
+    // blocks the JS thread for minutes on Fire TV. EPG sources are saved above
+    // so it re-fetches automatically on next startup.
+    const chCount = Object.keys(epgData.channels || {}).length;
+    if (chCount <= 500) {
+      localStorage.setItem(KEYS.epgData, JSON.stringify(epgData));
+    }
+  } catch(e) {}
+}
 function normalizeEpgUrl(url) {
   return (url || '').trim();
 }
@@ -1348,12 +1359,19 @@ function queueStartupAltCheck() {
 }
 
 // ─── EPG ───
-function parseXMLTV(xml) {
+async function parseXMLTV(xml) {
+  // Parse in async chunks to keep the UI/D-pad responsive on Fire TV.
+  // DOMParser itself is synchronous but we yield the event loop between
+  // batches of programme elements so input events can still be processed.
+  const CHUNK = 300;
+  const yield_ = () => new Promise(r => setTimeout(r, 0));
+
   const parser = new DOMParser();
   const doc = parser.parseFromString(xml, 'text/xml');
   const channels = {}, programs = {};
   const now = Date.now(), cutoff = now + 48 * 3600000;
 
+  // Channels are usually small — process all at once
   doc.querySelectorAll('channel').forEach(ch => {
     const id = ch.getAttribute('id');
     const dn = ch.querySelector('display-name');
@@ -1361,15 +1379,19 @@ function parseXMLTV(xml) {
     channels[id] = { name: dn ? dn.textContent : id, icon: ic ? (ic.getAttribute('src') || '') : '' };
   });
 
-  doc.querySelectorAll('programme').forEach(p => {
+  // Programmes can be 50k+ — process in chunks and yield between each
+  const progs = Array.from(doc.querySelectorAll('programme'));
+  for (let i = 0; i < progs.length; i++) {
+    if (i > 0 && i % CHUNK === 0) await yield_();
+    const p = progs[i];
     const chId = p.getAttribute('channel');
     const start = parseXMLDate(p.getAttribute('start'));
     const stop = parseXMLDate(p.getAttribute('stop'));
-    if (stop < now - 10800000 || start > cutoff) return; // keep 3hrs of past
+    if (stop < now - 10800000 || start > cutoff) continue;
     const title = p.querySelector('title');
     if (!programs[chId]) programs[chId] = [];
     programs[chId].push({ start, stop, title: title ? title.textContent : '' });
-  });
+  }
 
   Object.keys(programs).forEach(k => programs[k].sort((a, b) => a.start - b.start));
   return { channels, programs };
@@ -1401,7 +1423,7 @@ async function importLocalEpgFile(file, nameOverride) {
   } else {
     text = await file.text();
   }
-  const parsed = parseXMLTV(text);
+  const parsed = await parseXMLTV(text);
   const src = { id: gid(), name: name || 'Local XMLTV', url: 'local://' + gid(), lastFetch: Date.now(), chCount: Object.keys(parsed.channels || {}).length, localFileName: file.name || 'epg.xml' };
   epgSrc.push(src);
   Object.assign(epgData.channels, parsed.channels);
@@ -1424,7 +1446,7 @@ async function fetchEpgSource(src) {
     } else {
       text = await resp.text();
     }
-    const parsed = parseXMLTV(text);
+    const parsed = await parseXMLTV(text);
     Object.assign(epgData.channels, parsed.channels);
     Object.keys(parsed.programs).forEach(k => { epgData.programs[k] = parsed.programs[k]; });
     src.lastFetch = Date.now();
