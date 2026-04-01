@@ -93,6 +93,7 @@ body.tv-mode .hd{padding-top:10px}
 .fbar{display:flex;gap:4px;padding:2px 16px 4px;align-items:center;overflow-x:auto;-webkit-overflow-scrolling:touch}.fbar::-webkit-scrollbar{display:none}
 .fsel{padding:3px 7px;border-radius:10px;font-size:8px;background:var(--c1);border:1px solid var(--bd);color:var(--t2);appearance:none;outline:none;max-width:100px}
 .fsel option{background:var(--c1);color:var(--t1)}
+.fsel-btn{padding:3px 10px;border-radius:10px;font-size:8px;background:var(--c1);border:1px solid var(--bd);color:var(--t2);cursor:pointer;outline:none;min-width:60px;text-align:left}
 .flbl{font-size:7px;color:var(--t3);font-weight:600;text-transform:uppercase;flex-shrink:0}
 .slb{display:none;padding:6px 12px;background:var(--ac);align-items:center;justify-content:space-between;flex-shrink:0}
 .slb.on{display:flex}.slb span{font-size:10px;font-weight:600;color:#fff}
@@ -533,7 +534,16 @@ document.addEventListener('keydown', function(e) {
 <div id="br-scr" class="scr">
   <div class="hd"><button class="ib" id="br-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button><h1 id="br-title" style="flex:1;margin-left:6px;font-size:14px">Repo</h1><span class="cnt" id="br-cnt">0</span></div>
   <div class="sb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="br-q" placeholder="Search…"></div>
-  <div class="fbar"><span class="flbl">Region:</span><select class="fsel" id="f-reg"><option>All</option></select><span class="flbl">Genre:</span><select class="fsel" id="f-gen"><option>All</option></select></div>
+  <!-- TV-friendly filter bar: buttons open list modal instead of native <select> -->
+  <div class="fbar" id="filter-bar">
+    <span class="flbl">Region:</span>
+    <button class="fsel-btn" id="f-reg-btn" data-tv-zone="repo-filter" tabindex="0">All ▾</button>
+    <span class="flbl">Genre:</span>
+    <button class="fsel-btn" id="f-gen-btn" data-tv-zone="repo-filter" tabindex="0">All ▾</button>
+  </div>
+  <!-- Hidden selects kept for value tracking -->
+  <select id="f-reg" style="display:none"><option>All</option></select>
+  <select id="f-gen" style="display:none"><option>All</option></select>
   <div class="slb" id="slb"><span id="slcnt">0 selected</span><div><button class="sbc" id="sl-all" data-tv-zone="repo-select-bar">All</button><button class="sbc" id="sl-clr" data-tv-zone="repo-select-bar">Clear</button><button class="sbc" id="sl-epg" data-tv-zone="repo-select-bar">Bulk EPG</button><button class="sba" id="sl-add" data-tv-zone="repo-select-bar">Add to Playlist</button></div></div>
   <div class="lst" id="br-lst"></div>
 </div>
@@ -709,6 +719,17 @@ http://stream.example.com/cnn
   <div id="bk-pick-list" style="max-height:50vh;overflow-y:auto"></div>
   <div class="mab" style="margin-top:12px">
     <button class="bc" onclick="$('mo-bk-pick').classList.remove('on');refreshTvFocus()">Cancel</button>
+  </div>
+</div>
+</div>
+
+<!-- TV Picker Modal (shared for Region/Genre dropdowns) -->
+<div class="mo" id="mo-tv-picker">
+<div class="mc" style="max-height:80vh">
+  <h2 id="tv-picker-title">Choose</h2>
+  <div id="tv-picker-list" style="max-height:55vh;overflow-y:auto;margin-top:8px"></div>
+  <div class="mab" style="margin-top:12px">
+    <button class="bc" onclick="$('mo-tv-picker').classList.remove('on');refreshTvFocus()">Cancel</button>
   </div>
 </div>
 </div>
@@ -1424,7 +1445,6 @@ async function importLocalEpgFile(file, nameOverride) {
     text = await file.text();
   }
   const parsed = await parseXMLTV(text);
-  // Filter to only channels matching library items
   const epgIds = new Set(items.map(m => m.epgTitle).filter(Boolean));
   const filteredChannels = {}, filteredPrograms = {};
   Object.keys(parsed.channels || {}).forEach(id => {
@@ -1456,8 +1476,7 @@ async function fetchEpgSource(src) {
       text = await resp.text();
     }
     const parsed = await parseXMLTV(text);
-    // Filter to only channels matching items in the library.
-    // Storing all 9900+ channels + programs would use 50MB+ of JS heap and freeze Fire TV.
+    // Filter to only channels matching items in the library — prevents 50MB+ heap freeze on Fire TV
     const epgIds = new Set(items.map(m => m.epgTitle).filter(Boolean));
     const filteredChannels = {}, filteredPrograms = {};
     Object.keys(parsed.channels).forEach(id => {
@@ -2682,6 +2701,8 @@ function buildBrowseDropdowns() {
   const gens = ['All', ...new Set((brRepo.streams || []).map(s => s.category).filter(Boolean))].sort();
   $('f-reg').innerHTML = regs.map(r => `<option${r === brReg ? ' selected' : ''}>${r}</option>`).join('');
   $('f-gen').innerHTML = gens.map(g => `<option${g === brGen ? ' selected' : ''}>${g}</option>`).join('');
+  if ($('f-reg-btn')) $('f-reg-btn').textContent = (brReg || 'All') + ' ▾';
+  if ($('f-gen-btn')) $('f-gen-btn').textContent = (brGen || 'All') + ' ▾';
 }
 function invalidateBrowseCache() {
   brFilteredCache = { key: '', items: [] };
@@ -2691,6 +2712,60 @@ function saveBrowseRegionPref(val) {
 }
 $('f-reg').onchange = (e) => { brReg = e.target.value; saveBrowseRegionPref(brReg); invalidateBrowseCache(); brWindowStart = 0; brActiveIndex = 0; renderBrowse(); };
 $('f-gen').onchange = (e) => { brGen = e.target.value; invalidateBrowseCache(); brWindowStart = 0; brActiveIndex = 0; renderBrowse(); };
+
+// TV-friendly picker for Region and Genre filter buttons
+function openTvPicker(title, options, current, onSelect, afterCloseFocusId) {
+  $('tv-picker-title').textContent = title;
+  const list = $('tv-picker-list');
+  list.innerHTML = options.map((opt, i) =>
+    `<div class="rc tv-picker-opt${opt === current ? ' bs' : ''}" tabindex="0" role="button"
+      style="padding:10px 14px;margin-bottom:4px;font-size:11px;cursor:pointer"
+      data-val="${esc(opt)}">${esc(opt)}</div>`
+  ).join('');
+  list.querySelectorAll('.tv-picker-opt').forEach(el => {
+    el.onclick = () => {
+      onSelect(el.dataset.val);
+      $('mo-tv-picker').classList.remove('on');
+      if (afterCloseFocusId) {
+        setTimeout(() => { const t = $(afterCloseFocusId); if (t) t.focus(); }, 60);
+      } else {
+        setTimeout(refreshTvFocus, 60);
+      }
+    };
+    el.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); const n = el.nextElementSibling; if (n) n.focus(); }
+      if (e.key === 'ArrowUp') { e.preventDefault(); const p = el.previousElementSibling; if (p) p.focus(); }
+    };
+  });
+  $('mo-tv-picker').classList.add('on');
+  // Focus current selection or first item
+  setTimeout(() => {
+    const cur = list.querySelector('.bs') || list.querySelector('.tv-picker-opt');
+    if (cur) cur.focus();
+  }, 60);
+}
+
+$('f-reg-btn').onclick = () => {
+  const regs = Array.from($('f-reg').options).map(o => o.value || o.text);
+  openTvPicker('Select Region', regs, brReg, (val) => {
+    brReg = val;
+    $('f-reg-btn').textContent = val + ' ▾';
+    $('f-reg').value = val;
+    saveBrowseRegionPref(brReg);
+    invalidateBrowseCache(); brWindowStart = 0; brActiveIndex = 0; renderBrowse();
+  }, 'f-gen-btn');
+};
+
+$('f-gen-btn').onclick = () => {
+  const gens = Array.from($('f-gen').options).map(o => o.value || o.text);
+  openTvPicker('Select Genre', gens, brGen, (val) => {
+    brGen = val;
+    $('f-gen-btn').textContent = val + ' ▾';
+    $('f-gen').value = val;
+    invalidateBrowseCache(); brWindowStart = 0; brActiveIndex = 0; renderBrowse();
+  }, null);
+};
 
 function getBrowseFiltered() {
   if (!brRepo) return [];
@@ -3533,20 +3608,25 @@ function moveTvFocusSpatial(dirCode) {
 
   // ── Sport game cards: DPad down enters buttons inside card ──────────────
   if (currentZone === 'sport-game-card' || (current.classList && current.classList.contains('sport-gc'))) {
-    if (dirCode === 20) { // down — enter channel buttons inside this card
-      const btns = Array.from(current.querySelectorAll('button[tabindex]'));
-      if (btns.length) {
-        const i = els.indexOf(btns[0]);
-        if (i >= 0) return focusElementAtIndex(i);
+    const allCards = Array.from(document.querySelectorAll('.sport-gc'));
+    const ci = allCards.indexOf(current);
+    if (dirCode === 20) { // down — next card
+      if (ci >= 0 && ci < allCards.length - 1) {
+        const nx = allCards[ci + 1];
+        nx.scrollIntoView({block:'nearest'});
+        const i = els.indexOf(nx); if (i >= 0) return focusElementAtIndex(i);
       }
+      return pickClosestNav();
     }
-    if (dirCode === 19) { // up — go to league/section tabs
+    if (dirCode === 19) { // up — prev card or section tabs
+      if (ci > 0) {
+        const pv = allCards[ci - 1];
+        pv.scrollIntoView({block:'nearest'});
+        const i = els.indexOf(pv); if (i >= 0) return focusElementAtIndex(i);
+      }
       return focusNearestInSelector('#sport-section-tabs [tabindex], #sport-team-tabs [tabindex]', current, false) ||
              moveTvFocusLinear(-1);
     }
-    // Left/Right between cards
-    const allCards = Array.from(document.querySelectorAll('.sport-gc'));
-    const ci = allCards.indexOf(current);
     if (dirCode === 22 && ci >= 0 && ci < allCards.length - 1) {
       const nx = allCards[ci + 1];
       nx.scrollIntoView({block:'nearest'});
@@ -3559,36 +3639,19 @@ function moveTvFocusSpatial(dirCode) {
     }
   }
 
-  // ── Sport channel buttons inside game cards ───────────────────────────────
-  const sportCard = current && current.closest && current.closest('.sport-gc');
-  if (sportCard && !current.classList.contains('sport-gc')) {
-    const btns = Array.from(sportCard.querySelectorAll('button[tabindex]'));
-    const bi = btns.indexOf(current);
-    if (dirCode === 22 && bi >= 0 && bi < btns.length - 1) {
-      const i = els.indexOf(btns[bi + 1]); if (i >= 0) return focusElementAtIndex(i);
-      return false;
+  if (currentZone === 'repo-filter') {
+    if (dirCode === 22) { // right: region → genre → first list item
+      if (current.id === 'f-reg-btn') { const t = $('f-gen-btn'); if (t) { const i = els.indexOf(t); if (i >= 0) return focusElementAtIndex(i); } }
+      if (current.id === 'f-gen-btn') { return focusNearestInSelector('#br-lst .ri', current, true); }
     }
-    if (dirCode === 21 && bi > 0) {
-      const i = els.indexOf(btns[bi - 1]); if (i >= 0) return focusElementAtIndex(i);
-      return false;
+    if (dirCode === 21) { // left: genre → region
+      if (current.id === 'f-gen-btn') { const t = $('f-reg-btn'); if (t) { const i = els.indexOf(t); if (i >= 0) return focusElementAtIndex(i); } }
     }
-    if (dirCode === 21 && bi === 0) { // Left from first button → back to card
-      const i = els.indexOf(sportCard); if (i >= 0) return focusElementAtIndex(i);
-      return false;
+    if (dirCode === 20) { // down: move to list
+      return focusNearestInSelector('#br-lst .ri', current, true);
     }
-    if (dirCode === 19) { // up from button → back to card
-      const i = els.indexOf(sportCard); if (i >= 0) return focusElementAtIndex(i);
-      return false;
-    }
-    if (dirCode === 20) { // down from button → next card or nav
-      const allCards = Array.from(document.querySelectorAll('.sport-gc'));
-      const ci = allCards.indexOf(sportCard);
-      if (ci >= 0 && ci < allCards.length - 1) {
-        const nx = allCards[ci + 1];
-        nx.scrollIntoView({block:'nearest'});
-        const i = els.indexOf(nx); if (i >= 0) return focusElementAtIndex(i);
-      }
-      return pickClosestNav();
+    if (dirCode === 13 || dirCode === 23) { // Enter/Select: open picker
+      current.click(); return true;
     }
   }
 
@@ -5112,20 +5175,27 @@ function renderSportTab() {
     }
 
     const leagueLabel = (ESPN_SPORT_OPTIONS.find(o => o.path === g._path) || {}).label || g._lgName || '';
-    return `<div tabindex="0" role="listitem" data-tv-zone="sport-game-card" class="sport-gc" style="border:1px solid var(--bd);border-radius:var(--rs);margin:4px 12px;padding:8px;outline:none">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
-        <div>
+    // Register full failover on the card — Enter/Select plays top stream directly
+    const cardSi = window._svSportItems.length;
+    if (allFailover.length > 0) window._svSportItems.push(allFailover);
+    const hasChannel = allFailover.length > 0;
+    const cardClick = hasChannel ? `onclick="window._svPlaySport(${cardSi})"` : '';
+    return `<div tabindex="0" role="listitem" data-tv-zone="sport-game-card" class="sport-gc"
+      style="border:1px solid var(--bd);border-radius:var(--rs);margin:4px 12px;padding:10px;outline:none;cursor:${hasChannel?'pointer':'default'}"
+      ${cardClick}>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div style="flex:1;min-width:0">
           <div style="font-size:10px;font-weight:700;color:var(--t1)">${esc(name)}</div>
           ${!isLiveTab && lgName ? '' : `<div style="font-size:8px;color:var(--t3)">${esc(leagueLabel)}</div>`}
+          ${hasChannel
+            ? `<div style="font-size:8px;color:var(--ac);margin-top:3px">▶ ${esc((allFailover[0].title||'').slice(0,40)||'Watch')}</div>`
+            : '<div style="font-size:8px;color:var(--t3);margin-top:3px">No channels in your groups</div>'}
         </div>
-        <div style="text-align:right">
+        <div style="text-align:right;flex-shrink:0;margin-left:8px">
           <div style="font-size:10px;font-weight:700;color:${g.state==='in'?'var(--rd)':g.state==='post'?'var(--t3)':'var(--gn)'}">${timeStr}</div>
           ${scoreStr ? `<div style="font-size:11px;font-weight:700;color:var(--t1)">${scoreStr}</div>` : ''}
         </div>
       </div>
-      ${chButtons
-        ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${chButtons}</div>`
-        : '<div style="font-size:8px;color:var(--t3)">No matching channels in your groups</div>'}
     </div>`;
   };
 
@@ -5235,28 +5305,29 @@ function _renderAllGamesTab(lst) {
       const games2 = findGamesForItem(m);
       return games2.some(gg => gg.startTime === g.startTime && gg.shortName === g.shortName);
     }).slice(0, 4);
-    // All Games tab uses simplified buttons (no pinned-team context available here)
-    const chButtons = matchingChs.map(m => {
-      const si2 = window._svSportItems.length;
-      // Build a minimal failover entry per stream (others in matchingChs become alts)
-      const primaryEntry = { url: m.url || '', title: m.title || '', region: m.region || '', tag: (m.tags && m.tags[0]) || '', category: m.category || m._lgGroupName || '' };
-      const restEntries  = matchingChs.filter(x => x.url !== m.url).map(x => ({ url: x.url || '', title: x.title || '', region: x.region || '', tag: (x.tags && x.tags[0]) || '', category: x.category || x._lgGroupName || '' }));
-      window._svSportItems.push([primaryEntry, ...restEntries]);
-      return `<button tabindex="0" onclick="window._svPlaySport(${si2})" style="font-size:8px;padding:3px 8px;border-radius:6px;background:var(--ac);color:#fff;border:none;cursor:pointer;white-space:nowrap">${esc(m.title.replace(/\s*\(home\)|\s*\(away\)/i,'').trim().slice(0,30))}</button>`;
-    }).join('');
+    // Build failover list for All Games tab — first channel is primary, rest are alts
+    const allEntries = matchingChs.map(m => ({ url: m.url || '', title: m.title || '', region: m.region || '', tag: (m.tags && m.tags[0]) || '', category: m.category || m._lgGroupName || '' }));
+    const cardSi2 = window._svSportItems.length;
+    if (allEntries.length > 0) window._svSportItems.push(allEntries);
+    const hasChannel2 = allEntries.length > 0;
+    const cardClick2 = hasChannel2 ? `onclick="window._svPlaySport(${cardSi2})"` : '';
     const leagueLabel = (ESPN_SPORT_OPTIONS.find(o => o.path === g._path) || {}).label || g._lgName;
-    return `<div tabindex="0" role="listitem" data-tv-zone="sport-game-card" class="sport-gc" style="border:1px solid var(--bd);border-radius:var(--rs);margin:4px 12px;padding:8px;outline:none">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
-        <div>
+    return `<div tabindex="0" role="listitem" data-tv-zone="sport-game-card" class="sport-gc"
+      style="border:1px solid var(--bd);border-radius:var(--rs);margin:4px 12px;padding:10px;outline:none;cursor:${hasChannel2?'pointer':'default'}"
+      ${cardClick2}>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div style="flex:1;min-width:0">
           <div style="font-size:10px;font-weight:700;color:var(--t1)">${esc(name)}</div>
           <div style="font-size:8px;color:var(--t3)">${esc(leagueLabel)}</div>
+          ${hasChannel2
+            ? `<div style="font-size:8px;color:var(--ac);margin-top:3px">▶ ${esc((allEntries[0].title||'').replace(/\s*\(home\)|\s*\(away\)/i,'').trim().slice(0,40)||'Watch')}</div>`
+            : '<div style="font-size:8px;color:var(--t3);margin-top:3px">No channels in your groups</div>'}
         </div>
-        <div style="text-align:right">
+        <div style="text-align:right;flex-shrink:0;margin-left:8px">
           <div style="font-size:10px;font-weight:700;color:${g.state==='in'?'var(--rd)':g.state==='post'?'var(--t3)':'var(--gn)'}">${timeStr}</div>
           ${scoreStr ? `<div style="font-size:11px;font-weight:700;color:var(--t1)">${scoreStr}</div>` : ''}
         </div>
       </div>
-      ${chButtons ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${chButtons}</div>` : '<div style="font-size:8px;color:var(--t3)">No matching channels found in your groups</div>'}
     </div>`;
   };
 
