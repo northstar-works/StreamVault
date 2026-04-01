@@ -301,35 +301,57 @@ public class MainActivity extends Activity {
     private void scanUsbInjectFile() {
         new Thread(() -> {
             try {
-                // Strategy 1: getExternalFilesDirs gives us app dirs on all volumes.
-                // Navigate up 4 levels (app/files → Android/data → Android → volume root)
-                // to reach the USB root, then look for inject/.json
-                java.io.File[] appDirs = getExternalFilesDirs(null);
                 java.util.List<java.io.File> volumeRoots = new java.util.ArrayList<>();
+                StringBuilder debugPaths = new StringBuilder();
 
-                if (appDirs != null) {
-                    for (java.io.File d : appDirs) {
-                        if (d == null) continue;
-                        // Navigate: files/ → app-package/ → data/ → Android/ → volume root
-                        java.io.File vol = d;
-                        for (int i = 0; i < 4 && vol != null; i++) vol = vol.getParentFile();
-                        if (vol != null && !volumeRoots.contains(vol)) {
-                            volumeRoots.add(vol);
+                // Strategy 1: StorageManager (API 24+) — most reliable on Fire TV
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                    android.os.storage.StorageManager sm =
+                        (android.os.storage.StorageManager) getSystemService(STORAGE_SERVICE);
+                    if (sm != null) {
+                        for (android.os.storage.StorageVolume sv : sm.getStorageVolumes()) {
+                            if (sv.isPrimary()) continue; // skip internal storage
+                            try {
+                                java.lang.reflect.Method m = sv.getClass().getMethod("getPath");
+                                java.io.File f = new java.io.File((String) m.invoke(sv));
+                                if (f.exists() && !volumeRoots.contains(f)) {
+                                    volumeRoots.add(f);
+                                    debugPaths.append("[StorageManager] ").append(f.getAbsolutePath()).append("\n");
+                                }
+                            } catch (Exception ignored) {}
                         }
                     }
                 }
 
-                // Strategy 2: direct /storage/ scan for non-emulated entries
-                java.io.File storageDir = new java.io.File("/storage");
-                if (storageDir.exists()) {
-                    java.io.File[] entries = storageDir.listFiles();
-                    if (entries != null) {
-                        for (java.io.File e : entries) {
-                            if (!e.getName().equalsIgnoreCase("emulated") &&
-                                !e.getName().equalsIgnoreCase("self") &&
-                                e.isDirectory() && !volumeRoots.contains(e)) {
-                                volumeRoots.add(e);
-                            }
+                // Strategy 2: getExternalFilesDirs — navigate up 4 levels to volume root
+                java.io.File[] appDirs = getExternalFilesDirs(null);
+                if (appDirs != null) {
+                    for (java.io.File d : appDirs) {
+                        if (d == null) continue;
+                        java.io.File vol = d;
+                        for (int i = 0; i < 4 && vol != null; i++) vol = vol.getParentFile();
+                        if (vol != null && !volumeRoots.contains(vol)) {
+                            volumeRoots.add(vol);
+                            debugPaths.append("[ExternalDirs] ").append(vol.getAbsolutePath()).append("\n");
+                        }
+                    }
+                }
+
+                // Strategy 3: /mnt/media_rw/ — Fire TV's actual USB mount point, plus fallbacks
+                for (String base : new String[]{"/mnt/media_rw", "/mnt/usb_storage", "/mnt/usb", "/storage"}) {
+                    java.io.File dir = new java.io.File(base);
+                    if (!dir.exists()) continue;
+                    java.io.File[] entries = dir.listFiles();
+                    if (entries == null) {
+                        debugPaths.append("[").append(base).append("] listFiles=null\n");
+                        continue;
+                    }
+                    for (java.io.File e : entries) {
+                        if (e.getName().equalsIgnoreCase("emulated") ||
+                            e.getName().equalsIgnoreCase("self")) continue;
+                        if (e.isDirectory() && !volumeRoots.contains(e)) {
+                            volumeRoots.add(e);
+                            debugPaths.append("[").append(base).append("] ").append(e.getAbsolutePath()).append("\n");
                         }
                     }
                 }
@@ -339,6 +361,8 @@ public class MainActivity extends Activity {
                 outer:
                 for (java.io.File root : volumeRoots) {
                     java.io.File injectDir = new java.io.File(root, "inject");
+                    debugPaths.append("Checking: ").append(injectDir.getAbsolutePath())
+                              .append(" exists=").append(injectDir.exists()).append("\n");
                     if (!injectDir.exists() || !injectDir.isDirectory()) continue;
                     java.io.File[] jsonFiles = injectDir.listFiles(
                         f -> f.isFile() && f.getName().toLowerCase().endsWith(".json"));
@@ -351,7 +375,7 @@ public class MainActivity extends Activity {
                 }
 
                 if (foundFile == null) {
-                    final String msg = "No inject/*.json found on USB drive";
+                    final String msg = "No inject/*.json found. Paths checked:\n" + debugPaths;
                     runOnUiThread(() -> {
                         String js = "window.onInjectFileNotFound && window.onInjectFileNotFound(" + quoteJs(msg) + ");";
                         webView.evaluateJavascript(js, null);
