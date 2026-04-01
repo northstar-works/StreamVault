@@ -291,13 +291,37 @@ public class MainActivity extends Activity {
             // Called by the "Inject from USB" button in Settings
             runOnUiThread(() -> scanUsbInjectFile());
         }
+
+        @JavascriptInterface
+        public void readBackupFile(String uriOrPath) {
+            runOnUiThread(() -> {
+                new Thread(() -> {
+                    try {
+                        String jsonText;
+                        if (uriOrPath.startsWith("content://")) {
+                            android.net.Uri uri = android.net.Uri.parse(uriOrPath);
+                            try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) {}
+                            try (InputStream is = getContentResolver().openInputStream(uri)) {
+                                if (is == null) throw new IllegalStateException("Cannot open file");
+                                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                                byte[] buf = new byte[8192]; int len;
+                                while ((len = is.read(buf)) != -1) bos.write(buf, 0, len);
+                                jsonText = bos.toString(StandardCharsets.UTF_8.name());
+                            }
+                        } else {
+                            jsonText = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(uriOrPath)), StandardCharsets.UTF_8);
+                        }
+                        final String jt = jsonText;
+                        final String label = uriOrPath.contains("/") ? uriOrPath.substring(uriOrPath.lastIndexOf('/')+1) : uriOrPath;
+                        runOnUiThread(() -> notifyJsBackupFilePicked(jt, label));
+                    } catch (Exception e) {
+                        runOnUiThread(() -> notifyJsBackupError(e.getMessage() != null ? e.getMessage() : String.valueOf(e)));
+                    }
+                }).start();
+            });
+        }
     }
 
-    /**
-     * Scan all external storage volumes (USB drives, SD cards) for inject/*.json
-     * and call window.onInjectFileFound / window.onInjectFileNotFound in JS.
-     * Fire TV USB drives mount under /storage/ as non-"emulated" volumes.
-     */
     private void scanUsbInjectFile() {
         new Thread(() -> {
             try {
@@ -306,76 +330,85 @@ public class MainActivity extends Activity {
 
                 // Strategy 1: StorageManager (API 24+) — most reliable on Fire TV
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-                    android.os.storage.StorageManager sm =
-                        (android.os.storage.StorageManager) getSystemService(STORAGE_SERVICE);
-                    if (sm != null) {
-                        for (android.os.storage.StorageVolume sv : sm.getStorageVolumes()) {
-                            if (sv.isPrimary()) continue; // skip internal storage
-                            try {
-                                java.lang.reflect.Method m = sv.getClass().getMethod("getPath");
-                                java.io.File f = new java.io.File((String) m.invoke(sv));
-                                if (f.exists() && !volumeRoots.contains(f)) {
-                                    volumeRoots.add(f);
-                                    debugPaths.append("[StorageManager] ").append(f.getAbsolutePath()).append("\n");
-                                }
-                            } catch (Exception ignored) {}
+                    try {
+                        android.os.storage.StorageManager sm =
+                            (android.os.storage.StorageManager) getSystemService(STORAGE_SERVICE);
+                        if (sm != null) {
+                            for (android.os.storage.StorageVolume sv : sm.getStorageVolumes()) {
+                                if (sv.isPrimary()) continue;
+                                try {
+                                    java.lang.reflect.Method m = sv.getClass().getMethod("getPath");
+                                    Object result = m.invoke(sv);
+                                    if (result != null) {
+                                        java.io.File f = new java.io.File(result.toString());
+                                        if (f.exists() && !volumeRoots.contains(f)) {
+                                            volumeRoots.add(f);
+                                            debugPaths.append("[SM] ").append(f.getAbsolutePath()).append("\n");
+                                        }
+                                    }
+                                } catch (Exception ignored) {}
+                            }
                         }
-                    }
+                    } catch (Exception ignored) {}
                 }
 
                 // Strategy 2: getExternalFilesDirs — navigate up 4 levels to volume root
-                java.io.File[] appDirs = getExternalFilesDirs(null);
-                if (appDirs != null) {
-                    for (java.io.File d : appDirs) {
-                        if (d == null) continue;
-                        java.io.File vol = d;
-                        for (int i = 0; i < 4 && vol != null; i++) vol = vol.getParentFile();
-                        if (vol != null && !volumeRoots.contains(vol)) {
-                            volumeRoots.add(vol);
-                            debugPaths.append("[ExternalDirs] ").append(vol.getAbsolutePath()).append("\n");
+                try {
+                    java.io.File[] appDirs = getExternalFilesDirs(null);
+                    if (appDirs != null) {
+                        for (java.io.File d : appDirs) {
+                            if (d == null) continue;
+                            java.io.File vol = d;
+                            for (int i = 0; i < 4 && vol != null; i++) vol = vol.getParentFile();
+                            if (vol != null && !volumeRoots.contains(vol)) {
+                                volumeRoots.add(vol);
+                                debugPaths.append("[ED] ").append(vol.getAbsolutePath()).append("\n");
+                            }
                         }
                     }
-                }
+                } catch (Exception ignored) {}
 
                 // Strategy 3: /mnt/media_rw/ — Fire TV's actual USB mount point, plus fallbacks
                 for (String base : new String[]{"/mnt/media_rw", "/mnt/usb_storage", "/mnt/usb", "/storage"}) {
-                    java.io.File dir = new java.io.File(base);
-                    if (!dir.exists()) continue;
-                    java.io.File[] entries = dir.listFiles();
-                    if (entries == null) {
-                        debugPaths.append("[").append(base).append("] listFiles=null\n");
-                        continue;
-                    }
-                    for (java.io.File e : entries) {
-                        if (e.getName().equalsIgnoreCase("emulated") ||
-                            e.getName().equalsIgnoreCase("self")) continue;
-                        if (e.isDirectory() && !volumeRoots.contains(e)) {
-                            volumeRoots.add(e);
-                            debugPaths.append("[").append(base).append("] ").append(e.getAbsolutePath()).append("\n");
+                    try {
+                        java.io.File dir = new java.io.File(base);
+                        if (!dir.exists()) continue;
+                        java.io.File[] entries = dir.listFiles();
+                        if (entries == null) {
+                            debugPaths.append("[").append(base).append("] listFiles=null\n");
+                            continue;
                         }
-                    }
+                        for (java.io.File e : entries) {
+                            if (e.getName().equalsIgnoreCase("emulated") ||
+                                e.getName().equalsIgnoreCase("self")) continue;
+                            if (e.isDirectory() && !volumeRoots.contains(e)) {
+                                volumeRoots.add(e);
+                                debugPaths.append("[").append(base).append("] ").append(e.getAbsolutePath()).append("\n");
+                            }
+                        }
+                    } catch (Exception ignored) {}
                 }
 
                 // Search each volume root for inject/*.json
                 java.io.File foundFile = null;
-                outer:
                 for (java.io.File root : volumeRoots) {
-                    java.io.File injectDir = new java.io.File(root, "inject");
-                    debugPaths.append("Checking: ").append(injectDir.getAbsolutePath())
-                              .append(" exists=").append(injectDir.exists()).append("\n");
-                    if (!injectDir.exists() || !injectDir.isDirectory()) continue;
-                    java.io.File[] jsonFiles = injectDir.listFiles(
-                        f -> f.isFile() && f.getName().toLowerCase().endsWith(".json"));
-                    if (jsonFiles != null && jsonFiles.length > 0) {
-                        // Sort by name descending so newest backup (by timestamp in name) wins
-                        java.util.Arrays.sort(jsonFiles, (a, b) -> b.getName().compareToIgnoreCase(a.getName()));
-                        foundFile = jsonFiles[0];
-                        break outer;
-                    }
+                    try {
+                        java.io.File injectDir = new java.io.File(root, "inject");
+                        debugPaths.append("Checking: ").append(injectDir.getAbsolutePath())
+                                  .append(" exists=").append(injectDir.exists()).append("\n");
+                        if (!injectDir.exists() || !injectDir.isDirectory()) continue;
+                        java.io.File[] jsonFiles = injectDir.listFiles(
+                            f -> f.isFile() && f.getName().toLowerCase().endsWith(".json"));
+                        if (jsonFiles != null && jsonFiles.length > 0) {
+                            java.util.Arrays.sort(jsonFiles, (a, b) -> b.getName().compareToIgnoreCase(a.getName()));
+                            foundFile = jsonFiles[0];
+                            break;
+                        }
+                    } catch (Exception ignored) {}
                 }
 
                 if (foundFile == null) {
-                    final String msg = "No inject/*.json found. Paths checked:\n" + debugPaths;
+                    final String msg = "No inject/*.json found. Checked:\n" + debugPaths;
                     runOnUiThread(() -> {
                         String js = "window.onInjectFileNotFound && window.onInjectFileNotFound(" + quoteJs(msg) + ");";
                         webView.evaluateJavascript(js, null);
@@ -383,7 +416,6 @@ public class MainActivity extends Activity {
                     return;
                 }
 
-                // Read it and send to JS
                 final java.io.File injectFile = foundFile;
                 String jsonText = new String(
                     java.nio.file.Files.readAllBytes(injectFile.toPath()),
@@ -543,36 +575,6 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> toastNative("Could not list backups: " + e.getMessage()));
             }
         }).start();
-    }
-
-    /** Read a backup file by URI or filesystem path and send to JS */
-    @JavascriptInterface
-    public void readBackupFile(String uriOrPath) {
-        runOnUiThread(() -> {
-            new Thread(() -> {
-                try {
-                    String jsonText;
-                    if (uriOrPath.startsWith("content://")) {
-                        android.net.Uri uri = android.net.Uri.parse(uriOrPath);
-                        try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) {}
-                        try (InputStream is = getContentResolver().openInputStream(uri)) {
-                            if (is == null) throw new IllegalStateException("Cannot open file");
-                            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                            byte[] buf = new byte[8192]; int len;
-                            while ((len = is.read(buf)) != -1) bos.write(buf, 0, len);
-                            jsonText = bos.toString(StandardCharsets.UTF_8.name());
-                        }
-                    } else {
-                        jsonText = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(uriOrPath)), StandardCharsets.UTF_8);
-                    }
-                    final String jt = jsonText;
-                    final String label = uriOrPath.contains("/") ? uriOrPath.substring(uriOrPath.lastIndexOf('/')+1) : uriOrPath;
-                    runOnUiThread(() -> notifyJsBackupFilePicked(jt, label));
-                } catch (Exception e) {
-                    runOnUiThread(() -> notifyJsBackupError(e.getMessage() != null ? e.getMessage() : String.valueOf(e)));
-                }
-            }).start();
-        });
     }
 
     private void openDirectoryPicker(int requestCode) {
