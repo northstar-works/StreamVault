@@ -1108,12 +1108,11 @@ function restoreBackupPayload(data) {
     m.baseName = m.baseName || extractBase(m.title || m.name || '');
   });
   saveItems(); saveRepos(); saveEpg(); saveSettings();
-  refreshAltCache(true);
-  applyTvMode(); // re-apply TV mode class after settings restored
-  renderCats(); renderLib(); renderRepos(); renderSettings(); renderEpgList(); renderGuide();
-  fetchAllLeagueSchedules(); // Sport League: fetch ESPN schedules after library loads
-  renderSportTab(); updateSportNavVisibility();
-  refreshTvFocus();
+  // Reload the page instead of rendering inline — large libraries (60k+ streams) will
+  // freeze the WebView if we try to render them all immediately after restore.
+  // The normal startup flow handles pagination and lazy rendering safely.
+  toast('Backup restored — reloading…');
+  setTimeout(() => location.reload(), 1200);
 }
 
 // ─── M3U Parser ───
