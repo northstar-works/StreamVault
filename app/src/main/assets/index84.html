@@ -1424,19 +1424,10 @@ async function importLocalEpgFile(file, nameOverride) {
     text = await file.text();
   }
   const parsed = await parseXMLTV(text);
-  // Filter to only channels matching library items
-  const epgIds = new Set(items.map(m => m.epgTitle).filter(Boolean));
-  const filteredChannels = {}, filteredPrograms = {};
-  Object.keys(parsed.channels || {}).forEach(id => {
-    if (!epgIds.size || epgIds.has(id)) {
-      filteredChannels[id] = parsed.channels[id];
-      if (parsed.programs && parsed.programs[id]) filteredPrograms[id] = parsed.programs[id];
-    }
-  });
   const src = { id: gid(), name: name || 'Local XMLTV', url: 'local://' + gid(), lastFetch: Date.now(), chCount: Object.keys(parsed.channels || {}).length, localFileName: file.name || 'epg.xml' };
   epgSrc.push(src);
-  Object.assign(epgData.channels, filteredChannels);
-  Object.keys(filteredPrograms).forEach(k => { epgData.programs[k] = filteredPrograms[k]; });
+  Object.assign(epgData.channels, parsed.channels);
+  Object.keys(parsed.programs || {}).forEach(k => { epgData.programs[k] = parsed.programs[k]; });
   saveEpg();
   renderEpgList();
   fillEpgSourceSelect(getDefaultEpgSourceUrl());
@@ -1456,22 +1447,12 @@ async function fetchEpgSource(src) {
       text = await resp.text();
     }
     const parsed = await parseXMLTV(text);
-    // Filter to only channels matching items in the library.
-    // Storing all 9900+ channels + programs would use 50MB+ of JS heap and freeze Fire TV.
-    const epgIds = new Set(items.map(m => m.epgTitle).filter(Boolean));
-    const filteredChannels = {}, filteredPrograms = {};
-    Object.keys(parsed.channels).forEach(id => {
-      if (!epgIds.size || epgIds.has(id)) {
-        filteredChannels[id] = parsed.channels[id];
-        if (parsed.programs[id]) filteredPrograms[id] = parsed.programs[id];
-      }
-    });
-    Object.assign(epgData.channels, filteredChannels);
-    Object.keys(filteredPrograms).forEach(k => { epgData.programs[k] = filteredPrograms[k]; });
+    Object.assign(epgData.channels, parsed.channels);
+    Object.keys(parsed.programs).forEach(k => { epgData.programs[k] = parsed.programs[k]; });
     src.lastFetch = Date.now();
     src.chCount = Object.keys(parsed.channels).length;
     saveEpg();
-    toast('EPG updated: ' + src.chCount + ' channels, ' + Object.keys(filteredChannels).length + ' matched');
+    toast('EPG updated: ' + src.chCount + ' channels');
     renderLib();
     renderGuide();
   } catch(e) {
