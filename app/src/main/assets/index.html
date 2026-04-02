@@ -303,7 +303,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     <button class="ib" id="btn-sport-filter-tog" title="Toggle team filter" onclick="window.toggleSportFilter && window.toggleSportFilter()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
     <button class="ib" id="btn-sport-refresh" title="Refresh schedules" onclick="window.refreshAllSportData && window.refreshAllSportData()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg></button>
   </div></div>
-  <div id="sport-filter-bar" style="padding:4px 12px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span id="sport-clock" style="font-size:8px;color:var(--t3);margin-left:auto;font-variant-numeric:tabular-nums"></span></div>
+  <div id="sport-filter-bar" style="padding:4px 12px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap"></div>
   <div id="sport-section-tabs" data-tv-zone="sport-section-tabs" style="padding:2px 12px 2px;display:flex;align-items:center;gap:6px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;-ms-overflow-style:none"></div>
   <div id="sport-team-tabs" data-tv-zone="sport-team-tabs" style="padding:1px 12px 3px;display:flex;align-items:center;gap:6px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;-ms-overflow-style:none"></div>
   <div class="lst" id="sport-lst" style="padding-top:4px"></div>
@@ -1581,7 +1581,7 @@ function showTab(id) {
   if (id === 'sport-scr') {
     renderSportTab();
     _startSportScoreRefresh(); // begin live score polling
-    _startSportClock();           // start live clock
+    _startSportClock();
     // D-pad: focus the first section tab so TV remote can navigate immediately
     setTimeout(() => {
       const firstTab = document.querySelector('#sport-section-tabs [tabindex]');
@@ -4966,7 +4966,6 @@ function renderSportTab() {
       </span>
       <span style="font-size:8px;color:var(--t3)">${allGames.length} games today</span>
       <span id="sport-clock" style="font-size:8px;color:var(--t3);margin-left:auto;font-variant-numeric:tabular-nums"></span>`;
-    _startSportClock();
   }
 
   // ── Section tabs ──
@@ -5995,7 +5994,7 @@ updateSportNavVisibility();
 refreshTvFocus();
 queueStartupAltCheck();
 // Fetch ESPN schedules after a short delay (non-blocking startup)
-setTimeout(() => fetchAllLeagueSchedules(true), 800); // force-fetch on every startup
+setTimeout(() => fetchAllLeagueSchedules(true), 800);
 
 // ── Live score auto-refresh ───────────────────────────────────────────────
 // Re-polls the ESPN scoreboard every 30s when the Sport tab is active.
@@ -6003,6 +6002,7 @@ setTimeout(() => fetchAllLeagueSchedules(true), 800); // force-fetch on every st
 // (typically 1–2 API calls per poll instead of all leagues).
 // The scoreboard endpoint is very lightweight (~10KB per league).
 let _sportScoreTimer = null;
+let _sportClockTimer = null;
 
 async function _refreshLiveScores() {
   if (!$('sport-scr') || !$('sport-scr').classList.contains('on')) return;
@@ -6033,31 +6033,26 @@ async function _refreshLiveScores() {
   }
 }
 
-let _sportClockTimer = null;
-function _startSportClock() {
-  if (_sportClockTimer) return; // already running
-  const update = () => {
-    const el = $('sport-clock');
-    if (!el) { clearInterval(_sportClockTimer); _sportClockTimer = null; return; }
-    const now = new Date();
-    const h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const hh = (h % 12) || 12;
-    el.textContent = `${hh}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')} ${ampm}`;
-  };
-  update();
-  _sportClockTimer = setInterval(update, 1000);
-}
-function _stopSportClock() {
-  if (_sportClockTimer) { clearInterval(_sportClockTimer); _sportClockTimer = null; }
-}
-
 function _startSportScoreRefresh() {
   _stopSportScoreRefresh();
   _sportScoreTimer = setInterval(_refreshLiveScores, 30000);
 }
 function _stopSportScoreRefresh() {
   if (_sportScoreTimer) { clearInterval(_sportScoreTimer); _sportScoreTimer = null; }
+}
+function _startSportClock() {
+  if (_sportClockTimer) return;
+  const tick = () => {
+    const el = document.getElementById('sport-clock');
+    if (!el) { clearInterval(_sportClockTimer); _sportClockTimer = null; return; }
+    const d = new Date(), h = d.getHours(), m = d.getMinutes(), s = d.getSeconds();
+    el.textContent = ((h%12)||12) + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0') + (h>=12?' PM':' AM');
+  };
+  tick();
+  _sportClockTimer = setInterval(tick, 1000);
+}
+function _stopSportClock() {
+  if (_sportClockTimer) { clearInterval(_sportClockTimer); _sportClockTimer = null; }
 }
 
 // Auto-fetch EPG if stale (older than 1 hour)
