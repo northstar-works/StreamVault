@@ -252,8 +252,14 @@ public class MainActivity extends Activity {
                 try { seekMs = Long.parseLong(seekMsStr); } catch (Exception e) {}
                 if (seekMs > 0) intent.putExtra(PlayerActivity.EXTRA_SEEK_MS, seekMs);
 
-                boolean tsEnabled = !"false".equalsIgnoreCase(tsEnabledStr);
+                // Parse "true|30" format (enabled|bufferMinutes)
+                boolean tsEnabled = tsEnabledStr != null && !tsEnabledStr.startsWith("false");
+                int tsMaxMin = 30;
+                if (tsEnabledStr != null && tsEnabledStr.contains(":")) {
+                    try { tsMaxMin = Integer.parseInt(tsEnabledStr.split(":")[1]); } catch (Exception ignored) {}
+                }
                 intent.putExtra("ts_enabled", tsEnabled);
+                intent.putExtra("ts_max_min", tsMaxMin);
 
                 startActivity(intent);
             });

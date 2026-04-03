@@ -4990,7 +4990,9 @@ window.playSportChannel = async (url, lgGroupName) => {
     const category = lgGroupName || primaryTitle;
     const foTimeout = String(settings.foTimeout || 15);
     const foAuto = String(settings.foAuto !== false);
-    const tsEnabled = String(settings.timeshiftEnabled !== false);
+    const tsEnabled = (settings.timeshiftEnabled !== false)
+      ? ('true:' + String(settings.timeshiftMaxMin || 30))
+      : 'false';
 
     if (window.NativePlayer && typeof window.NativePlayer.isAvailable === 'function' && window.NativePlayer.isAvailable()) {
       window.NativePlayer.playStreamExTs(
@@ -5064,25 +5066,25 @@ function renderSportTab() {
         lg.cacheDate === today && Array.isArray(lg.cachedGamesByPath && lg.cachedGamesByPath[p])
       );
       if (hasData) {
-        // Data fetched: check if there are any games (any state)
-        const lgGameCount = (lg.espnPaths || []).reduce((sum, p) => {
+        // Always hide tab when no games today — regardless of filter mode
+        const lgGames = (lg.espnPaths || []).reduce(function(arr, p) {
           const g = lg.cachedGamesByPath && lg.cachedGamesByPath[p];
-          return sum + (Array.isArray(g) ? g.length : 0);
-        }, 0);
-        if (lgGameCount === 0) return; // no games today at all — hide tab
-        // My Teams Only: if filter ON + pinned teams + zero games for pinned team → hide tab
+          return Array.isArray(g) ? arr.concat(g) : arr;
+        }, []);
+        const countableGames = showPast ? lgGames : lgGames.filter(function(g) { return g.state !== 'post'; });
+        if (countableGames.length === 0) return;
+        // My Teams Only: hide tab when pinned team has no games today
         if (filterOn && (lg.pinnedTeams || []).length > 0) {
-          const lgGames = (lg.espnPaths || []).flatMap(p => {
-            const g = lg.cachedGamesByPath && lg.cachedGamesByPath[p];
-            return Array.isArray(g) ? g : [];
+          const pinnedLower = (lg.pinnedTeams || []).map(function(t) { return t.toLowerCase(); });
+          const hasPinnedGame = countableGames.some(function(g) {
+            return (g.teams || []).some(function(tn) {
+              const tl = tn.toLowerCase();
+              return pinnedLower.some(function(p) {
+                return tl.includes(p) || p.split(' ').some(function(w) { return w.length >= 3 && tl.includes(w); });
+              });
+            });
           });
-          const pinnedLower = lg.pinnedTeams.map(t => t.toLowerCase());
-          const hasPinnedGame = lgGames.some(g =>
-            (g.teams || []).some(t => pinnedLower.some(p =>
-              t.toLowerCase().includes(p) || p.split(/\s+/).some(w => w.length >= 3 && t.toLowerCase().includes(w))
-            ))
-          );
-          if (!hasPinnedGame && !showPast) return; // pinned team not playing today — hide tab
+          if (!hasPinnedGame) return;
         }
       }
     }
@@ -5113,18 +5115,22 @@ function renderSportTab() {
       const teams = getPinnedTeamsForLeague(sportSectionTab);
       // Only show team pills for teams that have at least one game in this tab today
       const lgForPills = settings.sportLeagues && settings.sportLeagues.find(l => l.groupName === sportSectionTab);
-      const visibleTeams = teams.filter(t => {
-        if (!lgForPills || !lgForPills.cachedGamesByPath) return true; // no data yet — show all
+      const visibleTeams = teams.filter(function(t) {
+        if (!lgForPills || !lgForPills.cachedGamesByPath) return true;
         const tLower = t.toLowerCase();
-        const lgGames = (lgForPills.espnPaths || []).flatMap(p => {
+        const lgGames = (lgForPills.espnPaths || []).reduce(function(arr, p) {
           const g = lgForPills.cachedGamesByPath[p];
-          return Array.isArray(g) ? g : [];
+          return Array.isArray(g) ? arr.concat(g) : arr;
+        }, []);
+        if (!lgGames.length) return true;
+        // Respect showPast: hide pill if team's only games are already finished
+        const countable = showPast ? lgGames : lgGames.filter(function(g) { return g.state !== 'post'; });
+        if (!countable.length) return false;
+        return countable.some(function(g) {
+          return (g.teams || []).some(function(tn) {
+            return tn.toLowerCase().includes(tLower);
+          });
         });
-        if (!lgGames.length) return true; // no games cached — show pill
-        return lgGames.some(g => (g.teams || []).some(gn =>
-          gn.toLowerCase().includes(tLower) ||
-          tLower.split(/\s+/).some(w => w.length >= 3 && gn.toLowerCase().includes(w))
-        ));
       });
       teamTabs.innerHTML = visibleTeams.length
         ? ['All', ...visibleTeams].map(t =>
@@ -5493,7 +5499,9 @@ window._svPlaySport = (idx) => {
     const category = candidates[0].category || primaryTitle;
     const foTimeout = String(settings.foTimeout || 15);
     const foAuto    = String(settings.foAuto !== false);
-    const tsEnabled = String(settings.timeshiftEnabled !== false);
+    const tsEnabled = (settings.timeshiftEnabled !== false)
+      ? ('true:' + String(settings.timeshiftMaxMin || 30))
+      : 'false';
     if (window.NativePlayer && typeof window.NativePlayer.isAvailable === 'function' && window.NativePlayer.isAvailable()) {
       window.NativePlayer.playStreamExTs(
         JSON.stringify(candidates), primaryTitle, category, '', foTimeout, foAuto,
@@ -5964,7 +5972,9 @@ window.playItem = async (id) => {
       const foTimeout = String(settings.foTimeout || 15);
       const foAuto = String(settings.foAuto !== false);
       // SINGLE method call — all String params — NO overloading
-      const tsEnabled = String(settings.timeshiftEnabled !== false);
+      const tsEnabled = (settings.timeshiftEnabled !== false)
+      ? ('true:' + String(settings.timeshiftMaxMin || 30))
+      : 'false';
       // Pass itemId only for Plex/VOD — empty string for ITV so native isIptvItem() works correctly
       const nativeItemId = isPlexItem(m) ? (m.id || '') : '';
       window.NativePlayer.playStreamExTs(json, m.title || 'Stream', category, nowNext || '', foTimeout, foAuto, settings.savePath || '', nativeItemId, '0', tsEnabled);
@@ -6001,16 +6011,42 @@ window.playItem = async (id) => {
       video.style.cssText = 'width:100%;height:100%;background:#000';
       $('pc').appendChild(video);
 
-      hlsInst = new Hls({ enableWorker: true });
+      const _tsMaxMin = (settings.timeshiftEnabled !== false) ? (settings.timeshiftMaxMin || 30) : 0;
+      const _tsMaxSec = _tsMaxMin * 60;
+      hlsInst = new Hls({
+        enableWorker: true,
+        // Buffer up to the user's timeshift window so pause holds position
+        maxBufferLength:    _tsMaxSec > 0 ? _tsMaxSec : 60,
+        maxMaxBufferLength: _tsMaxSec > 0 ? _tsMaxSec + 60 : 120,
+        liveSyncDurationCount: 3,
+        liveMaxLatencyDurationCount: 10,
+        // Keep segments in memory so seeking back works
+        backBufferLength: _tsMaxSec > 0 ? _tsMaxSec : 60,
+      });
       hlsInst.attachMedia(video);
       hlsInst.on(Hls.Events.MEDIA_ATTACHED, () => hlsInst.loadSource(url));
       hlsInst.on(Hls.Events.MANIFEST_PARSED, () => {
         $('ld2').style.display = 'none';
         video.play().catch(() => {});
       });
+      // Track pause position for timeshift resume
+      let _pausedAt = null;
+      video.addEventListener('pause', function() { _pausedAt = video.currentTime; });
+      video.addEventListener('play',  function() {
+        // If we paused and have buffered data, stay at pause point
+        // otherwise let HLS snap to live edge naturally
+        if (_pausedAt !== null) {
+          const buf = video.buffered;
+          let inBuf = false;
+          for (let i = 0; i < buf.length; i++) {
+            if (_pausedAt >= buf.start(i) - 0.5 && _pausedAt <= buf.end(i) + 0.5) { inBuf = true; break; }
+          }
+          if (inBuf) video.currentTime = _pausedAt;
+          _pausedAt = null;
+        }
+      });
       hlsInst.on(Hls.Events.ERROR, (_, data) => {
         if (data.fatal) {
-          // Fallback to iframe
           $('pc').innerHTML = '<iframe src="' + esc(m.url) + '" style="width:100%;height:100%;border:none" allowfullscreen></iframe>';
           $('ld2').style.display = 'none';
         }

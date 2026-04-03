@@ -118,6 +118,8 @@ public class PlayerActivity extends Activity {
     private volatile boolean timeshiftPaused   = false;
     private volatile long    timeshiftBufMs    = 0;   // ms of buffer accumulated
     private volatile long    timeshiftPausedAt = 0;
+    private volatile long    timeshiftPausedPos = 0;  // player ms position when paused
+    private volatile int     timeshiftMaxMin   = 30;  // buffer window from settings
     private volatile long    timeshiftOffset   = 0;   // ms behind live
     private static final long TS_MAX_BUF_MS   = 3600_000L; // 1 hour max
     private Thread      timeshiftThread;
@@ -176,6 +178,7 @@ public class PlayerActivity extends Activity {
         itemId      = getIntent().getStringExtra(EXTRA_ITEM_ID);
         long globalSeek = getIntent().getLongExtra(EXTRA_SEEK_MS, 0);
         timeshiftUserEnabled = getIntent().getBooleanExtra("ts_enabled", true);
+        timeshiftMaxMin      = getIntent().getIntExtra("ts_max_min", 30);
 
         String json = getIntent().getStringExtra(EXTRA_FAILOVER_JSON);
         if (json != null && !json.isEmpty()) {
@@ -485,7 +488,15 @@ public class PlayerActivity extends Activity {
             .setConnectTimeoutMs(12000).setReadTimeoutMs(12000)
             .setAllowCrossProtocolRedirects(true);
         // Wake lock keeps CPU alive during HLS segment downloads
-        player = new ExoPlayer.Builder(this).build();
+        long tsBufferMs = (long) timeshiftMaxMin * 60 * 1000L;
+        if (tsBufferMs <= 0) tsBufferMs = 30 * 60 * 1000L;
+        androidx.media3.exoplayer.DefaultLoadControl loadControl =
+            new androidx.media3.exoplayer.DefaultLoadControl.Builder()
+                .setBufferDurationsMs(15_000, (int) Math.min(tsBufferMs, 3_600_000),
+                    2_500, 5_000)
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .build();
+        player = new ExoPlayer.Builder(this).setLoadControl(loadControl).build();
         acquireWifiLock();
         playerView.setPlayer(player);
         playbackStartTime = System.currentTimeMillis();
@@ -619,6 +630,7 @@ public class PlayerActivity extends Activity {
         if (player==null||!timeshiftEnabled) return;
         timeshiftPaused   = true;
         timeshiftPausedAt = System.currentTimeMillis();
+        timeshiftPausedPos = player.getCurrentPosition();
         player.pause();
         updatePlayPauseIcon();
         updateTimeshiftUI();
@@ -627,11 +639,16 @@ public class PlayerActivity extends Activity {
     private void resumeTimeshift() {
         if (player==null) return;
         timeshiftPaused = false;
-        timeshiftOffset = System.currentTimeMillis()-timeshiftPausedAt;
+        timeshiftOffset = System.currentTimeMillis() - timeshiftPausedAt;
+        // Seek to exact paused position — ExoPlayer live streams jump to live edge
+        // on play() by default; seekTo() keeps us at the buffered pause point.
+        if (timeshiftPausedPos > 0) {
+            try { player.seekTo(timeshiftPausedPos); } catch (Exception ignored) {}
+        }
         player.play();
         updatePlayPauseIcon();
         updateTimeshiftUI();
-        // Buffer is now playing from where it was — ExoPlayer handles the lag naturally
+        showMsg("▶ Resuming — " + (timeshiftOffset / 1000) + "s behind live");
     }
     private void jumpToLive() {
         if (player==null) return;
