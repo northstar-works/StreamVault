@@ -1140,11 +1140,46 @@ function restoreBackupPayload(data) {
     m.baseName = m.baseName || extractBase(m.title || m.name || '');
   });
   saveItems(); saveRepos(); saveEpg(); saveSettings();
-  // Reload the page instead of rendering inline — large libraries (60k+ streams) will
-  // freeze the WebView if we try to render them all immediately after restore.
-  // The normal startup flow handles pagination and lazy rendering safely.
-  toast('Backup restored — reloading…');
-  setTimeout(() => location.reload(), 1200);
+  // Re-initialize in-place instead of location.reload().
+  // location.reload() called from inside a Java bridge evaluateJavascript callback
+  // causes a WebView deadlock/freeze on Fire TV — the page "reloads" but the JS
+  // engine never recovers, killing D-pad navigation permanently.
+  toast('Backup restored ✓');
+  setTimeout(() => {
+    try {
+      // Reset UI state
+      activeCat = 'All';
+      activeLibPage = 'all';
+      libEditMode = false;
+      libSearchOpen = false;
+      sportSectionTab = 'live';
+      sportActiveTeam = 'All';
+      _invalidateSportCache && _invalidateSportCache();
+      _invalidateSportTabCache && _invalidateSportTabCache();
+      // Apply settings and re-render everything
+      applyTvMode();
+      ensureActiveLibPage();
+      renderCats();
+      renderLib();
+      renderRepos();
+      renderSettings();
+      renderEpgList();
+      renderGuide();
+      updateSportNavVisibility();
+      renderSportTab();
+      // Fetch fresh schedules with the new leagues
+      if (typeof fetchAllLeagueSchedules === 'function') {
+        fetchAllLeagueSchedules(true);
+      }
+      // Go to home screen and restore focus
+      showTab('lib-scr');
+      setTimeout(refreshTvFocus, 80);
+    } catch(e) {
+      console.error('[SV] restoreBackupPayload re-init failed:', e);
+      // Last resort: reload (but this may freeze on some Fire TV versions)
+      location.reload();
+    }
+  }, 400);
 }
 
 // ─── M3U Parser ───
