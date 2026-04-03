@@ -4431,6 +4431,13 @@ const ESPN_LEAGUE_MAP = [
   { keys:['ncaa football','cfb','college football'],       path:'football/college-football',            label:'CFB' },
   { keys:['ncaa basketball','ncaab','college basketball'], path:'basketball/mens-college-basketball',   label:'NCAAB' },
   { keys:['liga mx'],                                      path:'soccer/mex.1',                         label:'Liga MX' },
+  { keys:['ufc','mma','ultimate fighting'],                path:'mma/ufc',                              label:'UFC/MMA' },
+  { keys:['boxing','ppv boxing'],                          path:'boxing/boxing',                        label:'Boxing' },
+  { keys:['tennis','atp','wta'],                           path:'tennis/atp',                           label:'Tennis' },
+  { keys:['golf','pga'],                                   path:'golf/leaderboard',                     label:'Golf' },
+  { keys:['racing','nascar'],                              path:'racing/nascar',                        label:'NASCAR' },
+  { keys:['formula 1','formula one','f1'],                 path:'racing/f1',                            label:'Formula 1' },
+  { keys:['cricket'],                                      path:'cricket/icc-cricket',                  label:'Cricket' },
 ];
 const ESPN_SPORT_OPTIONS = ESPN_LEAGUE_MAP.map(e => ({ path: e.path, label: e.label }));
 
@@ -4458,6 +4465,10 @@ function guessEspnPaths(groupName) {
   // Generic multi-sport group → all major US leagues
   if (/\bsports?\b/.test(gl) && !ESPN_LEAGUE_MAP.some(e => e.keys.some(k => gl.includes(k) && k.length > 6))) {
     return ['baseball/mlb','football/nfl','hockey/nhl','basketball/nba'];
+  }
+  // PPV / combat sports groups → UFC + Boxing
+  if (/\bppv\b|pay.per.view|combat sport|fight night/i.test(gl)) {
+    return ['mma/ufc','boxing/boxing'];
   }
   const paths = [];
   for (const e of ESPN_LEAGUE_MAP) {
@@ -4984,7 +4995,39 @@ function renderSportTab() {
   leagues.forEach(lg => {
     const hasPaths = (lg.espnPaths || (lg.espnPath ? [lg.espnPath] : [])).length > 0;
     const hasChs   = getSportGroupItems(lg).length > 0;
-    if (!hasPaths && !hasChs) return; // nothing to show for this league
+    if (!hasPaths && !hasChs) return; // no ESPN paths AND no channels — skip
+
+    // Hide tab if ESPN data is loaded but there are zero games today for this league
+    // (only hide if we've actually fetched — cacheDate matches today)
+    if (hasPaths) {
+      const today = new Date().toISOString().slice(0, 10);
+      const hasData = (lg.espnPaths || []).some(p =>
+        lg.cacheDate === today && Array.isArray(lg.cachedGamesByPath && lg.cachedGamesByPath[p])
+      );
+      if (hasData) {
+        // Data fetched: check if there are any games (any state)
+        const lgGameCount = (lg.espnPaths || []).reduce((sum, p) => {
+          const g = lg.cachedGamesByPath && lg.cachedGamesByPath[p];
+          return sum + (Array.isArray(g) ? g.length : 0);
+        }, 0);
+        if (lgGameCount === 0) return; // no games today at all — hide tab
+        // My Teams Only: if filter ON + pinned teams + zero games for pinned team → hide tab
+        if (filterOn && (lg.pinnedTeams || []).length > 0) {
+          const lgGames = (lg.espnPaths || []).flatMap(p => {
+            const g = lg.cachedGamesByPath && lg.cachedGamesByPath[p];
+            return Array.isArray(g) ? g : [];
+          });
+          const pinnedLower = lg.pinnedTeams.map(t => t.toLowerCase());
+          const hasPinnedGame = lgGames.some(g =>
+            (g.teams || []).some(t => pinnedLower.some(p =>
+              t.toLowerCase().includes(p) || p.split(/\s+/).some(w => w.length >= 3 && t.toLowerCase().includes(w))
+            ))
+          );
+          if (!hasPinnedGame && !showPast) return; // pinned team not playing today — hide tab
+        }
+      }
+    }
+
     tabs.push({ id: lg.groupName, label: lg.groupName, badge: null });
   });
   tabs.push({ id: 'allgames', label: '📅 All Games', badge: null });
@@ -5009,9 +5052,24 @@ function renderSportTab() {
       teamTabs.innerHTML = '';
     } else {
       const teams = getPinnedTeamsForLeague(sportSectionTab);
-      teamTabs.innerHTML = teams.length
-        ? ['All', ...teams].map(t =>
-            `<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;${t === sportActiveTeam ? 'background:var(--ac);color:#fff' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportTeamTab('${t.replace(/'/g,"\\'")}')">
+      // Only show team pills for teams that have at least one game in this tab today
+      const lgForPills = settings.sportLeagues && settings.sportLeagues.find(l => l.groupName === sportSectionTab);
+      const visibleTeams = teams.filter(t => {
+        if (!lgForPills || !lgForPills.cachedGamesByPath) return true; // no data yet — show all
+        const tLower = t.toLowerCase();
+        const lgGames = (lgForPills.espnPaths || []).flatMap(p => {
+          const g = lgForPills.cachedGamesByPath[p];
+          return Array.isArray(g) ? g : [];
+        });
+        if (!lgGames.length) return true; // no games cached — show pill
+        return lgGames.some(g => (g.teams || []).some(gn =>
+          gn.toLowerCase().includes(tLower) ||
+          tLower.split(/\s+/).some(w => w.length >= 3 && gn.toLowerCase().includes(w))
+        ));
+      });
+      teamTabs.innerHTML = visibleTeams.length
+        ? ['All', ...visibleTeams].map(t =>
+            `<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;${t === sportActiveTeam ? 'background:var(--ac);color:#fff' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportTeamTab('${t.replace(/'/g,"\'")}')">
               ${esc(t === 'All' ? '⚽ All' : t)}
             </span>`
           ).join('')
