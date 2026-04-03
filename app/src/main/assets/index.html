@@ -1131,6 +1131,30 @@ function restoreBackupPayload(data) {
   epgSrc = Array.isArray(data.epgSrc) ? data.epgSrc : [];
   epgData = data.epgData && typeof data.epgData === 'object' ? data.epgData : { channels:{}, programs:{} };
   settings = { ...settings, ...(data.settings || {}) };
+
+  // ── TV-safe overrides ──────────────────────────────────────────────────────
+  // If we are running on a TV device, never let tvMode be 'off'.
+  // An Android phone backup has tvMode='off'; injecting it onto Fire TV
+  // silently disables the entire D-pad system — the app appears frozen.
+  const _isTvNow = (window.NativePlayer && typeof window.NativePlayer.isTv === 'function')
+    ? window.NativePlayer.isTv()
+    : (typeof isTvDevice !== 'undefined' ? isTvDevice : false);
+  if (_isTvNow && (!settings.tvMode || settings.tvMode === 'off')) {
+    settings.tvMode = 'auto';
+  }
+
+  // Clear Android content:// URIs — they are invalid on Fire TV and
+  // will cause file-picker crashes if the app tries to use them.
+  if (settings.savePath && settings.savePath.startsWith('content://')) {
+    settings.savePath = '';
+    settings.savePathLabel = '';
+  }
+  if (settings.backupPath && settings.backupPath.startsWith('content://')) {
+    settings.backupPath = '';
+    settings.backupPathLabel = '';
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   items.forEach(m => {
     m.icon = m.icon || '';
     m.epgLink = m.epgLink || '';
