@@ -40,8 +40,15 @@ import java.io.ByteArrayOutputStream;
 
 import org.json.JSONObject;
 import java.nio.charset.StandardCharsets;
+import java.net.ServerSocket;
+import java.net.Socket;
 
 public class MainActivity extends Activity {
+
+    // ── Network Inject Server ────────────────────────────────────────────────
+    private static final int INJECT_PORT = 7654;
+    private ServerSocket injectServer;
+    private Thread injectServerThread;
 
     private boolean isTvDevice() {
         int uiMode = getResources().getConfiguration().uiMode & Configuration.UI_MODE_TYPE_MASK;
@@ -101,6 +108,7 @@ public class MainActivity extends Activity {
 
         setContentView(root);
         webView.loadUrl("file:///android_asset/index.html");
+        startNetworkInjectServer();
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -328,6 +336,127 @@ public class MainActivity extends Activity {
         }
     }
 
+    // ── Network Inject HTTP Server ───────────────────────────────────────────
+    // Listens on port 7654 for config pushes from the PC Configurator.
+    //   GET  /ping   → {"status":"ok","app":"StreamVault"}
+    //   POST /inject → body = backup JSON → calls onInjectFileFound in JS
+
+    private void startNetworkInjectServer() {
+        injectServerThread = new Thread(() -> {
+            try {
+                injectServer = new ServerSocket(INJECT_PORT);
+                android.util.Log.i("SV-Inject", "Network inject server listening on port " + INJECT_PORT);
+                while (!injectServer.isClosed()) {
+                    try {
+                        Socket client = injectServer.accept();
+                        new Thread(() -> handleInjectClient(client)).start();
+                    } catch (Exception e) {
+                        if (!injectServer.isClosed())
+                            android.util.Log.w("SV-Inject", "Accept error: " + e.getMessage());
+                    }
+                }
+            } catch (Exception e) {
+                android.util.Log.e("SV-Inject", "Server failed to start: " + e.getMessage());
+            }
+        });
+        injectServerThread.setDaemon(true);
+        injectServerThread.start();
+    }
+
+    private void handleInjectClient(Socket client) {
+        try {
+            client.setSoTimeout(8000);
+            java.io.InputStream rawIn = client.getInputStream();
+            java.io.OutputStream out  = client.getOutputStream();
+            java.io.BufferedReader br = new java.io.BufferedReader(
+                new java.io.InputStreamReader(rawIn, StandardCharsets.UTF_8));
+
+            // --- Parse request line ---
+            String requestLine = br.readLine();
+            if (requestLine == null) { client.close(); return; }
+            String[] rParts = requestLine.split(" ", 3);
+            String method = rParts.length > 0 ? rParts[0].toUpperCase() : "GET";
+            String path   = rParts.length > 1 ? rParts[1] : "/";
+
+            // --- Read headers ---
+            int contentLength = 0;
+            String hLine;
+            while ((hLine = br.readLine()) != null && !hLine.isEmpty()) {
+                if (hLine.toLowerCase().startsWith("content-length:")) {
+                    try { contentLength = Integer.parseInt(hLine.substring(15).trim()); }
+                    catch (Exception ignored) {}
+                }
+            }
+
+            // CORS headers so Electron renderer fetch() works too
+            final String CORS = "Access-Control-Allow-Origin: *\r\n" +
+                                "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
+                                "Access-Control-Allow-Headers: Content-Type\r\n";
+
+            if ("OPTIONS".equals(method)) {
+                sendHttpResponse(out, "200 OK", CORS, "");
+                client.close(); return;
+            }
+
+            if ("GET".equals(method) && "/ping".equals(path)) {
+                String body = "{\"status\":\"ok\",\"app\":\"StreamVault\",\"port\":" + INJECT_PORT + "}";
+                sendHttpResponse(out, "200 OK", CORS + "Content-Type: application/json\r\n", body);
+                client.close(); return;
+            }
+
+            if ("POST".equals(method) && "/inject".equals(path)) {
+                if (contentLength <= 0 || contentLength > 8 * 1024 * 1024) {
+                    sendHttpResponse(out, "400 Bad Request", CORS, "Invalid Content-Length");
+                    client.close(); return;
+                }
+                // Read body (BufferedReader may have buffered some; use raw stream for remainder)
+                char[] buf = new char[contentLength];
+                int read = 0;
+                while (read < contentLength) {
+                    int n = br.read(buf, read, contentLength - read);
+                    if (n < 0) break;
+                    read += n;
+                }
+                String jsonText = new String(buf, 0, read);
+                if (!jsonText.trim().startsWith("{")) {
+                    sendHttpResponse(out, "400 Bad Request", CORS, "Body must be JSON object");
+                    client.close(); return;
+                }
+                // ACK immediately, then apply on UI thread
+                sendHttpResponse(out, "200 OK", CORS + "Content-Type: application/json\r\n", "{\"status\":\"ok\"}");
+                client.close();
+                final String jt = jsonText;
+                runOnUiThread(() -> {
+                    String escaped = JSONObject.quote(jt);
+                    webView.evaluateJavascript(
+                        "window.onInjectFileFound && window.onInjectFileFound(" + escaped + ",'network-inject.json');",
+                        null);
+                    toastNative("📡 Network inject received — applying settings…");
+                });
+                return;
+            }
+
+            sendHttpResponse(out, "404 Not Found", CORS, "Not found");
+            client.close();
+        } catch (Exception e) {
+            android.util.Log.w("SV-Inject", "Client handler error: " + e.getMessage());
+            try { client.close(); } catch (Exception ignored) {}
+        }
+    }
+
+    private void sendHttpResponse(java.io.OutputStream out, String status,
+                                  String extraHeaders, String body) throws java.io.IOException {
+        byte[] bodyBytes = body.getBytes(StandardCharsets.UTF_8);
+        String headers = "HTTP/1.1 " + status + "\r\n" +
+            extraHeaders +
+            "Content-Length: " + bodyBytes.length + "\r\n" +
+            "Connection: close\r\n\r\n";
+        out.write(headers.getBytes(StandardCharsets.UTF_8));
+        if (bodyBytes.length > 0) out.write(bodyBytes);
+        out.flush();
+    }
+
+    // ── USB Inject File Scanner ──────────────────────────────────────────────
     private void scanUsbInjectFile() {
         new Thread(() -> {
             try {
@@ -835,6 +964,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        try { if (injectServer != null && !injectServer.isClosed()) injectServer.close(); } catch (Exception ignored) {}
         if (webView != null) {
             webView.stopLoading();
             webView.destroy();
