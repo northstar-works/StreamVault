@@ -1195,6 +1195,28 @@ function restoreBackupPayload(data) {
       if (typeof fetchAllLeagueSchedules === 'function') {
         fetchAllLeagueSchedules(true);
       }
+      // Refresh all repos from their injected sourceURLs so channels reflect the
+      // current playlist (not stale cached data), then re-fetch EPG to match.
+      // Staggered: repos first (1.2 s delay), EPG after repos finish.
+      if (repos.length) {
+        setTimeout(async () => {
+          let refreshed = 0;
+          for (const repo of repos) {
+            if (repo.sourceUrl) {
+              try { await window.refreshRepo(repo.id); refreshed++; }
+              catch(e) { console.warn('[SV] repo refresh failed:', repo.name, e.message); }
+            }
+          }
+          if (refreshed) toast(refreshed + ' repo' + (refreshed > 1 ? 's' : '') + ' refreshed ✓');
+          // Now refresh EPG so guide channel matches align with fresh stream list
+          if (epgSrc.length) {
+            fetchAllEpg().catch(e => console.warn('[SV] EPG refresh failed:', e.message));
+          }
+        }, 1200);
+      } else if (epgSrc.length) {
+        // No repos but EPG exists — still refresh EPG
+        setTimeout(() => fetchAllEpg().catch(() => {}), 1200);
+      }
       // Go to home screen and restore focus
       showTab('lib-scr');
       setTimeout(refreshTvFocus, 80);
@@ -3517,6 +3539,27 @@ function scrollGuideToRow(chIdx) {
   gw.scrollTop = Math.max(0, center);
 }
 
+// ── Guide D-pad helpers (module-level so BACK handler can also use them) ───
+function _guideGoToNav() {
+  const allEls = getTvFocusableElements();
+  const navEls = allEls.filter(el => el.closest && el.closest('#bnav'));
+  if (!navEls.length) return false;
+  const guideNav = navEls.find(el => el.dataset && el.dataset.t === 'guide-scr');
+  const target = guideNav || navEls[1] || navEls[0];
+  const idx = allEls.indexOf(target);
+  return idx >= 0 ? focusElementAtIndex(idx) : false;
+}
+
+function _guideGoToHeader() {
+  // Focus the first reachable header button (refresh is most useful so try it first)
+  const allEls = getTvFocusableElements();
+  for (const id of ['btn-eref', 'btn-gsync', 'btn-emgr']) {
+    const btn = document.getElementById(id);
+    if (btn) { const idx = allEls.indexOf(btn); if (idx >= 0) return focusElementAtIndex(idx); }
+  }
+  return false;
+}
+
 function handleGuideDpad(current, dirCode) {
   const isGch  = current.classList.contains('gch');
   const isGpr  = current.classList.contains('gpr');
@@ -3524,21 +3567,12 @@ function handleGuideDpad(current, dirCode) {
   const prIdx  = isGpr ? parseInt(current.dataset.progIdx || '0') : 0;
   const total  = document.querySelectorAll('.gch').length;
 
-  // Helper: focus a guide nav item (preferring Guide tab)
-  const goToNav = () => {
-    const allEls = getTvFocusableElements();
-    const navEls = allEls.filter(el => el.closest && el.closest('#bnav'));
-    if (!navEls.length) return false;
-    const guideNav = navEls.find(el => el.dataset && el.dataset.t === 'guide-scr');
-    const target = guideNav || navEls[1] || navEls[0];
-    const idx = allEls.indexOf(target);
-    return idx >= 0 ? focusElementAtIndex(idx) : false;
-  };
+  const goToNav = _guideGoToNav;
 
   if (isGch) {
     if (dirCode === 19) { // UP
       if (chIdx > 0) { scrollGuideToRow(chIdx-1); return focusGuideElement(document.querySelector(`.gch[data-ch-idx="${chIdx-1}"]`)); }
-      return false;
+      return _guideGoToHeader(); // first row → guide header buttons (EPG refresh, sync, settings)
     }
     if (dirCode === 20) { // DOWN
       if (chIdx < total - 1) { scrollGuideToRow(chIdx+1); return focusGuideElement(document.querySelector(`.gch[data-ch-idx="${chIdx+1}"]`)); }
@@ -3583,7 +3617,7 @@ function handleGuideDpad(current, dirCode) {
         const target = best || document.querySelector(`.gch[data-ch-idx="${chIdx-1}"]`);
         if (target) { scrollGuideToRow(chIdx-1); return focusGuideElement(target); }
       }
-      return false;
+      return _guideGoToHeader(); // first row → guide header buttons
     }
     if (dirCode === 20) { // DOWN → same horizontal pos in next channel
       if (chIdx < total - 1) {
@@ -3622,6 +3656,16 @@ function moveTvFocusSpatial(dirCode) {
   if ($('guide-scr') && $('guide-scr').classList.contains('on') &&
       current.classList && (current.classList.contains('gch') || current.classList.contains('gpr'))) {
     return handleGuideDpad(current, dirCode);
+  }
+
+  // Guide-page: header buttons (⚙ sync refresh) → DOWN enters the channel list
+  if ($('guide-scr') && $('guide-scr').classList.contains('on') &&
+      current.closest && current.closest('.hd')) {
+    if (dirCode === 20) { // DOWN → first channel row
+      const first = document.querySelector('.gch[data-ch-idx="0"]');
+      if (first) return focusGuideElement(first);
+    }
+    // LEFT/RIGHT between header buttons — fall through to spatial
   }
 
   // EPG dropdown: up/down between options; up from first = back to search input
@@ -3954,6 +3998,17 @@ window.__svHandleTvKey = function(code) {
   if (code === 4) {
     if ($('player-scr').classList.contains('on')) { destroyPlayer(); showTab('lib-scr'); refreshTvFocus(); return true; }
     if ($('br-scr').classList.contains('on')) { showTab('repo-scr'); refreshTvFocus(); return true; }
+    // BACK from guide channel/program cells → focus bottom nav (so user can switch tabs)
+    if ($('guide-scr') && $('guide-scr').classList.contains('on')) {
+      const backEl = getTvFocusableElements()[tvFocusIndex] || document.activeElement;
+      if (backEl && (backEl.classList.contains('gch') || backEl.classList.contains('gpr'))) {
+        return _guideGoToNav();
+      }
+      // BACK from guide header buttons → bottom nav
+      if (backEl && backEl.closest && backEl.closest('.hd')) {
+        return _guideGoToNav();
+      }
+    }
     const openModal = document.querySelector('.mo.on,.cod.on');
     // Close EPG dropdown first if open
     if (_epgDropdownOpen) {
@@ -6149,6 +6204,19 @@ queueStartupAltCheck();
 // Fetch ESPN schedules after a short delay (non-blocking startup)
 setTimeout(() => fetchAllLeagueSchedules(true), 800);
 
+// ── Startup repo + EPG refresh ────────────────────────────────────────────
+// Refresh all repos with a sourceUrl so channels are always current on launch,
+// then re-fetch EPG so guide channel matching is fresh.
+// Staggered so the UI renders first and fetchAllLeagueSchedules fires first.
+setTimeout(async () => {
+  const urlRepos = repos.filter(r => r.sourceUrl);
+  for (const repo of urlRepos) {
+    try { await window.refreshRepo(repo.id); }
+    catch(e) { console.warn('[SV] startup repo refresh:', repo.name, e.message); }
+  }
+  if (epgSrc.length) fetchAllEpg().catch(() => {});
+}, 2000);
+
 // ── Live score auto-refresh ───────────────────────────────────────────────
 // Re-polls the ESPN scoreboard every 30s when the Sport tab is active.
 // Only leagues that have a live or soon-starting game are re-fetched
@@ -6208,11 +6276,7 @@ function _stopSportClock() {
   if (_sportClockTimer) { clearInterval(_sportClockTimer); _sportClockTimer = null; }
 }
 
-// Auto-fetch EPG if stale (older than 1 hour)
-if (epgSrc.length) {
-  const oldest = Math.min(...epgSrc.map(s => s.lastFetch || 0));
-  if (Date.now() - oldest > 3600000) fetchAllEpg();
-}
+// EPG is now refreshed unconditionally at startup via the startup refresh block above.
 
 // Startup channel
 if (settings.startupChannel) {
