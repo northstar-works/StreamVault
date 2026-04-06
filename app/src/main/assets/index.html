@@ -3939,12 +3939,50 @@ function moveTvFocusSpatial(dirCode) {
   // ── Channel list (home grid): index-based navigation ──────────────────────
   // ── Sport section/team tabs → DPad down to first game card ─────────────
   if (currentZone === 'sport-section-tabs' || currentZone === 'sport-team-tabs') {
-    if (dirCode === 20) {
+    if (dirCode === 20) { // DOWN → first game card
       const firstCard = document.querySelector('.sport-gc');
       if (firstCard) {
         firstCard.scrollIntoView({block:'nearest'});
         const i = els.indexOf(firstCard); if (i >= 0) return focusElementAtIndex(i);
       }
+    }
+    if (dirCode === 22 || dirCode === 21) { // RIGHT / LEFT → stay in pill row
+      // Collect all pills from section-tabs ONLY for section navigation.
+      // Don't mix with team-tabs here — they are a separate row.
+      var secPills = Array.from(document.querySelectorAll('#sport-section-tabs [tabindex]'));
+      var teamPills = Array.from(document.querySelectorAll('#sport-team-tabs [tabindex]'));
+      var inSec = secPills.includes(current);
+      var inTeam = teamPills.includes(current);
+      var rowPills = inSec ? secPills : (inTeam ? teamPills : []);
+      var ci2 = rowPills.indexOf(current);
+      if (ci2 >= 0) {
+        var ni2 = dirCode === 22 ? ci2 + 1 : ci2 - 1;
+        if (ni2 >= 0 && ni2 < rowPills.length) {
+          var tgt2 = rowPills[ni2];
+          tgt2.scrollIntoView({block:'nearest', inline:'nearest'});
+          var ti2 = els.indexOf(tgt2);
+          if (ti2 >= 0) return focusElementAtIndex(ti2);
+          tgt2.focus(); return true;
+        }
+        // At edge: if RIGHT from last section pill, try first team pill
+        if (dirCode === 22 && inSec && teamPills.length > 0 && ci2 === rowPills.length - 1) {
+          var tp = teamPills[0];
+          tp.scrollIntoView({block:'nearest', inline:'nearest'});
+          var tpi = els.indexOf(tp); if (tpi >= 0) return focusElementAtIndex(tpi);
+          tp.focus(); return true;
+        }
+        // At left edge of team pills, go back to last section pill
+        if (dirCode === 21 && inTeam && secPills.length > 0 && ci2 === 0) {
+          var sp = secPills[secPills.length - 1];
+          sp.scrollIntoView({block:'nearest', inline:'nearest'});
+          var spi = els.indexOf(sp); if (spi >= 0) return focusElementAtIndex(spi);
+          sp.focus(); return true;
+        }
+      }
+      return true; // swallow at all edges — never fall through to spatial nav
+    }
+    if (dirCode === 19) { // UP → section-tabs should do nothing (already at top)
+      return true; // swallow
     }
   }
 
@@ -5051,7 +5089,11 @@ function shouldShowSportTeam(item) {
   if (!anyFetched || !anyGames) return true; // no data yet / off-season → show all
   // PPV / event-based groups: show ALL channels when any event is scheduled today.
   // (UFC 327 channels are named "PPV 01: Main Card" etc., not by fighter name)
-  const isPpvGroup = /ppv|pay.per.view|ufc|boxing|combat/i.test(cfg.groupName);
+  // Event-based bypass: group name OR ESPN paths containing combat sports.
+  // Covers Paramount+ which has mma/ufc as an ESPN path but a neutral group name.
+  var _combatPaths = ['mma/ufc','boxing/boxing','mma/bellator','mma/pfl'];
+  var isPpvGroup = /\bppv\b|pay.per.view|ufc|boxing|combat/i.test(cfg.groupName)
+    || paths.some(function(p) { return _combatPaths.indexOf(p) >= 0; });
   if (isPpvGroup && anyGames) return true;
   return !!findGameForItem(item);
 }
@@ -5423,7 +5465,14 @@ function renderSportTab() {
       });
       if (anyFetched) {
         const countableGames = showPast ? lgGamesAny : lgGamesAny.filter(function(g) { return g.state !== 'post'; });
-        if (countableGames.length === 0) return; // no games → hide tab
+        if (countableGames.length === 0) return; // no cached games at all → hide tab
+        // Also hide if _getAllTodayGames would yield no results for this tab
+        // (e.g. NCAA/EPL with ESPN paths that returned [] today)
+        var _tabCheck = _getAllTodayGames().filter(function(g) {
+          if (!showPast && g.state === 'post') return false;
+          return g._lgName === lg.groupName;
+        });
+        if (anyFetched && _tabCheck.length === 0) return; // dedup shows tab empty → hide
         // Fix 4 (updated): hide tab when My Teams Only is ON and no global team has a game here.
         // Uses _getLeagueTeamObjects so US Sports / Paramount+ check their scoped teams.
         if (filterOn) {
@@ -5696,11 +5745,21 @@ function renderSportTab() {
   };
 
   // Filter games for this tab
+  // Use _path-in-paths filter instead of _lgName match — this fixes groups (US Sports,
+  // Paramount+) that share ESPN paths with specific leagues: when MLB Baseball fetches
+  // a game first, that game gets _lgName="MLB Baseball league" in the dedup set.
+  // US Sports tab would then find zero results using _lgName match, even though its cache
+  // has 23 games. Path-based filter shows any game whose ESPN path is in this league's config.
+  const lgConfig = lgName ? (settings.sportLeagues || []).find(function(l) { return l.groupName === lgName; }) : null;
+  const lgEspnPaths = lgConfig ? (lgConfig.espnPaths || []) : [];
   let tabGames = allGames.filter(g => {
     // Live tab: only live games
     if (isLiveTab && g.state !== 'in') return false;
-    // League tab: only this league's games
-    if (lgName && g._lgName !== lgName) return false;
+    // League tab: game's ESPN path must be in this league's configured paths
+    if (lgName) {
+      if (lgEspnPaths.length > 0 && !lgEspnPaths.includes(g._path)) return false;
+      else if (lgEspnPaths.length === 0 && g._lgName !== lgName) return false; // no paths → legacy name match
+    }
     // Hide past games if setting off
     if (!showPast && g.state === 'post') return false;
     return true;
@@ -5751,6 +5810,9 @@ function renderSportTab() {
 
 // ── All Games tab: ESPN schedule cards ───────────────────────────────────────
 function _getAllTodayGames() {
+  // Dedup key includes groupName+path so multi-path groups (US Sports, Paramount+)
+  // each get their own copy of games that overlap with specific leagues.
+  // The All Games tab deduplicates further by shortName+startTime to avoid visual dupes.
   const seen = new Set();
   const out = [];
   (settings.sportLeagues || []).forEach(lg => {
@@ -5759,7 +5821,8 @@ function _getAllTodayGames() {
       const games = lg.cachedGamesByPath && lg.cachedGamesByPath[path];
       if (!Array.isArray(games)) return;
       games.forEach(g => {
-        const key = g.shortName + '|' + g.startTime;
+        // Key includes league so US Sports sees its own copy of MLB games
+        const key = lg.groupName + '|' + path + '|' + g.shortName + '|' + g.startTime;
         if (!seen.has(key)) { seen.add(key); out.push({ ...g, _path: path, _lgName: lg.groupName }); }
       });
     });
@@ -5779,8 +5842,15 @@ function _renderAllGamesTab(lst) {
       return _allPinObjs.some(function(t) { return _teamObjMatchesEspnName(t, enl); });
     });
   }
-  var games = _getAllTodayGames().filter(function(g) { return showPast || g.state !== 'post'; });
-  if (filterOn && _allPinObjs.length > 0) { games = games.filter(_gameMatchesPins); }
+  var allRaw = _getAllTodayGames().filter(function(g) { return showPast || g.state !== 'post'; });
+  if (filterOn && _allPinObjs.length > 0) { allRaw = allRaw.filter(_gameMatchesPins); }
+  // Deduplicate for display: keep first occurrence of each shortName|startTime
+  var _dispSeen = new Set();
+  var games = allRaw.filter(function(g) {
+    var dk = g.shortName + '|' + g.startTime;
+    if (_dispSeen.has(dk)) return false;
+    _dispSeen.add(dk); return true;
+  });
 
   if (!games.length) {
     lst.innerHTML = (filterOn && _allPinObjs.length > 0)
@@ -6176,10 +6246,18 @@ function renderSportLeagueSettings() {
       </div>
       <div style="margin-top:6px;padding:5px 8px;background:rgba(108,92,231,.08);border-radius:var(--rs);border:1px solid rgba(108,92,231,.2)">
         <div style="font-size:8px;color:var(--ac);font-weight:600;margin-bottom:3px">✨ Teams from global My Teams</div>
-        <div style="font-size:8px;color:var(--t2)">${(function(){
-          var matched = getPinnedTeamsForLeague(lg.groupName);
-          return matched.length ? matched.join(', ') : 'No teams match yet — add them in My Teams above';
-        })()}</div>
+        ${(function(){
+          const _lgPaths = lg.espnPaths || [];
+          const _matched = (settings.myTeams||[]).filter(t => _lgPaths.length > 0 ? (t.espnPath && _lgPaths.includes(t.espnPath)) : true);
+          if (!_matched.length) return '<div style="font-size:8px;color:var(--t3)">No teams match this league — add them in My Teams above.</div>';
+          return _matched.map(t => {
+            const gi = (settings.myTeams||[]).indexOf(t);
+            return '<div style="display:flex;align-items:center;gap:4px;padding:2px 0">'
+              + '<span style="font-size:8px;color:var(--t2);flex:1">' + esc(t.name||'')
+              + (t.leagueLabel ? ' <span style="font-size:7px;color:var(--t3)">(' + esc(t.leagueLabel) + ')</span>' : '')
+              + '</span><button onclick="window.rmMyTeam(' + gi + ')" style="font-size:8px;color:var(--rd);background:none;border:none;cursor:pointer;padding:0 2px" title="Remove">✕</button></div>';
+          }).join('');
+        })()}
       </div>
     </div>`;
   }).join('');
@@ -6297,10 +6375,11 @@ function renderMyTeams() {
     el.innerHTML = '<p style="font-size:8px;color:var(--t3);margin-bottom:4px">No teams added yet. Search above to add your teams.</p>';
     return;
   }
+  // Buttons are tabindex=0 so TV D-pad can reach them
   el.innerHTML = teams.map(function(t, i) {
     var label = t.name + (t.leagueLabel ? ' <span style="font-size:7px;color:var(--t3);background:rgba(255,255,255,.1);border-radius:3px;padding:1px 4px;margin-left:3px">' + esc(t.leagueLabel) + '</span>' : '');
-    return '<div class="li" style="padding:3px 0"><span class="lv" style="flex:1">' + label + '</span>'
-      + '<button onclick="window.rmMyTeam(' + i + ')" style="color:var(--rd);background:none;border:none;cursor:pointer;font-size:10px" title="Remove">✕</button></div>';
+    return '<div class="li" style="padding:4px 0;display:flex;align-items:center"><span class="lv" style="flex:1">' + label + '</span>'
+      + '<button tabindex="0" onclick="window.rmMyTeam(' + i + ')" style="color:var(--rd);background:rgba(255,0,0,.08);border:1px solid rgba(255,0,0,.2);border-radius:4px;cursor:pointer;font-size:9px;padding:2px 7px;margin-left:6px" title="Remove team">✕ Remove</button></div>';
   }).join('');
 }
 
