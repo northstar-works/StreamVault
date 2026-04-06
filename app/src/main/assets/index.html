@@ -1394,7 +1394,7 @@ function sportGameScore(item) {
   if (!cfg) return 0;
   const game = findGameForItem(item);
   if (!game) return 0;
-  const isPinned = (cfg.pinnedTeams || []).some(p => p && (item.title || '').toLowerCase().includes(p.toLowerCase()));
+  var _pTeams = _getLeagueTeamObjects(cfg.groupName); var isPinned = _pTeams.some(function(t) { return _teamObjMatchesTitle(t, (item.title || '').toLowerCase()); });
   if (game.state === 'in') return isPinned ? 400 : 200;  // LIVE: pinned=400, other=200
   return isPinned ? 300 : 100;  // Upcoming: pinned=300, other=100
 }
@@ -4958,10 +4958,10 @@ function findGamesForItem(item) {
   if (item.epgTitle && epgData.programs && epgData.programs[item.epgTitle]) {
     const now = Date.now();
     const progs = epgData.programs[item.epgTitle];
-    const allPinnedTeams = (cfg.pinnedTeams || []).map(p => p.toLowerCase());
-    progs.filter(p => p.stop > now - 3600000).forEach(p => {
-      const ptitle = (p.title || '').toLowerCase();
-      if (allPinnedTeams.some(team => ptitle.includes(team))) {
+    var _epgTeamObjs = _getLeagueTeamObjects(cfg.groupName);
+    progs.filter(function(p) { return p.stop > now - 3600000; }).forEach(function(p) {
+      var ptitle = (p.title || '').toLowerCase();
+      if (_epgTeamObjs.some(function(t) { return _teamObjMatchesTitle(t, ptitle); })) {
         // Synthesize a game object from EPG
         found.push({ teams: allPinnedTeams, teamObjects: [], startTime: p.start, endTime: p.stop, state: p.start <= now ? (p.stop > now ? 'in' : 'post') : 'pre', name: p.title, shortName: p.title });
       }
@@ -4976,14 +4976,11 @@ function findGameForItem(item) {
 
 // Is pinned team in item title?
 function itemMatchesPinnedTeam(item, cfg) {
-  const title = (item.title || '').toLowerCase();
-  return (cfg.pinnedTeams || []).some(p => {
-    if (!p) return false;
-    const pl = p.toLowerCase();
-    if (title.includes(pl)) return true;
-    // Also match on individual significant words: "Texas Rangers" → "rangers"
-    return pl.split(/\s+/).some(word => word.length >= 3 && title.includes(word));
-  });
+  var lgName = cfg ? cfg.groupName : (item.category || item._lgGroupName);
+  var teamObjs = _getLeagueTeamObjects(lgName);
+  if (!teamObjs.length) return false;
+  var titleLower = (item.title || '').toLowerCase();
+  return teamObjs.some(function(t) { return _teamObjMatchesTitle(t, titleLower); });
 }
 
 // Main visibility check for filter mode
@@ -5041,6 +5038,47 @@ let _sportItemsCache = null;  // invalidated when leagues change
 let _sportItemsCacheKey = ''; // JSON key of sportLeagues for invalidation
 let _sportTabCache = null;    // getSportTabItems result cache
 let _sportTabCacheKey = '';   // key: filterOn+showPast+activeTeam+leagueEnabledFlags
+
+// ── Team matching helpers ────────────────────────────────────────────────────
+// Returns full myTeam objects scoped to a league's ESPN paths.
+// League with matching paths → filtered subset.  Catch-all (no paths) → all teams.
+function _getLeagueTeamObjects(lgName) {
+  var myTeams = settings.myTeams || [];
+  if (!myTeams.length) return [];
+  if (!lgName || lgName === 'live' || lgName === 'allgames') return myTeams;
+  var lg = settings.sportLeagues && settings.sportLeagues.find(function(l) { return l.groupName === lgName; });
+  var lgPaths = lg ? (lg.espnPaths || []) : [];
+  if (lgPaths.length > 0) {
+    return myTeams.filter(function(t) { return !t.espnPath || lgPaths.includes(t.espnPath); });
+  }
+  return myTeams; // catch-all
+}
+
+// Match a myTeam object (or plain name string) against a stream title.
+// ESPN-sourced teams (have espnPath): exact full-name OR nickname (last word) only.
+//   "Texas Rangers" → matches "rangers" but NOT just "texas" (too generic).
+// Manually-added teams (no espnPath): any significant word (length >= 4).
+function _teamObjMatchesTitle(teamObj, titleLower) {
+  var name = (typeof teamObj === 'string' ? teamObj : (teamObj.name || '')).toLowerCase();
+  var hasPath = typeof teamObj === 'object' && teamObj.espnPath;
+  if (titleLower.includes(name)) return true;
+  var words = name.split(/\s+/);
+  if (hasPath) {
+    // Nickname only (last word) — never match on city name alone
+    var nick = words[words.length - 1];
+    return nick.length >= 4 && titleLower.includes(nick);
+  }
+  return words.some(function(w) { return w.length >= 4 && titleLower.includes(w); });
+}
+
+// Match a myTeam object against an ESPN team name string (from scoreboard API).
+function _teamObjMatchesEspnName(teamObj, espnNameLower) {
+  var name = (typeof teamObj === 'string' ? teamObj : (teamObj.name || '')).toLowerCase();
+  if (espnNameLower.includes(name) || name.includes(espnNameLower)) return true;
+  var words = name.split(/\s+/);
+  var nick = words[words.length - 1];
+  return nick.length >= 4 && espnNameLower.includes(nick);
+}
 
 function getAllPinnedTeams() {
   // Global My Teams takes priority; fall back to legacy per-league pinnedTeams
@@ -5107,32 +5145,20 @@ function getSportTabItems() {
     // Filter OFF: show everything
     if (!filterOn || !cfg) return true;
 
-    // Filter ON: pinned-team matching (per-league enabled flag refines pinned vs game-day mode)
-    const pinnedTeams = cfg.pinnedTeams || [];
-    if (pinnedTeams.length > 0) {
-      const hasSportPrefix = !!detectSportPathFromTitle(titleLower);
-      const hasGameIndicator = / vs | @ | home| away|\(home\)|\(away\)/i.test(title);
-      const allowWordSplit = hasSportPrefix || hasGameIndicator;
-
-      const isPinned = pinnedTeams.some(p => {
-        if (!p) return false;
-        const pl = p.toLowerCase();
-        if (titleLower.includes(pl)) return true;
-        if (!allowWordSplit) return false;
-        return pl.split(/\s+/).some(word => word.length >= 4 && titleLower.includes(word));
-      });
-      if (!isPinned) return false;
-
-      // Respect past-games setting for pinned channels
+    // Filter ON: use global My Teams scoped to this league's ESPN paths.
+    var _lgTeamObjs = _getLeagueTeamObjects(cfg ? cfg.groupName : null);
+    if (_lgTeamObjs.length > 0) {
+      // Strong matching: exact name or nickname only (see _teamObjMatchesTitle)
+      if (!_lgTeamObjs.some(function(t) { return _teamObjMatchesTitle(t, titleLower); })) return false;
       if (!showPast) {
-        const game = findGameForItem(m);
-        if (game && game.state === 'post') return false;
+        var _g = findGameForItem(m);
+        if (_g && _g.state === 'post') return false;
       }
     } else {
-      // No pinned teams: show channels with any game today
-      const game = findGameForItem(m);
-      if (!game) return false;
-      if (!showPast && game.state === 'post') return false;
+      // No teams configured: show channels with any game today
+      var _g2 = findGameForItem(m);
+      if (!_g2) return false;
+      if (!showPast && _g2.state === 'post') return false;
     }
     return true;
   });
@@ -5156,7 +5182,8 @@ window.playSportChannel = async (url, lgGroupName) => {
 
     // 2. Repo-only stream — build smart failover list
     const cfg = lgGroupName ? getSportLeagueConfig(lgGroupName) : null;
-    const pinnedTeams = cfg ? (cfg.pinnedTeams || []) : [];
+    var _repoTeamObjs = cfg ? _getLeagueTeamObjects(cfg.groupName) : [];
+    const pinnedTeams = _repoTeamObjs.map(function(t) { return t.name; });
     const pinnedLower = pinnedTeams.map(p => p.toLowerCase());
 
     // Resolve primary stream title
@@ -5339,24 +5366,15 @@ function renderSportTab() {
       if (anyFetched) {
         const countableGames = showPast ? lgGamesAny : lgGamesAny.filter(function(g) { return g.state !== 'post'; });
         if (countableGames.length === 0) return; // no games → hide tab
-        // Fix 4: hide tab when My Teams Only is ON and no pinned team has a game here.
-        // Leagues with their own pinnedTeams use those; catch-all leagues (e.g. US Sports)
-        // fall back to the global union of all pinned teams across all leagues.
+        // Fix 4 (updated): hide tab when My Teams Only is ON and no global team has a game here.
+        // Uses _getLeagueTeamObjects so US Sports / Paramount+ check their scoped teams.
         if (filterOn) {
-          var _relevantPins = (lg.pinnedTeams || []);
-          if (_relevantPins.length === 0) {
-            _relevantPins = (settings.sportLeagues || []).reduce(function(arr, l) {
-              return arr.concat(l.pinnedTeams || []);
-            }, []);
-          }
-          if (_relevantPins.length > 0) {
-            const pinnedLower = _relevantPins.map(function(t) { return t.toLowerCase(); });
-            const hasPinnedGame = countableGames.some(function(g) {
-              return (g.teams || []).some(function(tn) {
-                const tl = tn.toLowerCase();
-                return pinnedLower.some(function(p) {
-                  return tl.includes(p) || p.split(' ').some(function(w) { return w.length >= 3 && tl.includes(w); });
-                });
+          var _tabTeams = _getLeagueTeamObjects(lg.groupName);
+          if (_tabTeams.length > 0) {
+            var hasPinnedGame = countableGames.some(function(g) {
+              return (g.teams || []).some(function(espnName) {
+                var enl = espnName.toLowerCase();
+                return _tabTeams.some(function(t) { return _teamObjMatchesEspnName(t, enl); });
               });
             });
             if (!hasPinnedGame) return;
@@ -5395,18 +5413,18 @@ function renderSportTab() {
       const lgForPills = settings.sportLeagues && settings.sportLeagues.find(l => l.groupName === sportSectionTab);
       const visibleTeams = teams.filter(function(t) {
         if (!lgForPills || !lgForPills.cachedGamesByPath) return true;
-        const tLower = t.toLowerCase();
-        const lgGames = (lgForPills.espnPaths || []).reduce(function(arr, p) {
-          const g = lgForPills.cachedGamesByPath[p];
+        var lgGames = (lgForPills.espnPaths || []).reduce(function(arr, p) {
+          var g = lgForPills.cachedGamesByPath[p];
           return Array.isArray(g) ? arr.concat(g) : arr;
         }, []);
         if (!lgGames.length) return true;
-        // Respect showPast: hide pill if team's only games are already finished
-        const countable = showPast ? lgGames : lgGames.filter(function(g) { return g.state !== 'post'; });
+        var countable = showPast ? lgGames : lgGames.filter(function(g) { return g.state !== 'post'; });
         if (!countable.length) return false;
+        // Find the myTeam object for this pill name
+        var teamObj = (settings.myTeams || []).find(function(mt) { return mt.name === t; }) || { name: t, espnPath: '' };
         return countable.some(function(g) {
-          return (g.teams || []).some(function(tn) {
-            return tn.toLowerCase().includes(tLower);
+          return (g.teams || []).some(function(espnName) {
+            return _teamObjMatchesEspnName(teamObj, espnName.toLowerCase());
           });
         });
       });
@@ -5440,6 +5458,7 @@ function renderSportTab() {
 
   // Get pinned teams scoped to this league (prevents cross-league contamination)
   const pinnedTeams = getPinnedTeamsForLeague(sportSectionTab).map(t => t.toLowerCase());
+  const _pinnedTeamObjs = _getLeagueTeamObjects(sportSectionTab);
 
   // ── Smart stream classifier for a single channel item ──────────────────────
   // Returns: { isMyTeam, isHome, isAway, isBroadcast }
@@ -5508,7 +5527,8 @@ function renderSportTab() {
     // Determine if pinned team is home or away for THIS game using ESPN homeAway data
     const lgName2 = g._lgName || lgName || '';
     const lgCfg = lgName2 ? settings.sportLeagues && settings.sportLeagues.find(l => l.groupName === lgName2) : null;
-    const lgPinned = lgCfg ? (lgCfg.pinnedTeams || []).map(p => p.toLowerCase()) : pinnedTeams;
+    var _lgTeamObjs2 = _getLeagueTeamObjects(lgName2 || sportSectionTab);
+    const lgPinned = _lgTeamObjs2.length ? _lgTeamObjs2.map(function(t) { return t.name.toLowerCase(); }) : pinnedTeams;
     let gamePin = null; // true=home, false=away, null=unknown
     if (lgPinned.length) {
       const homeName = (t1.name || '').toLowerCase();
@@ -5626,13 +5646,13 @@ function renderSportTab() {
     return true;
   });
 
-  // My Teams Only filter — filter to games involving a pinned team
-  if (filterOn && pinnedTeams.length > 0) {
-    tabGames = tabGames.filter(g => {
-      const names = (g.teams || []).map(t => t.toLowerCase());
-      return pinnedTeams.some(p =>
-        names.some(n => n.includes(p) || p.split(/\s+/).some(w => w.length >= 4 && n.includes(w)))
-      );
+  // My Teams Only filter — use precise ESPN-name matching
+  if (filterOn && _pinnedTeamObjs.length > 0) {
+    tabGames = tabGames.filter(function(g) {
+      return (g.teams || []).some(function(espnName) {
+        var enl = espnName.toLowerCase();
+        return _pinnedTeamObjs.some(function(t) { return _teamObjMatchesEspnName(t, enl); });
+      });
     });
   }
 
@@ -5699,17 +5719,16 @@ function _renderAllGamesTab(lst) {
     ? (settings.sportLeagues || []).reduce(function(arr, l) { return arr.concat(l.pinnedTeams || []); }, [])
     : [];
   const _allPinsLower = _allPins.map(function(p) { return p.toLowerCase(); });
+  var _allPinObjs = filterOn ? (settings.myTeams || []) : [];
   function _gameMatchesPins(g) {
-    if (!_allPinsLower.length) return false;
-    return (g.teams || []).some(function(tn) {
-      var tl = tn.toLowerCase();
-      return _allPinsLower.some(function(p) {
-        return tl.includes(p) || p.split(/\s+/).some(function(w) { return w.length >= 3 && tl.includes(w); });
-      });
+    if (!_allPinObjs.length) return false;
+    return (g.teams || []).some(function(espnName) {
+      var enl = espnName.toLowerCase();
+      return _allPinObjs.some(function(t) { return _teamObjMatchesEspnName(t, enl); });
     });
   }
   var games = _getAllTodayGames().filter(function(g) { return showPast || g.state !== 'post'; });
-  if (filterOn && _allPinsLower.length > 0) { games = games.filter(_gameMatchesPins); }
+  if (filterOn && _allPinObjs.length > 0) { games = games.filter(_gameMatchesPins); }
 
   if (!games.length) {
     lst.innerHTML = (filterOn && _allPinsLower.length > 0)
@@ -6149,7 +6168,6 @@ window.toggleSportFilter = () => {
   const tog2 = $('btn-sport-filter-tog');
   if (tog2) tog2.style.color = settings.sportLeagueFilterEnabled ? 'var(--ac)' : '';
   saveSettings();
-  fetchAllLeagueSchedules();
   // Only re-render lib tab if currently on it (avoids full item scan when on Sports screen)
   if ($('lib-scr') && $('lib-scr').classList.contains('on')) {
     renderCats(); renderLib();
@@ -6299,13 +6317,17 @@ function _fetchEspnTeamSuggestions(query) {
     .catch(function() { window._myTeamSuggestions = []; });
 }
 
+window.selectMyTeamSuggestion = function(i) {
+  var t = window._myTeamSuggestions && window._myTeamSuggestions[i];
+  if (t) window.addMyTeamEntry(t.name, t.espnPath, t.leagueLabel);
+};
 function _renderMyTeamSuggestions() {
   var sug = $('my-team-suggestions');
   if (!sug) return;
   var items = window._myTeamSuggestions || [];
   if (!items.length) { sug.style.display = 'none'; return; }
   sug.innerHTML = items.map(function(t, i) {
-    return '<div onclick="window.addMyTeamEntry(' + JSON.stringify(t.name) + ',' + JSON.stringify(t.espnPath) + ',' + JSON.stringify(t.leagueLabel) + ')" style="padding:7px 10px;cursor:pointer;font-size:9px;color:var(--t1);border-bottom:1px solid var(--bd)" onmouseover="this.style.background=\'var(--ac)\'" onmouseout="this.style.background=\'\'">'
+    return '<div onclick="window.selectMyTeamSuggestion(' + i + ')" style="padding:7px 10px;cursor:pointer;font-size:9px;color:var(--t1);border-bottom:1px solid var(--bd)">'
       + esc(t.name) + (t.leagueLabel ? ' <span style="font-size:7px;color:var(--t3)">' + esc(t.leagueLabel) + '</span>' : '')
       + '</div>';
   }).join('');
