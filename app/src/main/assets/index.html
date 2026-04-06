@@ -5032,6 +5032,7 @@ function sportGameScore(item) {
 // ── Sports Tab rendering ──────────────────────────────────────────────────────
 
 let sportActiveTeam = 'All'; // which pinned team tab is active
+let sportSubLeague = ''; // sub-league filter for multi-path groups (espnPath string or '')
 let sportConfigOpen = false; // accordion open/close state
 let sportSectionTab = 'live'; // 'live' | league groupName | 'allgames'
 let _sportItemsCache = null;  // invalidated when leagues change
@@ -5049,9 +5050,12 @@ function _getLeagueTeamObjects(lgName) {
   var lg = settings.sportLeagues && settings.sportLeagues.find(function(l) { return l.groupName === lgName; });
   var lgPaths = lg ? (lg.espnPaths || []) : [];
   if (lgPaths.length > 0) {
-    return myTeams.filter(function(t) { return !t.espnPath || lgPaths.includes(t.espnPath); });
+    // Strict: team must have an espnPath that matches this league.
+    // Teams with no espnPath are excluded from specific-path leagues — they only
+    // appear in catch-all groups (those with no ESPN paths configured).
+    return myTeams.filter(function(t) { return t.espnPath && lgPaths.includes(t.espnPath); });
   }
-  return myTeams; // catch-all
+  return myTeams; // catch-all group: show all teams
 }
 
 // Match a myTeam object (or plain name string) against a stream title.
@@ -5064,20 +5068,22 @@ function _teamObjMatchesTitle(teamObj, titleLower) {
   if (titleLower.includes(name)) return true;
   var words = name.split(/\s+/);
   if (hasPath) {
-    // Nickname only (last word) — never match on city name alone
+    // Nickname only (last word, >=5 chars) — never match on city name alone
     var nick = words[words.length - 1];
-    return nick.length >= 4 && titleLower.includes(nick);
+    return nick.length >= 5 && titleLower.includes(nick);
   }
-  return words.some(function(w) { return w.length >= 4 && titleLower.includes(w); });
+  return words.some(function(w) { return w.length >= 5 && titleLower.includes(w); });
 }
 
 // Match a myTeam object against an ESPN team name string (from scoreboard API).
+// Rules: ESPN name must contain my full team name, OR my nickname (last word, >=5 chars).
+// No reverse-contains: "texas rangers".includes("texas") must NOT match CFB team "Texas".
 function _teamObjMatchesEspnName(teamObj, espnNameLower) {
   var name = (typeof teamObj === 'string' ? teamObj : (teamObj.name || '')).toLowerCase();
-  if (espnNameLower.includes(name) || name.includes(espnNameLower)) return true;
+  if (espnNameLower.includes(name)) return true; // ESPN name contains full team name
   var words = name.split(/\s+/);
-  var nick = words[words.length - 1];
-  return nick.length >= 4 && espnNameLower.includes(nick);
+  var nick = words[words.length - 1]; // last word = nickname (Rangers, Cowboys, Stars...)
+  return nick.length >= 5 && espnNameLower.includes(nick); // 5+ chars prevents "star"/"bear"/etc
 }
 
 function getAllPinnedTeams() {
@@ -5402,39 +5408,41 @@ function renderSportTab() {
     ).join('');
   }
 
-  // ── Team pills ──
+  // ── Sub-league pills (multi-path groups only) ──
+  // Single-path leagues: no pills (nothing to sub-filter).
+  // Multi-path groups: show "All | MLB | NHL" etc. for paths that have My Teams games today.
   const teamTabs = $('sport-team-tabs');
   if (teamTabs) {
-    if (sportSectionTab === 'allgames') {
+    if (sportSectionTab === 'allgames' || sportSectionTab === 'live') {
       teamTabs.innerHTML = '';
     } else {
-      const teams = getPinnedTeamsForLeague(sportSectionTab);
-      // Only show team pills for teams that have at least one game in this tab today
-      const lgForPills = settings.sportLeagues && settings.sportLeagues.find(l => l.groupName === sportSectionTab);
-      const visibleTeams = teams.filter(function(t) {
-        if (!lgForPills || !lgForPills.cachedGamesByPath) return true;
-        var lgGames = (lgForPills.espnPaths || []).reduce(function(arr, p) {
-          var g = lgForPills.cachedGamesByPath[p];
-          return Array.isArray(g) ? arr.concat(g) : arr;
-        }, []);
-        if (!lgGames.length) return true;
-        var countable = showPast ? lgGames : lgGames.filter(function(g) { return g.state !== 'post'; });
-        if (!countable.length) return false;
-        // Find the myTeam object for this pill name
-        var teamObj = (settings.myTeams || []).find(function(mt) { return mt.name === t; }) || { name: t, espnPath: '' };
+      const lgForPills = settings.sportLeagues && settings.sportLeagues.find(function(l) { return l.groupName === sportSectionTab; });
+      const allPaths = lgForPills ? (lgForPills.espnPaths || []) : [];
+      // Find paths where at least one My Team has a game today
+      const activePaths = allPaths.filter(function(path) {
+        var scopedTeams = (settings.myTeams || []).filter(function(t) { return t.espnPath === path; });
+        if (!scopedTeams.length) return false;
+        var pathGames = lgForPills && lgForPills.cachedGamesByPath && lgForPills.cachedGamesByPath[path];
+        if (!Array.isArray(pathGames)) return false;
+        var countable = showPast ? pathGames : pathGames.filter(function(g) { return g.state !== 'post'; });
         return countable.some(function(g) {
           return (g.teams || []).some(function(espnName) {
-            return _teamObjMatchesEspnName(teamObj, espnName.toLowerCase());
+            return scopedTeams.some(function(t) { return _teamObjMatchesEspnName(t, espnName.toLowerCase()); });
           });
         });
       });
-      teamTabs.innerHTML = visibleTeams.length
-        ? ['All', ...visibleTeams].map(t =>
-            `<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" data-team="${t}" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;${t === sportActiveTeam ? 'background:var(--ac);color:#fff' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportTeamTab('${t.replace(/'/g,"\'")}')">
-              ${esc(t === 'All' ? '⚽ All' : t)}
-            </span>`
-          ).join('')
-        : '';
+      // Only show pills when 2+ paths have My Team games (otherwise single-path, no pills needed)
+      if (activePaths.length >= 2) {
+        var subPills = ['', ...activePaths];
+        teamTabs.innerHTML = subPills.map(function(path) {
+          var label = path === '' ? '⚽ All' : ((ESPN_LEAGUE_MAP.find(function(e) { return e.path === path; }) || {}).label || path.split('/').pop().toUpperCase());
+          var active = path === sportSubLeague;
+          return '<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" data-team="' + path + '" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;' + (active ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)') + '" onclick="window.setSportSubLeague(' + JSON.stringify(path) + ')">' + esc(label) + '</span>';
+        }).join('');
+      } else {
+        teamTabs.innerHTML = '';
+        sportSubLeague = ''; // reset if no longer applicable
+      }
     }
   }
 
@@ -5656,13 +5664,9 @@ function renderSportTab() {
     });
   }
 
-  // Team pill filter
-  if (sportActiveTeam !== 'All') {
-    const ta = sportActiveTeam.toLowerCase();
-    tabGames = tabGames.filter(g => {
-      const names = (g.teams || []).map(t => t.toLowerCase());
-      return names.some(n => n.includes(ta) || ta.split(/\s+/).some(w => w.length >= 4 && n.includes(w)));
-    });
+  // Sub-league pill filter (filters by ESPN path when a sub-league is selected)
+  if (sportSubLeague) {
+    tabGames = tabGames.filter(function(g) { return g._path === sportSubLeague; });
   }
 
   if (!tabGames.length) {
@@ -5715,10 +5719,6 @@ function _renderAllGamesTab(lst) {
   const showPast = settings.sportShowPastGames !== false;
   const filterOn = settings.sportLeagueFilterEnabled;
   // Fix 5: global pinned-team union for cross-league All Games filtering
-  const _allPins = filterOn
-    ? (settings.sportLeagues || []).reduce(function(arr, l) { return arr.concat(l.pinnedTeams || []); }, [])
-    : [];
-  const _allPinsLower = _allPins.map(function(p) { return p.toLowerCase(); });
   var _allPinObjs = filterOn ? (settings.myTeams || []) : [];
   function _gameMatchesPins(g) {
     if (!_allPinObjs.length) return false;
@@ -5731,7 +5731,7 @@ function _renderAllGamesTab(lst) {
   if (filterOn && _allPinObjs.length > 0) { games = games.filter(_gameMatchesPins); }
 
   if (!games.length) {
-    lst.innerHTML = (filterOn && _allPinsLower.length > 0)
+    lst.innerHTML = (filterOn && _allPinObjs.length > 0)
       ? '<div class="emp"><h3>No games for your teams today</h3><p>Your pinned teams have no games scheduled. Disable My Teams Only to see all games.</p></div>'
       : '<div class="emp"><h3>No games scheduled today</h3><p>Fetch schedules using the ↻ button, or check Settings → Live Sports.</p></div>';
     return;
@@ -5917,6 +5917,7 @@ function _showTvSelectPicker(selectEl) {
 window.setSportSectionTab = (id) => {
   sportSectionTab = id;
   sportActiveTeam = 'All';
+  sportSubLeague = ''; // reset sub-league filter on tab switch
   _invalidateSportCache();
   _invalidateSportTabCache();
   renderSportTab();
@@ -5928,6 +5929,20 @@ window.setSportSectionTab = (id) => {
         var els = getTvFocusableElements(); var idx = els.indexOf(target);
         if (idx >= 0) { focusElementAtIndex(idx); } else { target.focus(); }
       }
+    }, 40);
+  }
+};
+
+window.setSportSubLeague = function(path) {
+  sportSubLeague = path;
+  _invalidateSportTabCache();
+  renderSportTab();
+  // Restore focus to the clicked pill
+  if (isTvDevice) {
+    setTimeout(function() {
+      var pills = document.querySelectorAll('#sport-team-tabs [tabindex]');
+      var target = Array.from(pills).find(function(el) { return el.dataset.team === path; }) || pills[0];
+      if (target) { var els = getTvFocusableElements(); var idx = els.indexOf(target); if (idx >= 0) focusElementAtIndex(idx); else target.focus(); }
     }, 40);
   }
 };
@@ -6163,6 +6178,7 @@ window.toggleSportFilter = () => {
   _invalidateSportTabCache();
   // Fix 5: switching to My Teams Only defaults to All Games (the filtered view)
   if (settings.sportLeagueFilterEnabled) { sportSectionTab = 'allgames'; }
+  sportSubLeague = ''; // reset sub-league filter on toggle
   const tgl = $('s-sport-enable');
   if (tgl) tgl.className = 'tgl' + (settings.sportLeagueFilterEnabled ? ' on' : '');
   const tog2 = $('btn-sport-filter-tog');
