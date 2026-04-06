@@ -62,7 +62,10 @@ body.tv-mode .hd{padding-top:10px}
 .px-thumb{width:34px;height:48px;border-radius:6px;background:var(--acs);overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .px-thumb img{width:100%;height:100%;object-fit:cover}
 .px-info{flex:1;min-width:0}.px-info .nm{font-size:10px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.px-info .mt{font-size:8px;color:var(--t3);line-height:1.35}
-.px-row button{padding:7px 9px;border-radius:var(--rs);border:none;cursor:pointer;background:var(--ac);color:#fff;font-size:9px;font-weight:700}
+.px-row button{padding:7px 9px;border-radius:var(--rs);border:2px solid transparent;cursor:pointer;background:var(--ac);color:#fff;font-size:9px;font-weight:700}
+body.tv-mode .px-row button.tv-f,body.tv-mode .px-row button:focus{border-color:#fff!important;box-shadow:0 0 0 3px rgba(108,92,231,.95),0 0 14px rgba(108,92,231,.45)!important;transform:scale(1.07)}
+.px-added{font-size:9px;font-weight:700;color:#2ecc71;margin-left:4px}
+.px-row.px-done button{background:var(--c2);color:var(--t3);border-color:var(--bd);cursor:default}
 
 /* Pills */
 .pls{display:flex;gap:3px;padding:2px 16px 3px;overflow-x:auto;-webkit-overflow-scrolling:touch;align-items:center}.pls::-webkit-scrollbar{display:none}
@@ -884,6 +887,7 @@ let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTim
   icamCfg: {},
   networkCfg: {} };
 let plexAddMode = false;
+let _plexView = ''; // '' | 'search' | 'library' — tracks which plex result view is showing
 
 let editId = null;
 let _epgDropdownOpen = false;  // true while EPG options list is visible
@@ -1656,7 +1660,7 @@ function showTab(id) {
   $(id).classList.add('on');
   document.querySelectorAll('.ni').forEach(n => n.classList.toggle('on', n.dataset.t === id));
   $('bnav').style.display = (id === 'player-scr' || id === 'br-scr') ? 'none' : 'flex';
-  if (id !== 'lib-scr') plexAddMode = false;
+  if (id !== 'lib-scr') { plexAddMode = false; _plexView = ''; }
   if (id === 'guide-scr') renderGuide();
   if (id === 'set-scr') renderSettings();
   if (id === 'sport-scr') {
@@ -1767,6 +1771,16 @@ function renderLibModes() {
     renderLibModes();
     renderLibExtra();
     renderLib();
+    // Restore focus to the now-active tab button, not bottom nav
+    if (isTvDevice) {
+      const activeBtn = $('lib-modes') && $('lib-modes').querySelector('.lmb.on');
+      if (activeBtn) {
+        const allEls = getTvFocusableElements();
+        const idx = allEls.indexOf(activeBtn);
+        setTimeout(() => idx >= 0 ? focusElementAtIndex(idx) : (activeBtn.focus(), setTvFocusClass(activeBtn)), 40);
+        return;
+      }
+    }
     refreshTvFocus();
   });
 }
@@ -1956,25 +1970,59 @@ function addPlexItem(meta) {
   const category = meta.type === 'movie' ? 'Plex Movie' : 'Plex TV';
   const existing = items.find(m => m.plexMeta && m.plexMeta.ratingKey === meta.ratingKey && normalizePlexServer(m.plexMeta.server) === normalizePlexServer(cfg.server));
   if (existing) { toast('Already in PlexStr'); return; }
+
+  // Snapshot which Add button is focused so we can return to it after save
+  const focusedEl = isTvDevice ? (getTvFocusableElements()[tvFocusIndex] || document.activeElement) : null;
+  const focusedRating = focusedEl && focusedEl.dataset && focusedEl.dataset.rating ? focusedEl.dataset.rating : null;
+
   items.push({
-    id: gid(),
-    title,
-    url: '',
-    category,
-    icon: thumb,
-    epgLink: '',
-    epgTitle: '',
-    region: 'Plex',
-    tags: [],
-    baseName: extractBase(title),
-    added: Date.now(),
+    id: gid(), title, url: '', category, icon: thumb,
+    epgLink: '', epgTitle: '', region: 'Plex', tags: [],
+    baseName: extractBase(title), added: Date.now(),
     sourceKind: 'plex',
     plexMeta: { ratingKey: meta.ratingKey, type: meta.type, title: meta.title, thumb: meta.thumb || '', server: cfg.server, token: cfg.token }
   });
   saveItems();
+
+  // Update the count badge in the tab bar without touching plex-results
   renderLibModes();
-  renderCats();
-  renderLib();
+
+  // Patch all result rows in-place: mark added ones without a full re-render
+  const resultsEl = $('plex-results');
+  if (resultsEl) {
+    resultsEl.querySelectorAll('.px-row').forEach(row => {
+      const btn = row.querySelector('button[data-rating]');
+      if (!btn) return;
+      const alreadyAdded = items.some(m => m.plexMeta && m.plexMeta.ratingKey === btn.dataset.rating
+        && normalizePlexServer(m.plexMeta.server) === normalizePlexServer(cfg.server));
+      if (!alreadyAdded) return;
+      row.classList.add('px-done');
+      btn.textContent = 'Added';
+      btn.disabled = true;
+      const nm = row.querySelector('.nm');
+      if (nm && !nm.querySelector('.px-added')) {
+        const badge = document.createElement('span');
+        badge.className = 'px-added';
+        badge.textContent = ' ✓';
+        nm.appendChild(badge);
+      }
+    });
+    // Restore TV focus: same button (now says Added) or the next available Add button
+    if (isTvDevice) {
+      let target = null;
+      if (focusedRating) target = resultsEl.querySelector(`button[data-rating="${focusedRating}"]`);
+      if (!target || target.disabled) {
+        // Try next undone button
+        const all = Array.from(resultsEl.querySelectorAll('button[data-rating]:not([disabled])'));
+        target = all[0] || null;
+      }
+      if (target) {
+        const allEls = getTvFocusableElements();
+        const idx = allEls.indexOf(target);
+        setTimeout(() => idx >= 0 ? focusElementAtIndex(idx) : (target.focus(), setTvFocusClass(target)), 40);
+      }
+    }
+  }
   toast('Added to PlexStr: ' + title);
 }
 function openAddStreamPreset(preset) {
@@ -2021,6 +2069,7 @@ function renderLibExtra() {
     if (!cfg.sections || !cfg.sections.length) await plexConnect(false);
   };
   const runSearch = async () => {
+    _plexView = 'search';
     cfg.section = $('plex-section').value || '';
     saveSettings();
     const q = $('plex-query').value.trim();
@@ -2033,9 +2082,15 @@ function renderLibExtra() {
       $('plex-results').innerHTML = results.map(r => {
         const thumb = plexThumb(r.thumb, '');
         const meta = [r.type || 'item', r.year || '', r.parentTitle || '', r.summary ? r.summary.slice(0,70) : ''].filter(Boolean).join(' · ');
-        return `<div class="px-row"><div class="px-thumb">${thumb ? '<img src="' + esc(thumb) + '">' : ''}</div><div class="px-info"><div class="nm">${esc(r.type==='episode' && r.grandparentTitle ? (r.grandparentTitle + ' — ' + r.title) : r.title)}</div><div class="mt">${esc(meta)}</div></div><button data-rating="${esc(r.ratingKey)}">Add</button></div>`;
+        const displayTitle = r.type === 'episode' && r.grandparentTitle ? (r.grandparentTitle + ' — ' + r.title) : r.title;
+        const alreadyAdded = items.some(m => m.plexMeta && m.plexMeta.ratingKey === r.ratingKey && normalizePlexServer(m.plexMeta.server) === normalizePlexServer(cfg.server));
+        return `<div class="px-row${alreadyAdded ? ' px-done' : ''}"><div class="px-thumb">${thumb ? '<img src="' + esc(thumb) + '">' : ''}</div><div class="px-info"><div class="nm">${esc(displayTitle)}${alreadyAdded ? '<span class="px-added"> ✓</span>' : ''}</div><div class="mt">${esc(meta)}</div></div><button data-rating="${esc(r.ratingKey)}"${alreadyAdded ? ' disabled' : ''}>${alreadyAdded ? 'Added' : 'Add'}</button></div>`;
       }).join('');
-      Array.from($('plex-results').querySelectorAll('button[data-rating]')).forEach((btn, idx) => btn.onclick = () => addPlexItem(results[idx]));
+      Array.from($('plex-results').querySelectorAll('button[data-rating]:not([disabled])')).forEach((btn, idx) => {
+        const ratingKey = btn.dataset.rating;
+        const result = results.find(r => r.ratingKey === ratingKey);
+        if (result) btn.onclick = () => addPlexItem(result);
+      });
       setTimeout(refreshTvFocus, 30);
     } catch (e) {
       $('plex-results').innerHTML = '<div class="px-sub">Search failed · ' + esc(e.message) + '</div>';
@@ -2043,15 +2098,16 @@ function renderLibExtra() {
       toast('Plex search failed: ' + e.message);
     }
   };
-  $('plex-search-btn').onclick = runSearch;
+  $('plex-search-btn').onclick = () => { _plexView = 'search'; runSearch(); };
   $('plex-open-lib').onclick = async () => {
+    _plexView = 'library';
     cfg.section = $('plex-section').value || '';
     saveSettings();
     $('plex-results').innerHTML = '<div class="px-sub">Loading library…</div>';
     try {
       await ensurePlexConnected();
-      renderLibExtra();
-      $('plex-results').innerHTML = '<div class="px-sub">Loading library…</div>';
+      // Do NOT call renderLibExtra() here — it would rebuild the whole card and
+      // create the search/library overlay bug. Just update plex-results in place.
       const target = cfg.section ? ('/library/sections/' + encodeURIComponent(cfg.section) + '/all') : '/library/recentlyAdded';
       const resp = await fetch(plexUrl(target));
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -2060,9 +2116,15 @@ function renderLibExtra() {
       $('plex-results').innerHTML = results.map(r => {
         const thumb = plexThumb(r.thumb, '');
         const meta = [r.type || 'item', r.year || '', r.parentTitle || ''].filter(Boolean).join(' · ');
-        return `<div class="px-row"><div class="px-thumb">${thumb ? '<img src="' + esc(thumb) + '">' : ''}</div><div class="px-info"><div class="nm">${esc(r.type==='episode' && r.grandparentTitle ? (r.grandparentTitle + ' — ' + r.title) : r.title)}</div><div class="mt">${esc(meta)}</div></div><button data-rating="${esc(r.ratingKey)}">Add</button></div>`;
+        const displayTitle = r.type === 'episode' && r.grandparentTitle ? (r.grandparentTitle + ' — ' + r.title) : r.title;
+        const alreadyAdded = items.some(m => m.plexMeta && m.plexMeta.ratingKey === r.ratingKey && normalizePlexServer(m.plexMeta.server) === normalizePlexServer(cfg.server));
+        return `<div class="px-row${alreadyAdded ? ' px-done' : ''}"><div class="px-thumb">${thumb ? '<img src="' + esc(thumb) + '">' : ''}</div><div class="px-info"><div class="nm">${esc(displayTitle)}${alreadyAdded ? '<span class="px-added"> ✓</span>' : ''}</div><div class="mt">${esc(meta)}</div></div><button data-rating="${esc(r.ratingKey)}"${alreadyAdded ? ' disabled' : ''}>${alreadyAdded ? 'Added' : 'Add'}</button></div>`;
       }).join('');
-      Array.from($('plex-results').querySelectorAll('button[data-rating]')).forEach((btn, idx) => btn.onclick = () => addPlexItem(results[idx]));
+      Array.from($('plex-results').querySelectorAll('button[data-rating]:not([disabled])')).forEach(btn => {
+        const ratingKey = btn.dataset.rating;
+        const result = results.find(r => r.ratingKey === ratingKey);
+        if (result) btn.onclick = () => addPlexItem(result);
+      });
       setTimeout(refreshTvFocus, 30);
     } catch (e) {
       $('plex-results').innerHTML = '<div class="px-sub">Library open failed · ' + esc(e.message) + '</div>';
@@ -2120,7 +2182,19 @@ function renderCats() {
     `<div class="pl${c === activeCat ? ' on' : ''}" data-tv-zone="group-bar" data-c="${esc(c)}">${esc(c)}</div>`
   ).join('');
   $('lib-pls').querySelectorAll('.pl').forEach(p => {
-    p.onclick = () => { activeCat = p.dataset.c; renderCats(); renderLib(); };
+    p.onclick = () => {
+      activeCat = p.dataset.c;
+      renderCats();
+      renderLib();
+      if (isTvDevice) {
+        const activePill = $('lib-pls') && $('lib-pls').querySelector('.pl.on');
+        if (activePill) {
+          const allEls = getTvFocusableElements();
+          const idx = allEls.indexOf(activePill);
+          setTimeout(() => idx >= 0 ? focusElementAtIndex(idx) : (activePill.focus(), setTvFocusClass(activePill)), 40);
+        }
+      }
+    };
   });
 }
 
@@ -3006,6 +3080,15 @@ $('sl-add').onclick = () => {
   renderLib();
   refreshAltCache(true);
   toast('Added ' + added + (skipped ? ' · ' + skipped + ' dupes' : ''));
+  // Keep TV focus on the Add button, not the bottom nav
+  if (isTvDevice) {
+    const addBtn = $('sl-add');
+    if (addBtn) {
+      const allEls = getTvFocusableElements();
+      const idx = allEls.indexOf(addBtn);
+      setTimeout(() => idx >= 0 ? focusElementAtIndex(idx) : (addBtn.focus(), setTvFocusClass(addBtn)), 40);
+    }
+  }
 };
 
 // ═══ EPG SOURCES MANAGER ═══
@@ -3698,7 +3781,9 @@ function moveTvFocusSpatial(dirCode) {
   }
 
   if (current && current.tagName && current.tagName.toLowerCase() === 'select' && (dirCode === 21 || dirCode === 22)) {
-    return cycleSelectOption(current, dirCode === 22 ? 1 : -1);
+    // plex-section: LEFT/RIGHT should navigate to sibling elements (plex-query), not cycle options
+    if (current.id === 'plex-section') { /* fall through to spatial nav */ }
+    else return cycleSelectOption(current, dirCode === 22 ? 1 : -1);
   }
   const settingsContainer = current && current.closest && current.closest('#set-scr');
   if (settingsContainer && focusWithinContainerRows(settingsContainer, current, dirCode)) return true;
@@ -3975,7 +4060,29 @@ window.__svHandleTvKey = function(code) {
       return true;
     }
     if (el.classList.contains('epg-opt')) { selectEpg(el); return true; }
-    if (tag === 'select') { el.focus(); if (typeof el.showPicker === 'function' && !isTvDevice) { try { el.showPicker(); return true; } catch(e) {} } return cycleSelectOption(el, 1) || true; }
+    if (tag === 'select') {
+      el.focus();
+      // plex-section library picker: Enter opens native dropdown on TV too;
+      // after the user picks a library, focus jumps to the Search query field.
+      if (el.id === 'plex-section') {
+        if (typeof el.showPicker === 'function') {
+          try { el.showPicker(); } catch(e) {}
+        }
+        const afterChange = () => {
+          el.removeEventListener('change', afterChange);
+          const q = $('plex-query');
+          if (q) {
+            const allEls2 = getTvFocusableElements();
+            const i2 = allEls2.indexOf(q);
+            setTimeout(() => i2 >= 0 ? focusElementAtIndex(i2) : (q.focus(), setTvFocusClass(q)), 80);
+          }
+        };
+        el.addEventListener('change', afterChange);
+        return true;
+      }
+      if (typeof el.showPicker === 'function' && !isTvDevice) { try { el.showPicker(); return true; } catch(e) {} }
+      return cycleSelectOption(el, 1) || true;
+    }
     if (tag === 'textarea') { el.focus(); return true; }
     if (tag === 'input') {
       const type = (el.type || '').toLowerCase();
@@ -4010,6 +4117,27 @@ window.__svHandleTvKey = function(code) {
       }
     }
     const openModal = document.querySelector('.mo.on,.cod.on');
+    // ── PlexStr BACK navigation ───────────────────────────────────────────
+    if ($('lib-scr') && $('lib-scr').classList.contains('on') && (activeLibPage === 'plex' || plexAddMode)) {
+      const backEl = getTvFocusableElements()[tvFocusIndex] || document.activeElement;
+      // BACK from inside plex-results → focus the button that opened the view
+      if (backEl && backEl.closest && backEl.closest('#plex-results')) {
+        const targetId = _plexView === 'library' ? 'plex-open-lib' : 'plex-search-btn';
+        const btn = $(targetId);
+        if (btn) {
+          const allEls = getTvFocusableElements();
+          const idx = allEls.indexOf(btn);
+          setTimeout(() => idx >= 0 ? focusElementAtIndex(idx) : (btn.focus(), setTvFocusClass(btn)), 20);
+          return true;
+        }
+      }
+      // BACK from PlexStr card (not in results) → bottom nav
+      if (backEl && backEl.closest && backEl.closest('#lib-extra')) {
+        _plexView = '';
+        return _guideGoToNav ? _guideGoToNav() : false;
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────
     // Close EPG dropdown first if open
     if (_epgDropdownOpen) {
       const epgList = $('in-epg-list');
