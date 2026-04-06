@@ -4082,6 +4082,10 @@ window.__svHandleTvKey = function(code) {
         el.addEventListener('change', afterChange);
         return true;
       }
+      // Fix 6: sport repo/group selects → custom overlay picker on TV
+      if (isTvDevice && (el.id === 'sport-repo-sel' || el.id === 'sport-grp-sel')) {
+        _showTvSelectPicker(el); return true;
+      }
       if (typeof el.showPicker === 'function' && !isTvDevice) { try { el.showPicker(); return true; } catch(e) {} }
       return cycleSelectOption(el, 1) || true;
     }
@@ -4149,8 +4153,8 @@ window.__svHandleTvKey = function(code) {
       return true;
     }
     if (openModal) { openModal.classList.remove('on'); refreshTvFocus(); return true; }
-    // BACK from settings → bottom nav (lets user switch tabs without hunting for nav)
-    if ($('set-scr') && $('set-scr').classList.contains('on')) { return _guideGoToNav(); }
+    // Fix 2: BACK from Settings screen → focus bottom nav
+    if ($("set-scr") && $("set-scr").classList.contains("on")) { return _guideGoToNav(); }
   }
   return false;
 };
@@ -5281,20 +5285,18 @@ function renderSportTab() {
       if (anyFetched) {
         const countableGames = showPast ? lgGamesAny : lgGamesAny.filter(function(g) { return g.state !== 'post'; });
         if (countableGames.length === 0) return; // no games → hide tab
-        // My Teams Only: hide tab when no pinned team has games in this league.
-        // For leagues with their own pinnedTeams list, use that directly.
-        // For catch-all leagues (e.g. "US Sports") with no pinnedTeams, fall back to
-        // the global union of all pinned teams — so the tab is hidden when none of the
-        // user's teams across any league have a game here today.
+        // Fix 4: hide tab when My Teams Only is ON and no pinned team has a game here.
+        // Leagues with their own pinnedTeams use those; catch-all leagues (e.g. US Sports)
+        // fall back to the global union of all pinned teams across all leagues.
         if (filterOn) {
-          let relevantPins = (lg.pinnedTeams || []);
-          if (relevantPins.length === 0) {
-            relevantPins = (settings.sportLeagues || []).reduce(function(arr, l) {
+          var _relevantPins = (lg.pinnedTeams || []);
+          if (_relevantPins.length === 0) {
+            _relevantPins = (settings.sportLeagues || []).reduce(function(arr, l) {
               return arr.concat(l.pinnedTeams || []);
             }, []);
           }
-          if (relevantPins.length > 0) {
-            const pinnedLower = relevantPins.map(function(t) { return t.toLowerCase(); });
+          if (_relevantPins.length > 0) {
+            const pinnedLower = _relevantPins.map(function(t) { return t.toLowerCase(); });
             const hasPinnedGame = countableGames.some(function(g) {
               return (g.teams || []).some(function(tn) {
                 const tl = tn.toLowerCase();
@@ -5638,29 +5640,27 @@ function _getAllTodayGames() {
 function _renderAllGamesTab(lst) {
   const showPast = settings.sportShowPastGames !== false;
   const filterOn = settings.sportLeagueFilterEnabled;
-  // Fix 5: when "My Teams Only" is ON, All Games shows only pinned-team games.
-  // Collect global union of all pinned teams for the cross-league match.
+  // Fix 5: global pinned-team union for cross-league All Games filtering
   const _allPins = filterOn
-    ? (settings.sportLeagues || []).reduce((arr, l) => arr.concat(l.pinnedTeams || []), [])
+    ? (settings.sportLeagues || []).reduce(function(arr, l) { return arr.concat(l.pinnedTeams || []); }, [])
     : [];
-  const _allPinsLower = _allPins.map(p => p.toLowerCase());
+  const _allPinsLower = _allPins.map(function(p) { return p.toLowerCase(); });
   function _gameMatchesPins(g) {
     if (!_allPinsLower.length) return false;
-    return (g.teams || []).some(tn => {
-      const tl = tn.toLowerCase();
-      return _allPinsLower.some(p => tl.includes(p) || p.split(/\s+/).some(w => w.length >= 3 && tl.includes(w)));
+    return (g.teams || []).some(function(tn) {
+      var tl = tn.toLowerCase();
+      return _allPinsLower.some(function(p) {
+        return tl.includes(p) || p.split(/\s+/).some(function(w) { return w.length >= 3 && tl.includes(w); });
+      });
     });
   }
-  let games = _getAllTodayGames().filter(g => showPast || g.state !== 'post');
-  if (filterOn && _allPinsLower.length > 0) {
-    games = games.filter(_gameMatchesPins);
-  }
+  var games = _getAllTodayGames().filter(function(g) { return showPast || g.state !== 'post'; });
+  if (filterOn && _allPinsLower.length > 0) { games = games.filter(_gameMatchesPins); }
 
   if (!games.length) {
-    const emptyMsg = (filterOn && _allPinsLower.length > 0)
-      ? '<div class="emp"><h3>No games for your teams today</h3><p>Your pinned teams aren't playing today. Turn off "My Teams Only" to see all games.</p></div>'
+    lst.innerHTML = (filterOn && _allPinsLower.length > 0)
+      ? '<div class="emp"><h3>No games for your teams today</h3><p>Your pinned teams have no games scheduled. Disable My Teams Only to see all games.</p></div>'
       : '<div class="emp"><h3>No games scheduled today</h3><p>Fetch schedules using the ↻ button, or check Settings → Live Sports.</p></div>';
-    lst.innerHTML = emptyMsg;
     return;
   }
 
@@ -5766,21 +5766,126 @@ window._svPlaySport = (idx) => {
   console.warn('[SV] _svPlaySport: unrecognised entry format', e);
 };
 
+
+// ── TV custom select picker overlay ─────────────────────────────────────────
+// Fire TV WebView doesn't support showPicker(). For any <select> element,
+// this builds a full-screen D-pad-navigable overlay of its options,
+// updates the select value on confirm, then fires a 'change' event.
+function _showTvSelectPicker(selectEl) {
+  if (!selectEl) return;
+  // Build option list (skip disabled, skip optgroup labels)
+  var opts = [];
+  for (var i = 0; i < selectEl.options.length; i++) {
+    var o = selectEl.options[i];
+    if (!o.disabled) opts.push({ value: o.value, label: o.text, index: i });
+  }
+  if (!opts.length) return;
+
+  // Remove any stale overlay
+  var existing = document.getElementById('sv-tv-picker');
+  if (existing) existing.remove();
+
+  // Current value → start highlight there
+  var curIdx = opts.findIndex(function(o) { return o.value === selectEl.value; });
+  if (curIdx < 0) curIdx = 0;
+  var focusIdx = curIdx;
+
+  // Overlay shell
+  var overlay = document.createElement('div');
+  overlay.id = 'sv-tv-picker';
+  overlay.setAttribute('tabindex', '-1');
+  overlay.style.cssText = [
+    'position:fixed;inset:0;z-index:9000',
+    'background:rgba(0,0,0,.78)',
+    'display:flex;align-items:center;justify-content:center'
+  ].join(';');
+
+  // Card
+  var card = document.createElement('div');
+  card.style.cssText = [
+    'background:var(--c1);border-radius:12px;padding:12px 0',
+    'min-width:280px;max-width:90vw;max-height:70vh',
+    'overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.8)'
+  ].join(';');
+
+  function renderRows() {
+    card.innerHTML = opts.map(function(o, i) {
+      var active = i === focusIdx;
+      return '<div data-picker-idx="' + i + '" style="'
+        + 'padding:10px 20px;font-size:11px;cursor:pointer;'
+        + 'color:' + (active ? '#fff' : 'var(--t1)') + ';'
+        + 'background:' + (active ? 'var(--ac)' : 'transparent') + ';'
+        + 'font-weight:' + (active ? '700' : '400') + ';'
+        + '">' + o.label + '</div>';
+    }).join('');
+
+    // Click handlers on rows
+    card.querySelectorAll('[data-picker-idx]').forEach(function(row) {
+      row.onclick = function() {
+        focusIdx = parseInt(row.dataset.pickerIdx, 10);
+        confirm();
+      };
+    });
+
+    // Scroll active row into view
+    var activeRow = card.querySelector('[data-picker-idx="' + focusIdx + '"]');
+    if (activeRow) { activeRow.scrollIntoView({ block: 'nearest' }); }
+  }
+
+  function confirm() {
+    var chosen = opts[focusIdx];
+    if (chosen) {
+      selectEl.value = chosen.value;
+      selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    close();
+  }
+
+  function close() {
+    var ov = document.getElementById('sv-tv-picker');
+    if (ov) ov.remove();
+    // Return focus to the select that opened the picker
+    var els = getTvFocusableElements();
+    var si = els.indexOf(selectEl);
+    if (si >= 0) { focusElementAtIndex(si); } else { selectEl.focus(); }
+  }
+
+  overlay.addEventListener('keydown', function(e) {
+    if (e.key === 'ArrowDown' || e.keyCode === 40) {
+      e.preventDefault(); e.stopPropagation();
+      focusIdx = Math.min(focusIdx + 1, opts.length - 1);
+      renderRows();
+    } else if (e.key === 'ArrowUp' || e.keyCode === 38) {
+      e.preventDefault(); e.stopPropagation();
+      focusIdx = Math.max(focusIdx - 1, 0);
+      renderRows();
+    } else if (e.key === 'Enter' || e.keyCode === 13 || e.keyCode === 23) {
+      e.preventDefault(); e.stopPropagation();
+      confirm();
+    } else if (e.key === 'Escape' || e.keyCode === 27 || e.keyCode === 4) {
+      e.preventDefault(); e.stopPropagation();
+      close();
+    }
+  }, true);
+
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  renderRows();
+  overlay.focus();
+}
 window.setSportSectionTab = (id) => {
   sportSectionTab = id;
   sportActiveTeam = 'All';
   _invalidateSportCache();
   _invalidateSportTabCache();
   renderSportTab();
-  // Fix 3: restore focus to the tab that was just clicked so TV remote
-  // stays in the section-tab row — not the bottom nav.
+  // Fix 3: keep TV focus on the tab that was clicked, not the bottom nav
   if (isTvDevice) {
-    setTimeout(() => {
-      const target = document.querySelector('#sport-section-tabs [data-sid="' + id + '"]');
+    setTimeout(function() {
+      var target = document.querySelector('#sport-section-tabs [data-sid="' + id + '"]');
       if (target) {
-        const els = getTvFocusableElements();
-        const idx = els.indexOf(target);
-        if (idx >= 0) focusElementAtIndex(idx); else target.focus();
+        var els = getTvFocusableElements(); var idx = els.indexOf(target);
+        if (idx >= 0) { focusElementAtIndex(idx); } else { target.focus(); }
       }
     }, 40);
   }
@@ -5790,15 +5895,14 @@ window.setSportTeamTab = (team) => {
   sportActiveTeam = team;
   _invalidateSportTabCache();
   renderSportTab();
-  // Fix 3: keep focus in the team-pill row after clicking
+  // Fix 3: keep TV focus in the team-pill row after clicking
   if (isTvDevice) {
-    setTimeout(() => {
-      const pills = document.querySelectorAll('#sport-team-tabs [tabindex]');
-      const target = Array.from(pills).find(el => el.dataset.team === team) || pills[0];
+    setTimeout(function() {
+      var pills = document.querySelectorAll('#sport-team-tabs [tabindex]');
+      var target = Array.from(pills).find(function(el) { return el.dataset.team === team; }) || pills[0];
       if (target) {
-        const els = getTvFocusableElements();
-        const idx = els.indexOf(target);
-        if (idx >= 0) focusElementAtIndex(idx); else target.focus();
+        var els = getTvFocusableElements(); var idx = els.indexOf(target);
+        if (idx >= 0) { focusElementAtIndex(idx); } else { target.focus(); }
       }
     }, 40);
   }
@@ -6023,8 +6127,7 @@ window.toggleSportFilter = () => {
   settings.sportLeagueFilterEnabled = !settings.sportLeagueFilterEnabled;
   _invalidateSportCache();
   _invalidateSportTabCache();
-  // Fix 5: switching TO My Teams Only → default to All Games tab (shows filtered game list).
-  // Switching back to All Sport Channels preserves whatever tab was active.
+  // Fix 5: switching to My Teams Only defaults to All Games (the filtered view)
   if (settings.sportLeagueFilterEnabled) { sportSectionTab = 'allgames'; }
   const tgl = $('s-sport-enable');
   if (tgl) tgl.className = 'tgl' + (settings.sportLeagueFilterEnabled ? ' on' : '');
