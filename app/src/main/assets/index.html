@@ -1609,14 +1609,19 @@ async function fetchEpgSource(src) {
         if (parsed.programs[id]) filteredPrograms[id] = parsed.programs[id];
       }
     });
+    // Cap programs per channel to prevent OOM on Fire TV with large EPG feeds
+    Object.keys(filteredPrograms).forEach(k => {
+      filteredPrograms[k].sort(function(a,b){return a.start-b.start;});
+      filteredPrograms[k] = filteredPrograms[k].slice(-96); // keep last 96 slots (~48h)
+    });
     Object.assign(epgData.channels, filteredChannels);
     Object.keys(filteredPrograms).forEach(k => { epgData.programs[k] = filteredPrograms[k]; });
     src.lastFetch = Date.now();
     src.chCount = Object.keys(parsed.channels).length;
     saveEpg();
     toast('EPG updated: ' + src.chCount + ' channels, ' + Object.keys(filteredChannels).length + ' matched');
-    renderLib();
-    renderGuide();
+    // Defer heavy DOM rebuild so the toast can render first
+    setTimeout(function() { renderLib(); renderGuide(); }, 80);
   } catch(e) {
     toast('EPG error: ' + e.message);
   }
@@ -1750,9 +1755,18 @@ function isIptvItem(item) {
 }
 
 function getLibPageCounts() {
+  // Count visible items only — sport filter may hide some ITV items
+  function visibleIptv(m) {
+    if (!isIptvItem(m)) return false;
+    if (settings.sportLeagueFilterEnabled && m.category && isSportLeagueGroup(m.category)) {
+      var lg = getSportLeagueConfig(m.category);
+      if (lg && lg.enabled && !shouldShowSportTeam(m)) return false;
+    }
+    return true;
+  }
   return {
     all: items.length,
-    itv: items.filter(isIptvItem).length,
+    itv: items.filter(visibleIptv).length,
     icam: items.filter(isCameraItem).length,
     plex: items.filter(isPlexItem).length,
     local: items.filter(isLocalItem).length,
@@ -3813,8 +3827,8 @@ function moveTvFocusSpatial(dirCode) {
   }
 
   if (current && current.tagName && current.tagName.toLowerCase() === 'select' && (dirCode === 21 || dirCode === 22)) {
-    // plex-section: LEFT/RIGHT should navigate to sibling elements (plex-query), not cycle options
-    if (current.id === 'plex-section') { /* fall through to spatial nav */ }
+    // plex-section / sport-path-add-N: LEFT/RIGHT → spatial nav, not cycling
+    if (current.id === 'plex-section' || (current.id && current.id.startsWith('sport-path-add-'))) { /* fall through to spatial nav */ }
     else return cycleSelectOption(current, dirCode === 22 ? 1 : -1);
   }
   const settingsContainer = current && current.closest && current.closest('#set-scr');
@@ -4104,6 +4118,12 @@ window.__svHandleTvKey = function(code) {
       el.focus();
       if (isTvDevice) {
         // On TV, ALL <select> elements use the custom overlay picker.
+        // sport-path-add-N: after pick, fire the existing addSportPath(i) flow via onchange.
+        var _pathAddMatch = el.id && el.id.match(/^sport-path-add-(\d+)$/);
+        if (_pathAddMatch) {
+          _showTvSelectPicker(el);
+          return true;
+        }
         // For plex-section: wire up afterChange first so focus advances to query field after pick.
         if (el.id === 'plex-section') {
           var _plexAfter = function() {
@@ -4988,6 +5008,8 @@ function shouldShowSportTeam(item) {
   const cfg = getSportLeagueConfig(item.category || item._lgGroupName);
   if (!cfg) return true;
   if (!settings.sportLeagueFilterEnabled) return true;
+  // League filter toggle OFF for this specific group → always show its channels
+  if (!cfg.enabled) return true;
   // Pinned teams always visible
   if (itemMatchesPinnedTeam(item, cfg)) return true;
   const paths = cfg.espnPaths || (cfg.espnPath ? [cfg.espnPath] : []);
@@ -5001,6 +5023,10 @@ function shouldShowSportTeam(item) {
     if (Array.isArray(g)) { anyFetched = true; if (g.length) { anyGames = true; break; } }
   }
   if (!anyFetched || !anyGames) return true; // no data yet / off-season → show all
+  // PPV / event-based groups: show ALL channels when any event is scheduled today.
+  // (UFC 327 channels are named "PPV 01: Main Card" etc., not by fighter name)
+  const isPpvGroup = /ppv|pay.per.view|ufc|boxing|combat/i.test(cfg.groupName);
+  if (isPpvGroup && anyGames) return true;
   return !!findGameForItem(item);
 }
 
