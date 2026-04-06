@@ -565,7 +565,7 @@ document.addEventListener('keydown', function(e) {
   <!-- Hidden selects kept for value tracking -->
   <select id="f-reg" style="display:none"><option>All</option></select>
   <select id="f-gen" style="display:none"><option>All</option></select>
-  <div class="slb" id="slb"><span id="slcnt">0 selected</span><div><button class="sbc" id="sl-all" data-tv-zone="repo-select-bar">All</button><button class="sbc" id="sl-clr" data-tv-zone="repo-select-bar">Clear</button><button class="sbc" id="sl-epg" data-tv-zone="repo-select-bar">Bulk EPG</button><button class="sba" id="sl-add" data-tv-zone="repo-select-bar">Add to Playlist</button></div></div>
+  <div class="slb" id="slb"><span id="slcnt">0 selected</span><div><button class="sbc" id="sl-all" data-tv-zone="repo-select-bar">All</button><button class="sbc" id="sl-clr" data-tv-zone="repo-select-bar">Clear</button><button class="sbc" id="sl-play" data-tv-zone="repo-select-bar">&#9654; Play</button><button class="sbc" id="sl-epg" data-tv-zone="repo-select-bar">Bulk EPG</button><button class="sba" id="sl-add" data-tv-zone="repo-select-bar">Add to Playlist</button></div></div>
   <div class="lst" id="br-lst"></div>
 </div>
 
@@ -1755,18 +1755,12 @@ function isIptvItem(item) {
 }
 
 function getLibPageCounts() {
-  // Count visible items only — sport filter may hide some ITV items
-  function visibleIptv(m) {
-    if (!isIptvItem(m)) return false;
-    if (settings.sportLeagueFilterEnabled && m.category && isSportLeagueGroup(m.category)) {
-      var lg = getSportLeagueConfig(m.category);
-      if (lg && lg.enabled && !shouldShowSportTeam(m)) return false;
-    }
-    return true;
-  }
+  // Count all items you own — pill reflects your library, not today's filter state.
+  // (Sport filter hides channels on non-game days; that shouldn't make them disappear
+  //  from the count — you still own them.)
   return {
     all: items.length,
-    itv: items.filter(visibleIptv).length,
+    itv: items.filter(isIptvItem).length,
     icam: items.filter(isCameraItem).length,
     plex: items.filter(isPlexItem).length,
     local: items.filter(isLocalItem).length,
@@ -3073,6 +3067,38 @@ $('br-q').addEventListener('input', () => {
 });
 $('sl-all').onclick = () => { getBrowseFiltered().forEach(s => brSel.add(s.url)); renderBrowse(); };
 $('sl-clr').onclick = () => { brSel.clear(); renderBrowse(); };
+$('sl-play').onclick = () => {
+  if (!brRepo || brSel.size === 0) { toast('Select a channel first'); return; }
+  // Collect selected streams as a failover list (primary = first selected)
+  var selStreams = (brRepo.streams || []).filter(function(s) { return brSel.has(s.url); });
+  if (!selStreams.length) return;
+  var primary = selStreams[0];
+  var failoverList = selStreams.map(function(s) {
+    return { url: s.url || '', title: s.name || s.title || '', region: s.region || '',
+             tag: (s.tags && s.tags[0]) || '', category: s.category || '' };
+  });
+  var foTimeout = String(settings.foTimeout || 15);
+  var foAuto    = String(settings.foAuto !== false);
+  var tsEnabled = (settings.timeshiftEnabled !== false)
+    ? ('true:' + String(settings.timeshiftMaxMin || 30)) : 'false';
+  if (window.NativePlayer && typeof window.NativePlayer.isAvailable === 'function' && window.NativePlayer.isAvailable()) {
+    window.NativePlayer.playStreamExTs(
+      JSON.stringify(failoverList), primary.name || primary.title || 'Stream',
+      primary.category || '', '', foTimeout, foAuto,
+      settings.savePath || '', '', '0', tsEnabled
+    );
+  } else {
+    showTab('player-scr');
+    if ($('p-tt')) $('p-tt').textContent = primary.name || primary.title || 'Stream';
+    if ($('p-url')) $('p-url').textContent = primary.url;
+    if (typeof playWebStream === 'function') playWebStream(primary.url, primary.name || 'Stream');
+  }
+  if (isTvDevice) {
+    var btn = $('sl-play');
+    if (btn) { var els = getTvFocusableElements(); var idx = els.indexOf(btn);
+      setTimeout(function() { if (idx >= 0) focusElementAtIndex(idx); else btn.focus(); }, 40); }
+  }
+};
 $('sl-epg').onclick = () => {
   if (brSel.size === 0) { toast('Select channels first'); return; }
   const sel = $('be-src');
@@ -6309,15 +6335,20 @@ window.addMyTeamEntry = function(name, espnPath, leagueLabel) {
 };
 
 window.addMyTeamFromInput = function() {
-  // On TV with pending suggestions: open picker overlay
-  if (isTvDevice && window._myTeamSuggestions && window._myTeamSuggestions.length > 0) {
-    _showMyTeamSuggestionPicker();
-    return;
-  }
-  // Otherwise add raw text from input
   var inp = $('my-team-input');
   var val = inp ? inp.value.trim() : '';
   if (!val) { toast('Enter a team name'); return; }
+  // On TV: always open the picker overlay (shows ESPN results + "Add as typed" at bottom)
+  if (isTvDevice) {
+    _showMyTeamSuggestionPicker();
+    return;
+  }
+  // On mobile: if ESPN suggestions exist show dropdown, otherwise add raw text
+  if (window._myTeamSuggestions && window._myTeamSuggestions.length > 0) {
+    // Mobile: focus the suggestion dropdown so user can click
+    var sug = $('my-team-suggestions');
+    if (sug) { sug.style.display = 'block'; return; }
+  }
   window.addMyTeamEntry(val, '', '');
 };
 
@@ -6378,10 +6409,20 @@ function _renderMyTeamSuggestions() {
 
 // TV-specific: open suggestion picker overlay when user presses Enter on input
 function _showMyTeamSuggestionPicker() {
-  var items = window._myTeamSuggestions || [];
-  if (!items.length) { window.addMyTeamFromInput(); return; }
-  // Build a fake <select>-like structure for _showTvSelectPicker
-  // Re-use the picker controller pattern directly
+  var espnItems = window._myTeamSuggestions || [];
+  var inp = $('my-team-input');
+  var typedVal = inp ? inp.value.trim() : '';
+  // Build display list: ESPN results first, then "Add as typed: <value>" at bottom
+  // so user can always add a custom name not returned by ESPN search.
+  var displayItems = espnItems.slice();
+  if (typedVal) {
+    displayItems.push({ name: typedVal, espnPath: '', leagueLabel: '', _custom: true });
+  }
+  if (!displayItems.length) {
+    // No suggestions and no typed value — add nothing
+    toast('Type a team name first');
+    return;
+  }
   window._svPickerCtrl = null;
   var existing = document.getElementById('sv-tv-picker');
   if (existing) existing.remove();
@@ -6391,19 +6432,26 @@ function _showMyTeamSuggestionPicker() {
   overlay.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;';
   var card = document.createElement('div');
   card.style.cssText = 'background:var(--c1);border-radius:12px;padding:12px 0;min-width:300px;max-width:92vw;max-height:72vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.85);';
-  var title = document.createElement('div');
-  title.style.cssText = 'padding:4px 22px 10px;font-size:9px;color:var(--t3);font-weight:600;border-bottom:1px solid var(--bd);margin-bottom:4px';
-  title.textContent = 'Select a team';
-  card.appendChild(title);
+  var titleEl = document.createElement('div');
+  titleEl.style.cssText = 'padding:4px 22px 10px;font-size:9px;color:var(--t3);font-weight:600;border-bottom:1px solid var(--bd);margin-bottom:4px';
+  titleEl.textContent = espnItems.length ? 'Select a team (or add as typed)' : 'Add custom team';
+  card.appendChild(titleEl);
   function renderRows() {
     var rows = card.querySelectorAll('[data-pidx]');
     rows.forEach(function(r) { r.remove(); });
-    items.forEach(function(t, i) {
+    displayItems.forEach(function(t, i) {
       var row = document.createElement('div');
       row.dataset.pidx = String(i);
       var a = (i === focusIdx);
-      row.style.cssText = 'padding:11px 22px;font-size:11px;cursor:pointer;color:' + (a ? '#fff' : 'var(--t1)') + ';background:' + (a ? 'var(--ac)' : 'transparent') + ';font-weight:' + (a ? '700' : '400') + ';';
-      row.innerHTML = esc(t.name) + (t.leagueLabel ? ' <span style="font-size:8px;opacity:.7">' + esc(t.leagueLabel) + '</span>' : '');
+      var isCustom = !!t._custom;
+      row.style.cssText = 'padding:11px 22px;font-size:11px;cursor:pointer;'
+        + 'color:' + (a ? '#fff' : (isCustom ? 'var(--ac)' : 'var(--t1)')) + ';'
+        + 'background:' + (a ? 'var(--ac)' : 'transparent') + ';'
+        + 'font-weight:' + (a ? '700' : (isCustom ? '600' : '400')) + ';'
+        + (isCustom && !a ? 'border-top:1px solid var(--bd);margin-top:4px;' : '');
+      row.innerHTML = isCustom
+        ? '✚ Add as typed: <em>' + esc(t.name) + '</em>'
+        : esc(t.name) + (t.leagueLabel ? ' <span style="font-size:8px;opacity:.7">' + esc(t.leagueLabel) + '</span>' : '');
       row.onclick = function() { focusIdx = i; ctrl.confirm(); };
       card.appendChild(row);
     });
@@ -6412,18 +6460,18 @@ function _showMyTeamSuggestionPicker() {
   }
   var ctrl = {
     up:      function() { if (focusIdx > 0) { focusIdx--; renderRows(); } },
-    down:    function() { if (focusIdx < items.length - 1) { focusIdx++; renderRows(); } },
+    down:    function() { if (focusIdx < displayItems.length - 1) { focusIdx++; renderRows(); } },
     confirm: function() {
-      var t = items[focusIdx];
-      if (t) window.addMyTeamEntry(t.name, t.espnPath, t.leagueLabel);
+      var t = displayItems[focusIdx];
+      if (t) window.addMyTeamEntry(t.name, t.espnPath || '', t.leagueLabel || '');
       ctrl.close();
     },
     close: function() {
       window._svPickerCtrl = null;
       var ov = document.getElementById('sv-tv-picker');
       if (ov) ov.remove();
-      var inp = $('my-team-input');
-      if (inp) { var els = getTvFocusableElements(); var si = els.indexOf(inp); if (si >= 0) focusElementAtIndex(si); else inp.focus(); }
+      var inp2 = $('my-team-input');
+      if (inp2) { var els = getTvFocusableElements(); var si = els.indexOf(inp2); if (si >= 0) focusElementAtIndex(si); else inp2.focus(); }
     }
   };
   window._svPickerCtrl = ctrl;
