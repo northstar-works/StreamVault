@@ -180,6 +180,8 @@ body.tv-mode .px-row button.tv-f,body.tv-mode .px-row button:focus{border-color:
 .gpr.now{background:rgba(108,92,231,.18);border-left:3px solid var(--ac)}
 .gpr.past{opacity:.4}
 .gpr:hover,.gpr:active,.gpr:focus{background:rgba(255,255,255,.1)!important;outline:none}
+body.tv-mode .gpr.tv-f{overflow:visible!important;z-index:20!important;min-width:140px;background:var(--c1)!important;box-shadow:0 2px 12px rgba(0,0,0,.6)!important;}
+body.tv-mode .gpr.tv-f .gt{white-space:normal!important;text-overflow:clip!important;word-break:break-word;}
 .sport-gc:focus,.sport-gc.tv-f{border-color:var(--ac)!important;background:rgba(108,92,231,.08)}
 .gnl{position:absolute;top:0;bottom:0;width:2px;background:var(--rd);z-index:4;pointer-events:none}
 .gnl-hdr{position:absolute;top:0;bottom:0;width:2px;background:var(--rd);z-index:14;pointer-events:none}
@@ -4147,6 +4149,8 @@ window.__svHandleTvKey = function(code) {
       return true;
     }
     if (openModal) { openModal.classList.remove('on'); refreshTvFocus(); return true; }
+    // BACK from settings → bottom nav (lets user switch tabs without hunting for nav)
+    if ($('set-scr') && $('set-scr').classList.contains('on')) { return _guideGoToNav(); }
   }
   return false;
 };
@@ -5277,18 +5281,30 @@ function renderSportTab() {
       if (anyFetched) {
         const countableGames = showPast ? lgGamesAny : lgGamesAny.filter(function(g) { return g.state !== 'post'; });
         if (countableGames.length === 0) return; // no games → hide tab
-        // My Teams Only: hide tab when pinned team has no games
-        if (filterOn && (lg.pinnedTeams || []).length > 0) {
-          const pinnedLower = (lg.pinnedTeams || []).map(function(t) { return t.toLowerCase(); });
-          const hasPinnedGame = countableGames.some(function(g) {
-            return (g.teams || []).some(function(tn) {
-              const tl = tn.toLowerCase();
-              return pinnedLower.some(function(p) {
-                return tl.includes(p) || p.split(' ').some(function(w) { return w.length >= 3 && tl.includes(w); });
+        // My Teams Only: hide tab when no pinned team has games in this league.
+        // For leagues with their own pinnedTeams list, use that directly.
+        // For catch-all leagues (e.g. "US Sports") with no pinnedTeams, fall back to
+        // the global union of all pinned teams — so the tab is hidden when none of the
+        // user's teams across any league have a game here today.
+        if (filterOn) {
+          let relevantPins = (lg.pinnedTeams || []);
+          if (relevantPins.length === 0) {
+            relevantPins = (settings.sportLeagues || []).reduce(function(arr, l) {
+              return arr.concat(l.pinnedTeams || []);
+            }, []);
+          }
+          if (relevantPins.length > 0) {
+            const pinnedLower = relevantPins.map(function(t) { return t.toLowerCase(); });
+            const hasPinnedGame = countableGames.some(function(g) {
+              return (g.teams || []).some(function(tn) {
+                const tl = tn.toLowerCase();
+                return pinnedLower.some(function(p) {
+                  return tl.includes(p) || p.split(' ').some(function(w) { return w.length >= 3 && tl.includes(w); });
+                });
               });
             });
-          });
-          if (!hasPinnedGame) return;
+            if (!hasPinnedGame) return;
+          }
         }
       }
       // If not yet fetched and no channels → skip
@@ -5306,7 +5322,7 @@ function renderSportTab() {
 
   if (secTabs) {
     secTabs.innerHTML = tabs.map(t =>
-      `<span tabindex="0" role="button" data-tv-zone="sport-section-tabs" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;${t.id === sportSectionTab ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportSectionTab('${t.id.replace(/'/g,"\\'")}')">
+      `<span tabindex="0" role="button" data-tv-zone="sport-section-tabs" data-sid="${t.id}" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;${t.id === sportSectionTab ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportSectionTab('${t.id.replace(/'/g,"\\'")}')">
         ${esc(t.label)}${t.badge ? ' <span style="font-size:8px;opacity:.85">('+t.badge+')</span>' : ''}
       </span>`
     ).join('');
@@ -5340,7 +5356,7 @@ function renderSportTab() {
       });
       teamTabs.innerHTML = visibleTeams.length
         ? ['All', ...visibleTeams].map(t =>
-            `<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;${t === sportActiveTeam ? 'background:var(--ac);color:#fff' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportTeamTab('${t.replace(/'/g,"\'")}')">
+            `<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" data-team="${t}" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;${t === sportActiveTeam ? 'background:var(--ac);color:#fff' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportTeamTab('${t.replace(/'/g,"\'")}')">
               ${esc(t === 'All' ? '⚽ All' : t)}
             </span>`
           ).join('')
@@ -5621,10 +5637,30 @@ function _getAllTodayGames() {
 
 function _renderAllGamesTab(lst) {
   const showPast = settings.sportShowPastGames !== false;
-  const games = _getAllTodayGames().filter(g => showPast || g.state !== 'post');
+  const filterOn = settings.sportLeagueFilterEnabled;
+  // Fix 5: when "My Teams Only" is ON, All Games shows only pinned-team games.
+  // Collect global union of all pinned teams for the cross-league match.
+  const _allPins = filterOn
+    ? (settings.sportLeagues || []).reduce((arr, l) => arr.concat(l.pinnedTeams || []), [])
+    : [];
+  const _allPinsLower = _allPins.map(p => p.toLowerCase());
+  function _gameMatchesPins(g) {
+    if (!_allPinsLower.length) return false;
+    return (g.teams || []).some(tn => {
+      const tl = tn.toLowerCase();
+      return _allPinsLower.some(p => tl.includes(p) || p.split(/\s+/).some(w => w.length >= 3 && tl.includes(w)));
+    });
+  }
+  let games = _getAllTodayGames().filter(g => showPast || g.state !== 'post');
+  if (filterOn && _allPinsLower.length > 0) {
+    games = games.filter(_gameMatchesPins);
+  }
 
   if (!games.length) {
-    lst.innerHTML = '<div class="emp"><h3>No games scheduled today</h3><p>Fetch schedules using the ↻ button, or check Settings → Live Sports.</p></div>';
+    const emptyMsg = (filterOn && _allPinsLower.length > 0)
+      ? '<div class="emp"><h3>No games for your teams today</h3><p>Your pinned teams aren't playing today. Turn off "My Teams Only" to see all games.</p></div>'
+      : '<div class="emp"><h3>No games scheduled today</h3><p>Fetch schedules using the ↻ button, or check Settings → Live Sports.</p></div>';
+    lst.innerHTML = emptyMsg;
     return;
   }
 
@@ -5736,12 +5772,36 @@ window.setSportSectionTab = (id) => {
   _invalidateSportCache();
   _invalidateSportTabCache();
   renderSportTab();
+  // Fix 3: restore focus to the tab that was just clicked so TV remote
+  // stays in the section-tab row — not the bottom nav.
+  if (isTvDevice) {
+    setTimeout(() => {
+      const target = document.querySelector('#sport-section-tabs [data-sid="' + id + '"]');
+      if (target) {
+        const els = getTvFocusableElements();
+        const idx = els.indexOf(target);
+        if (idx >= 0) focusElementAtIndex(idx); else target.focus();
+      }
+    }, 40);
+  }
 };
 
 window.setSportTeamTab = (team) => {
   sportActiveTeam = team;
   _invalidateSportTabCache();
   renderSportTab();
+  // Fix 3: keep focus in the team-pill row after clicking
+  if (isTvDevice) {
+    setTimeout(() => {
+      const pills = document.querySelectorAll('#sport-team-tabs [tabindex]');
+      const target = Array.from(pills).find(el => el.dataset.team === team) || pills[0];
+      if (target) {
+        const els = getTvFocusableElements();
+        const idx = els.indexOf(target);
+        if (idx >= 0) focusElementAtIndex(idx); else target.focus();
+      }
+    }, 40);
+  }
 };
 
 // ── Settings UI ──────────────────────────────────────────────────────────────
@@ -5963,6 +6023,9 @@ window.toggleSportFilter = () => {
   settings.sportLeagueFilterEnabled = !settings.sportLeagueFilterEnabled;
   _invalidateSportCache();
   _invalidateSportTabCache();
+  // Fix 5: switching TO My Teams Only → default to All Games tab (shows filtered game list).
+  // Switching back to All Sport Channels preserves whatever tab was active.
+  if (settings.sportLeagueFilterEnabled) { sportSectionTab = 'allgames'; }
   const tgl = $('s-sport-enable');
   if (tgl) tgl.className = 'tgl' + (settings.sportLeagueFilterEnabled ? ' on' : '');
   const tog2 = $('btn-sport-filter-tog');
