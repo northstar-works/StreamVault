@@ -4050,6 +4050,14 @@ function moveTvFocusSpatial(dirCode) {
 }
 window.__svHandleTvKey = function(code) {
   if (!isTvDevice) return false;
+  // ── Custom TV picker overlay: intercept ALL keys while open ──────────
+  if (window._svPickerCtrl) {
+    if (code === 19) { window._svPickerCtrl.up();      return true; }
+    if (code === 20) { window._svPickerCtrl.down();    return true; }
+    if ([23,66,160].includes(code)) { window._svPickerCtrl.confirm(); return true; }
+    if (code === 4)  { window._svPickerCtrl.close();   return true; }
+    return true; // swallow all other keys while picker is open
+  }
   if ([19,20,21,22].includes(code)) return moveTvFocusSpatial(code);
   if ([23,66,160].includes(code)) {
     const el = getTvFocusableElements()[tvFocusIndex] || document.activeElement || document.querySelector('.tv-f');
@@ -4153,8 +4161,13 @@ window.__svHandleTvKey = function(code) {
       return true;
     }
     if (openModal) { openModal.classList.remove('on'); refreshTvFocus(); return true; }
-    // Fix 2: BACK from Settings screen → focus bottom nav
-    if ($("set-scr") && $("set-scr").classList.contains("on")) { return _guideGoToNav(); }
+    // Fix 7/8: BACK on any main screen → bottom nav bar.
+    // Covers Settings, Sports, Home (non-Plex), Repos, Guide, and any future screens.
+    // Specific sub-navigation (PlexStr, EPG cells, guide header) is already handled above.
+    if ($("set-scr")   && $("set-scr").classList.contains("on"))   { return _guideGoToNav(); }
+    if ($("sport-scr") && $("sport-scr").classList.contains("on")) { return _guideGoToNav(); }
+    if ($("repo-scr")  && $("repo-scr").classList.contains("on"))  { return _guideGoToNav(); }
+    if ($("lib-scr")   && $("lib-scr").classList.contains("on"))   { return _guideGoToNav(); }
   }
   return false;
 };
@@ -5768,110 +5781,78 @@ window._svPlaySport = (idx) => {
 
 
 // ── TV custom select picker overlay ─────────────────────────────────────────
-// Fire TV WebView doesn't support showPicker(). For any <select> element,
-// this builds a full-screen D-pad-navigable overlay of its options,
-// updates the select value on confirm, then fires a 'change' event.
+// Fire TV native keys are dispatched via window.__svHandleTvKey (not DOM
+// keydown), so the overlay must expose a controller on window._svPickerCtrl
+// that __svHandleTvKey can call directly.
 function _showTvSelectPicker(selectEl) {
   if (!selectEl) return;
-  // Build option list (skip disabled, skip optgroup labels)
+
+  // Build flat option list (skip disabled items)
   var opts = [];
   for (var i = 0; i < selectEl.options.length; i++) {
     var o = selectEl.options[i];
-    if (!o.disabled) opts.push({ value: o.value, label: o.text, index: i });
+    if (!o.disabled) opts.push({ value: o.value, label: o.text });
   }
   if (!opts.length) return;
 
-  // Remove any stale overlay
+  // Remove stale overlay/controller
   var existing = document.getElementById('sv-tv-picker');
   if (existing) existing.remove();
+  window._svPickerCtrl = null;
 
-  // Current value → start highlight there
-  var curIdx = opts.findIndex(function(o) { return o.value === selectEl.value; });
-  if (curIdx < 0) curIdx = 0;
-  var focusIdx = curIdx;
+  // Start highlight on current value
+  var focusIdx = Math.max(0, opts.findIndex(function(o) { return o.value === selectEl.value; }));
 
-  // Overlay shell
+  // ── DOM ──
   var overlay = document.createElement('div');
   overlay.id = 'sv-tv-picker';
-  overlay.setAttribute('tabindex', '-1');
-  overlay.style.cssText = [
-    'position:fixed;inset:0;z-index:9000',
-    'background:rgba(0,0,0,.78)',
-    'display:flex;align-items:center;justify-content:center'
-  ].join(';');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;';
 
-  // Card
   var card = document.createElement('div');
-  card.style.cssText = [
-    'background:var(--c1);border-radius:12px;padding:12px 0',
-    'min-width:280px;max-width:90vw;max-height:70vh',
-    'overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.8)'
-  ].join(';');
+  card.style.cssText = 'background:var(--c1);border-radius:12px;padding:12px 0;min-width:300px;max-width:92vw;max-height:72vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.85);';
 
   function renderRows() {
     card.innerHTML = opts.map(function(o, i) {
-      var active = i === focusIdx;
-      return '<div data-picker-idx="' + i + '" style="'
-        + 'padding:10px 20px;font-size:11px;cursor:pointer;'
-        + 'color:' + (active ? '#fff' : 'var(--t1)') + ';'
-        + 'background:' + (active ? 'var(--ac)' : 'transparent') + ';'
-        + 'font-weight:' + (active ? '700' : '400') + ';'
-        + '">' + o.label + '</div>';
+      var a = (i === focusIdx);
+      return '<div data-pidx="' + i + '" style="padding:11px 22px;font-size:11px;cursor:pointer;'
+        + 'color:' + (a ? '#fff' : 'var(--t1)') + ';background:' + (a ? 'var(--ac)' : 'transparent') + ';font-weight:' + (a ? '700' : '400') + ';">'
+        + o.label + '</div>';
     }).join('');
-
-    // Click handlers on rows
-    card.querySelectorAll('[data-picker-idx]').forEach(function(row) {
-      row.onclick = function() {
-        focusIdx = parseInt(row.dataset.pickerIdx, 10);
-        confirm();
-      };
+    card.querySelectorAll('[data-pidx]').forEach(function(row) {
+      row.onclick = function() { focusIdx = parseInt(row.dataset.pidx, 10); ctrl.confirm(); };
     });
-
-    // Scroll active row into view
-    var activeRow = card.querySelector('[data-picker-idx="' + focusIdx + '"]');
-    if (activeRow) { activeRow.scrollIntoView({ block: 'nearest' }); }
+    var activeRow = card.querySelector('[data-pidx="' + focusIdx + '"]');
+    if (activeRow) activeRow.scrollIntoView({ block: 'nearest' });
   }
 
-  function confirm() {
-    var chosen = opts[focusIdx];
-    if (chosen) {
-      selectEl.value = chosen.value;
-      selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+  var ctrl = {
+    up:      function() { if (focusIdx > 0) { focusIdx--; renderRows(); } },
+    down:    function() { if (focusIdx < opts.length - 1) { focusIdx++; renderRows(); } },
+    confirm: function() {
+      var chosen = opts[focusIdx];
+      if (chosen) {
+        selectEl.value = chosen.value;
+        selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      ctrl.close();
+    },
+    close: function() {
+      window._svPickerCtrl = null;
+      var ov = document.getElementById('sv-tv-picker');
+      if (ov) ov.remove();
+      // Return focus to the select
+      var els = getTvFocusableElements();
+      var si = els.indexOf(selectEl);
+      if (si >= 0) { focusElementAtIndex(si); } else { selectEl.focus(); }
     }
-    close();
-  }
+  };
 
-  function close() {
-    var ov = document.getElementById('sv-tv-picker');
-    if (ov) ov.remove();
-    // Return focus to the select that opened the picker
-    var els = getTvFocusableElements();
-    var si = els.indexOf(selectEl);
-    if (si >= 0) { focusElementAtIndex(si); } else { selectEl.focus(); }
-  }
-
-  overlay.addEventListener('keydown', function(e) {
-    if (e.key === 'ArrowDown' || e.keyCode === 40) {
-      e.preventDefault(); e.stopPropagation();
-      focusIdx = Math.min(focusIdx + 1, opts.length - 1);
-      renderRows();
-    } else if (e.key === 'ArrowUp' || e.keyCode === 38) {
-      e.preventDefault(); e.stopPropagation();
-      focusIdx = Math.max(focusIdx - 1, 0);
-      renderRows();
-    } else if (e.key === 'Enter' || e.keyCode === 13 || e.keyCode === 23) {
-      e.preventDefault(); e.stopPropagation();
-      confirm();
-    } else if (e.key === 'Escape' || e.keyCode === 27 || e.keyCode === 4) {
-      e.preventDefault(); e.stopPropagation();
-      close();
-    }
-  }, true);
+  // Expose controller so __svHandleTvKey can reach it
+  window._svPickerCtrl = ctrl;
 
   overlay.appendChild(card);
   document.body.appendChild(overlay);
   renderRows();
-  overlay.focus();
 }
 window.setSportSectionTab = (id) => {
   sportSectionTab = id;
