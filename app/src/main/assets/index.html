@@ -396,7 +396,23 @@ document.addEventListener('keydown', function(e) {
 
         <hr style="border:none;border-top:1px solid var(--bd);margin:4px 0 12px">
 
-        <p style="font-size:9px;color:var(--ac);font-weight:600;margin-bottom:4px">② Configure leagues &amp; pin your teams</p>
+        <p style="font-size:9px;color:var(--ac);font-weight:600;margin-bottom:6px">② My Teams &mdash; universal across all sport groups</p>
+        <div id="my-teams-section" style="margin-bottom:8px"></div>
+        <div class="tv-row" data-tv-group="my-team-add-row" style="position:relative;margin-bottom:12px">
+          <div style="display:flex;gap:4px;align-items:center">
+            <input id="my-team-input" tabindex="0" placeholder="Search ESPN: Rangers, Cowboys..." autocomplete="off"
+              style="flex:1;padding:5px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px"
+              oninput="window.onMyTeamInput && window.onMyTeamInput(this.value)"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();window.addMyTeamFromInput&&window.addMyTeamFromInput();}"
+            >
+            <button class="bs" tabindex="0" onclick="window.addMyTeamFromInput && window.addMyTeamFromInput()" style="padding:5px 8px;font-size:9px;border-radius:var(--rs)">Add</button>
+          </div>
+          <div id="my-team-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:500;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);max-height:160px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.4);margin-top:2px"></div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid var(--bd);margin:4px 0 12px">
+
+        <p style="font-size:9px;color:var(--ac);font-weight:600;margin-bottom:4px">③ Configure sport channel groups</p>
         <div id="sport-league-lst" style="margin-bottom:4px"></div>
 
       </div><!-- sport-acc-body -->
@@ -884,7 +900,7 @@ let items = [];
 let repos = [];
 let epgSrc = [];
 let epgData = { channels: {}, programs: {} };
-let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [], tabOrder: ['itv','plex','icam','local','network'], tvMode: 'auto', plex: { server: '', token: '', section: '', sections: [] }, timeshiftEnabled: true, timeshiftMaxMin: 30, dvrCfg: { remoteEnabled: false, proto: 'ftp', host: '', port: '21', user: '', pass: '', path: '/recordings' }, sportLeagueFilterEnabled: true, sportLeagues: [], sportShowPastGames: true,
+let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [], tabOrder: ['itv','plex','icam','local','network'], tvMode: 'auto', plex: { server: '', token: '', section: '', sections: [] }, timeshiftEnabled: true, timeshiftMaxMin: 30, dvrCfg: { remoteEnabled: false, proto: 'ftp', host: '', port: '21', user: '', pass: '', path: '/recordings' }, sportLeagueFilterEnabled: true, sportLeagues: [], sportShowPastGames: true, myTeams: [],
   localEnable: true, localPath: '',
   icamCfg: {},
   networkCfg: {} };
@@ -1075,6 +1091,20 @@ function loadSettings() {
           lg.cacheDate = '';
         });
       }
+    }
+    // One-time migration: move per-league pinnedTeams into global myTeams
+    if (!settings.myTeams || settings.myTeams.length === 0) {
+      var _migrated = [];
+      (settings.sportLeagues || []).forEach(function(lg) {
+        var paths = lg.espnPaths || [];
+        var espnPath = paths.length === 1 ? paths[0] : '';
+        (lg.pinnedTeams || []).forEach(function(name) {
+          if (!_migrated.find(function(t) { return t.name === name; })) {
+            _migrated.push({ name: name, espnPath: espnPath });
+          }
+        });
+      });
+      if (_migrated.length > 0) { settings.myTeams = _migrated; }
     }
     // One-time migration: if leagues are configured, default filter ON
     // (older installs saved sportLeagueFilterEnabled: false as default)
@@ -4072,29 +4102,25 @@ window.__svHandleTvKey = function(code) {
     if (el.classList.contains('epg-opt')) { selectEpg(el); return true; }
     if (tag === 'select') {
       el.focus();
-      // plex-section library picker: Enter opens native dropdown on TV too;
-      // after the user picks a library, focus jumps to the Search query field.
-      if (el.id === 'plex-section') {
-        if (typeof el.showPicker === 'function') {
-          try { el.showPicker(); } catch(e) {}
+      if (isTvDevice) {
+        // On TV, ALL <select> elements use the custom overlay picker.
+        // For plex-section: wire up afterChange first so focus advances to query field after pick.
+        if (el.id === 'plex-section') {
+          var _plexAfter = function() {
+            el.removeEventListener('change', _plexAfter);
+            var q = $('plex-query');
+            if (q) {
+              var allEls2 = getTvFocusableElements();
+              var i2 = allEls2.indexOf(q);
+              setTimeout(function() { if (i2 >= 0) focusElementAtIndex(i2); else { q.focus(); setTvFocusClass(q); } }, 80);
+            }
+          };
+          el.addEventListener('change', _plexAfter);
         }
-        const afterChange = () => {
-          el.removeEventListener('change', afterChange);
-          const q = $('plex-query');
-          if (q) {
-            const allEls2 = getTvFocusableElements();
-            const i2 = allEls2.indexOf(q);
-            setTimeout(() => i2 >= 0 ? focusElementAtIndex(i2) : (q.focus(), setTvFocusClass(q)), 80);
-          }
-        };
-        el.addEventListener('change', afterChange);
+        _showTvSelectPicker(el);
         return true;
       }
-      // Fix 6: sport repo/group selects → custom overlay picker on TV
-      if (isTvDevice && (el.id === 'sport-repo-sel' || el.id === 'sport-grp-sel')) {
-        _showTvSelectPicker(el); return true;
-      }
-      if (typeof el.showPicker === 'function' && !isTvDevice) { try { el.showPicker(); return true; } catch(e) {} }
+      if (typeof el.showPicker === 'function') { try { el.showPicker(); return true; } catch(e) {} }
       return cycleSelectOption(el, 1) || true;
     }
     if (tag === 'textarea') { el.focus(); return true; }
@@ -5017,10 +5043,13 @@ let _sportTabCache = null;    // getSportTabItems result cache
 let _sportTabCacheKey = '';   // key: filterOn+showPast+activeTeam+leagueEnabledFlags
 
 function getAllPinnedTeams() {
+  // Global My Teams takes priority; fall back to legacy per-league pinnedTeams
+  var global = (settings.myTeams || []).map(function(t) { return t.name; });
+  if (global.length > 0) return global;
   if (!settings.sportLeagues) return [];
-  const teams = [];
-  settings.sportLeagues.forEach(lg => {
-    (lg.pinnedTeams || []).forEach(t => { if (!teams.includes(t)) teams.push(t); });
+  var teams = [];
+  settings.sportLeagues.forEach(function(lg) {
+    (lg.pinnedTeams || []).forEach(function(t) { if (!teams.includes(t)) teams.push(t); });
   });
   return teams;
 }
@@ -5030,9 +5059,21 @@ function getAllPinnedTeams() {
 // cannot bleed into NHL and match "New York Rangers".
 function getPinnedTeamsForLeague(lgName) {
   if (!lgName || lgName === 'live' || lgName === 'allgames') return getAllPinnedTeams();
+  var myTeams = settings.myTeams || [];
+  if (myTeams.length > 0) {
+    var lg = settings.sportLeagues && settings.sportLeagues.find(function(l) { return l.groupName === lgName; });
+    var lgPaths = lg ? (lg.espnPaths || []) : [];
+    if (lgPaths.length > 0) {
+      // Teams with a matching ESPN path (or no path set) qualify for this league
+      return myTeams.filter(function(t) { return !t.espnPath || lgPaths.includes(t.espnPath); }).map(function(t) { return t.name; });
+    }
+    // Catch-all league (no ESPN paths): show all teams
+    return myTeams.map(function(t) { return t.name; });
+  }
+  // Legacy fallback: per-league pinnedTeams
   if (!settings.sportLeagues) return [];
-  const lg = settings.sportLeagues.find(l => l.groupName === lgName);
-  return lg ? (lg.pinnedTeams || []) : [];
+  var lg2 = settings.sportLeagues.find(function(l) { return l.groupName === lgName; });
+  return lg2 ? (lg2.pinnedTeams || []) : [];
 }
 
 function _invalidateSportTabCache() { _sportTabCache = null; _sportTabCacheKey = ''; }
@@ -5892,6 +5933,7 @@ window.setSportTeamTab = (team) => {
 // ── Settings UI ──────────────────────────────────────────────────────────────
 
 function renderSportLeagueSettings() {
+  renderMyTeams(); // refresh global My Teams panel
   const tgl = $('s-sport-enable');
   if (tgl) tgl.className = 'tgl' + (settings.sportLeagueFilterEnabled ? ' on' : '');
   const pastTgl = $('s-sport-past');
@@ -6023,10 +6065,6 @@ function renderSportLeagueSettings() {
     const repoName = lg.repoId ? (repos.find(r=>r.id===lg.repoId)||{}).name||lg.repoId : 'Library';
     const srcCount = getSportGroupItems(lg).length;
 
-    const pins = (lg.pinnedTeams || []).map((p, pi) =>
-      `<div class="li" style="padding:3px 0"><span class="lv" style="flex:1">${esc(p)}</span><button onclick="rmSportPin(${i},${pi})" style="color:var(--rd);background:none;border:none;cursor:pointer;font-size:10px">✕</button></div>`
-    ).join('') || '<p style="font-size:8px;color:var(--t3)">No pinned teams. Team keywords added here filter the Sports tab and always show in filter mode.</p>';
-
     return `<div style="border:1px solid var(--bd);border-radius:var(--rs);padding:8px;margin-bottom:8px">
       <div class="sr" style="margin-bottom:6px">
         <div style="flex:1">
@@ -6050,16 +6088,12 @@ function renderSportLeagueSettings() {
           <button class="bc" onclick="refreshSportLeague(${i})" style="padding:5px 8px;font-size:9px;border-radius:var(--rs)" title="Fetch schedule">↻</button>
         </div>
       </div>
-      <div style="margin-top:6px">
-        <div style="font-size:9px;color:var(--t2);margin-bottom:4px">📌 Pinned teams (${(lg.pinnedTeams||[]).length})</div>
-        <div style="padding-left:4px">${pins}</div>
-        <div class="tv-row" data-tv-group="sport-pin-row-${i}" style="display:flex;gap:4px;margin-top:6px">
-          <input id="sport-pin-in-${i}" tabindex="0" placeholder="Team name…" autocomplete="off"
-            style="flex:1;padding:5px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px"
-            onkeydown="if(event.key==='Enter'){event.preventDefault();addSportPin(${i});}"
-          >
-          <button class="bs" tabindex="0" onclick="addSportPin(${i})" style="padding:5px 8px;font-size:9px;border-radius:var(--rs)">Add</button>
-        </div>
+      <div style="margin-top:6px;padding:5px 8px;background:rgba(108,92,231,.08);border-radius:var(--rs);border:1px solid rgba(108,92,231,.2)">
+        <div style="font-size:8px;color:var(--ac);font-weight:600;margin-bottom:3px">✨ Teams from global My Teams</div>
+        <div style="font-size:8px;color:var(--t2)">${(function(){
+          var matched = getPinnedTeamsForLeague(lg.groupName);
+          return matched.length ? matched.join(', ') : 'No teams match yet — add them in My Teams above';
+        })()}</div>
       </div>
     </div>`;
   }).join('');
@@ -6166,6 +6200,173 @@ window.rmSportPath = (i, pi) => {
   if (removed && settings.sportLeagues[i].cachedGamesByPath) delete settings.sportLeagues[i].cachedGamesByPath[removed];
   saveSettings(); renderSportLeagueSettings();
 };
+
+
+// ── Global My Teams ───────────────────────────────────────────────────────────
+function renderMyTeams() {
+  var el = $('my-teams-section');
+  if (!el) return;
+  var teams = settings.myTeams || [];
+  if (!teams.length) {
+    el.innerHTML = '<p style="font-size:8px;color:var(--t3);margin-bottom:4px">No teams added yet. Search above to add your teams.</p>';
+    return;
+  }
+  el.innerHTML = teams.map(function(t, i) {
+    var label = t.name + (t.leagueLabel ? ' <span style="font-size:7px;color:var(--t3);background:rgba(255,255,255,.1);border-radius:3px;padding:1px 4px;margin-left:3px">' + esc(t.leagueLabel) + '</span>' : '');
+    return '<div class="li" style="padding:3px 0"><span class="lv" style="flex:1">' + label + '</span>'
+      + '<button onclick="window.rmMyTeam(' + i + ')" style="color:var(--rd);background:none;border:none;cursor:pointer;font-size:10px" title="Remove">✕</button></div>';
+  }).join('');
+}
+
+window.rmMyTeam = function(i) {
+  if (!settings.myTeams || !settings.myTeams[i]) return;
+  var name = settings.myTeams[i].name;
+  settings.myTeams.splice(i, 1);
+  _invalidateSportTabCache();
+  saveSettings(); renderMyTeams(); renderSportLeagueSettings(); renderSportTab();
+  toast('Removed: ' + name);
+};
+
+window.addMyTeamEntry = function(name, espnPath, leagueLabel) {
+  if (!name) { toast('Enter a team name'); return; }
+  if (!settings.myTeams) settings.myTeams = [];
+  if (settings.myTeams.find(function(t) { return t.name.toLowerCase() === name.toLowerCase(); })) {
+    toast('Already added'); return;
+  }
+  settings.myTeams.push({ name: name, espnPath: espnPath || '', leagueLabel: leagueLabel || '' });
+  _invalidateSportTabCache();
+  saveSettings(); renderMyTeams(); renderSportLeagueSettings(); renderSportTab();
+  // Clear input and suggestions
+  var inp = $('my-team-input'); if (inp) inp.value = '';
+  window._myTeamSuggestions = [];
+  var sug = $('my-team-suggestions'); if (sug) sug.style.display = 'none';
+  toast('\uD83D\uDCCC Added: ' + name);
+  // Refocus input
+  setTimeout(function() {
+    var inp2 = $('my-team-input');
+    if (inp2) { var els = getTvFocusableElements(); var idx = els.indexOf(inp2); if (idx >= 0) focusElementAtIndex(idx); else inp2.focus(); }
+  }, 60);
+};
+
+window.addMyTeamFromInput = function() {
+  // On TV with pending suggestions: open picker overlay
+  if (isTvDevice && window._myTeamSuggestions && window._myTeamSuggestions.length > 0) {
+    _showMyTeamSuggestionPicker();
+    return;
+  }
+  // Otherwise add raw text from input
+  var inp = $('my-team-input');
+  var val = inp ? inp.value.trim() : '';
+  if (!val) { toast('Enter a team name'); return; }
+  window.addMyTeamEntry(val, '', '');
+};
+
+// ── ESPN team autocomplete ────────────────────────────────────────────────────
+window._myTeamSuggestions = [];
+var _myTeamSearchTimer = null;
+
+window.onMyTeamInput = function(val) {
+  clearTimeout(_myTeamSearchTimer);
+  var sug = $('my-team-suggestions');
+  if (val.length < 2) { window._myTeamSuggestions = []; if (sug) sug.style.display = 'none'; return; }
+  _myTeamSearchTimer = setTimeout(function() { _fetchEspnTeamSuggestions(val); }, 350);
+};
+
+function _fetchEspnTeamSuggestions(query) {
+  fetch('https://site.api.espn.com/apis/common/v3/search?query=' + encodeURIComponent(query) + '&limit=8&type=team&lang=en&region=us')
+    .then(function(r) { return r.json(); })
+    .then(function(j) {
+      var items = (j.items || []).filter(function(item) { return item.displayName || item.shortDisplayName; });
+      window._myTeamSuggestions = items.map(function(item) {
+        var name = item.displayName || item.shortDisplayName || '';
+        var sport = (item.sport && (item.sport.slug || item.sport.name || '')) || '';
+        var league = (item.league && (item.league.slug || item.league.abbreviation || '')) || '';
+        if (!sport && !league) {
+          // Try UID pattern s:N~l:N~t:N - look up known paths
+          var uid = item.uid || '';
+          var uidMatch = uid.match(/s:(\d+)~l:(\d+)/);
+          // Fallback: see if ESPN_LEAGUE_MAP label appears in name
+        }
+        var espnPath = (sport && league) ? (sport.toLowerCase() + '/' + league.toLowerCase()) : '';
+        // Normalise to known ESPN_LEAGUE_MAP paths
+        var known = ESPN_LEAGUE_MAP.find(function(e) { return e.path === espnPath || (league && e.keys.some(function(k) { return k === league.toLowerCase(); })); });
+        if (known) { espnPath = known.path; }
+        var leagueLabel = known ? known.label : (league ? league.toUpperCase() : '');
+        return { name: name, espnPath: espnPath, leagueLabel: leagueLabel };
+      });
+      _renderMyTeamSuggestions();
+    })
+    .catch(function() { window._myTeamSuggestions = []; });
+}
+
+function _renderMyTeamSuggestions() {
+  var sug = $('my-team-suggestions');
+  if (!sug) return;
+  var items = window._myTeamSuggestions || [];
+  if (!items.length) { sug.style.display = 'none'; return; }
+  sug.innerHTML = items.map(function(t, i) {
+    return '<div onclick="window.addMyTeamEntry(' + JSON.stringify(t.name) + ',' + JSON.stringify(t.espnPath) + ',' + JSON.stringify(t.leagueLabel) + ')" style="padding:7px 10px;cursor:pointer;font-size:9px;color:var(--t1);border-bottom:1px solid var(--bd)" onmouseover="this.style.background=\'var(--ac)\'" onmouseout="this.style.background=\'\'">'
+      + esc(t.name) + (t.leagueLabel ? ' <span style="font-size:7px;color:var(--t3)">' + esc(t.leagueLabel) + '</span>' : '')
+      + '</div>';
+  }).join('');
+  sug.style.display = 'block';
+}
+
+// TV-specific: open suggestion picker overlay when user presses Enter on input
+function _showMyTeamSuggestionPicker() {
+  var items = window._myTeamSuggestions || [];
+  if (!items.length) { window.addMyTeamFromInput(); return; }
+  // Build a fake <select>-like structure for _showTvSelectPicker
+  // Re-use the picker controller pattern directly
+  window._svPickerCtrl = null;
+  var existing = document.getElementById('sv-tv-picker');
+  if (existing) existing.remove();
+  var focusIdx = 0;
+  var overlay = document.createElement('div');
+  overlay.id = 'sv-tv-picker';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;';
+  var card = document.createElement('div');
+  card.style.cssText = 'background:var(--c1);border-radius:12px;padding:12px 0;min-width:300px;max-width:92vw;max-height:72vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.85);';
+  var title = document.createElement('div');
+  title.style.cssText = 'padding:4px 22px 10px;font-size:9px;color:var(--t3);font-weight:600;border-bottom:1px solid var(--bd);margin-bottom:4px';
+  title.textContent = 'Select a team';
+  card.appendChild(title);
+  function renderRows() {
+    var rows = card.querySelectorAll('[data-pidx]');
+    rows.forEach(function(r) { r.remove(); });
+    items.forEach(function(t, i) {
+      var row = document.createElement('div');
+      row.dataset.pidx = String(i);
+      var a = (i === focusIdx);
+      row.style.cssText = 'padding:11px 22px;font-size:11px;cursor:pointer;color:' + (a ? '#fff' : 'var(--t1)') + ';background:' + (a ? 'var(--ac)' : 'transparent') + ';font-weight:' + (a ? '700' : '400') + ';';
+      row.innerHTML = esc(t.name) + (t.leagueLabel ? ' <span style="font-size:8px;opacity:.7">' + esc(t.leagueLabel) + '</span>' : '');
+      row.onclick = function() { focusIdx = i; ctrl.confirm(); };
+      card.appendChild(row);
+    });
+    var activeRow = card.querySelector('[data-pidx="' + focusIdx + '"]');
+    if (activeRow) activeRow.scrollIntoView({ block: 'nearest' });
+  }
+  var ctrl = {
+    up:      function() { if (focusIdx > 0) { focusIdx--; renderRows(); } },
+    down:    function() { if (focusIdx < items.length - 1) { focusIdx++; renderRows(); } },
+    confirm: function() {
+      var t = items[focusIdx];
+      if (t) window.addMyTeamEntry(t.name, t.espnPath, t.leagueLabel);
+      ctrl.close();
+    },
+    close: function() {
+      window._svPickerCtrl = null;
+      var ov = document.getElementById('sv-tv-picker');
+      if (ov) ov.remove();
+      var inp = $('my-team-input');
+      if (inp) { var els = getTvFocusableElements(); var si = els.indexOf(inp); if (si >= 0) focusElementAtIndex(si); else inp.focus(); }
+    }
+  };
+  window._svPickerCtrl = ctrl;
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  renderRows();
+}
 
 window.addSportPin = (i) => {
   const inp = $('sport-pin-in-' + i);
