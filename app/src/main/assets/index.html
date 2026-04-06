@@ -4826,23 +4826,45 @@ async function fetchLeagueSchedule(idx) {
   const needsFetch = paths.filter(p => p && !(lg.cacheDate === today && Array.isArray(lg.cachedGamesByPath[p])));
   if (!needsFetch.length) return;
   for (const path of needsFetch) {
-    try { lg.cachedGamesByPath[path] = await _fetchOnePath(path); }
-    catch(e) {
+    try {
+      const fresh = await _fetchOnePath(path);
+      // Only overwrite existing non-empty data with an empty response if we have
+      // a recent cache (today). An empty ESPN response at 2-5 AM doesn't mean
+      // there are no games — it usually means the scoreboard API has no data yet
+      // for today's slate. Preserve existing populated cache in that case.
+      const existing = lg.cachedGamesByPath[path];
+      const hasExisting = Array.isArray(existing) && existing.length > 0;
+      if (fresh.length > 0 || !hasExisting) {
+        lg.cachedGamesByPath[path] = fresh;
+      }
+      // If fresh is empty but we had data → keep the existing data (don't overwrite)
+    } catch(e) {
       console.warn('[SportFilter] ESPN fetch failed:', path, e.message || e);
       if (!Array.isArray(lg.cachedGamesByPath[path])) lg.cachedGamesByPath[path] = [];
     }
   }
   lg.cacheDate = today;
+  lg.lastFetchMs = Date.now();
   saveSettings();
 }
 
 // Fetch all leagues regardless of filter toggle state
 function fetchAllLeagueSchedules(force) {
   if (!settings.sportLeagues || !settings.sportLeagues.length) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const STALE_MS = 4 * 3600 * 1000; // 4 hours
   settings.sportLeagues.forEach((lg, i) => {
     const paths = lg.espnPaths || (lg.espnPath ? [lg.espnPath] : []);
     if (!paths.length) return;
-    if (force) { lg.cacheDate = ''; } // bust cache if forced
+    if (force) {
+      // Only clear cacheDate if cache is actually stale (> 4 hours old).
+      // Keeps overnight / off-peak cached game data intact for leagues that
+      // genuinely have no ESPN events right now (ESPN returns [] at 2-5 AM).
+      const cacheAge = lg.lastFetchMs ? (Date.now() - lg.lastFetchMs) : Infinity;
+      const cacheIsToday = lg.cacheDate === today;
+      const cacheIsFresh = cacheIsToday && cacheAge < STALE_MS;
+      if (!cacheIsFresh) { lg.cacheDate = ''; }
+    }
     fetchLeagueSchedule(i).then(() => {
       renderSportLeagueSettings();
       renderCats(); renderLib();
@@ -5241,22 +5263,21 @@ function renderSportTab() {
     const hasChs   = getSportGroupItems(lg).length > 0;
     if (!hasPaths && !hasChs) return; // no ESPN paths AND no channels — skip
 
-    // Hide tab if ESPN data is loaded but there are zero games today for this league
-    // (only hide if we've actually fetched — cacheDate matches today)
+    // Hide tab when ESPN data is fetched but zero countable games exist.
+    // Uses any cached data (any path populated), not just today's date-matched cache.
+    // This correctly hides PPV/UFC etc when no events are scheduled.
     if (hasPaths) {
-      const today = new Date().toISOString().slice(0, 10);
-      const hasData = (lg.espnPaths || []).some(p =>
-        lg.cacheDate === today && Array.isArray(lg.cachedGamesByPath && lg.cachedGamesByPath[p])
-      );
-      if (hasData) {
-        // Always hide tab when no games today — regardless of filter mode
-        const lgGames = (lg.espnPaths || []).reduce(function(arr, p) {
-          const g = lg.cachedGamesByPath && lg.cachedGamesByPath[p];
-          return Array.isArray(g) ? arr.concat(g) : arr;
-        }, []);
-        const countableGames = showPast ? lgGames : lgGames.filter(function(g) { return g.state !== 'post'; });
-        if (countableGames.length === 0) return;
-        // My Teams Only: hide tab when pinned team has no games today
+      const lgGamesAny = (lg.espnPaths || []).reduce(function(arr, p) {
+        const g = lg.cachedGamesByPath && lg.cachedGamesByPath[p];
+        return Array.isArray(g) ? arr.concat(g) : arr;
+      }, []);
+      const anyFetched = (lg.espnPaths || []).some(function(p) {
+        return Array.isArray(lg.cachedGamesByPath && lg.cachedGamesByPath[p]);
+      });
+      if (anyFetched) {
+        const countableGames = showPast ? lgGamesAny : lgGamesAny.filter(function(g) { return g.state !== 'post'; });
+        if (countableGames.length === 0) return; // no games → hide tab
+        // My Teams Only: hide tab when pinned team has no games
         if (filterOn && (lg.pinnedTeams || []).length > 0) {
           const pinnedLower = (lg.pinnedTeams || []).map(function(t) { return t.toLowerCase(); });
           const hasPinnedGame = countableGames.some(function(g) {
@@ -5270,6 +5291,8 @@ function renderSportTab() {
           if (!hasPinnedGame) return;
         }
       }
+      // If not yet fetched and no channels → skip
+      else if (!hasChs) return;
     }
 
     tabs.push({ id: lg.groupName, label: lg.groupName, badge: null });
@@ -6329,8 +6352,10 @@ renderSportTab();
 updateSportNavVisibility();
 refreshTvFocus();
 queueStartupAltCheck();
-// Fetch ESPN schedules after a short delay (non-blocking startup)
-setTimeout(() => fetchAllLeagueSchedules(true), 800);
+// Fetch ESPN schedules on startup — only leagues with missing/stale cache.
+// Do NOT use force=true here: that would nuke today's cached data and re-fetch
+// from ESPN at whatever time the app opens, which returns 0 games at off-peak hours.
+setTimeout(() => fetchAllLeagueSchedules(false), 800);
 
 // ── Startup repo + EPG refresh ────────────────────────────────────────────
 // Refresh all repos with a sourceUrl so channels are always current on launch,
