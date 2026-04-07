@@ -5644,11 +5644,21 @@ function renderSportTab() {
     const scoreStr = (g.state === 'in' || g.state === 'post') && t1.score && t2.score
       ? t1.score + ' – ' + t2.score : '';
 
-    // All channels matching this game
-    const matchingChs = allChs.filter(m => {
+    // Channels matching this game:
+    // Primary = from the current tab's group (shown as play buttons on card)
+    // Alt     = from other groups (silently added to failover JSON only)
+    // This prevents Paramount+ tab from showing PPV/US Sports channels as buttons.
+    const _allMatchingChs = allChs.filter(m => {
       const gms = findGamesForItem(m);
       return gms.some(gg => gg.startTime === g.startTime && gg.shortName === g.shortName);
     });
+    const matchingChs = lgName
+      ? _allMatchingChs.filter(m => m._lgGroupName === lgName)
+      : _allMatchingChs;
+    // Alt channels from other groups become silent failover at the end of allFailover
+    const _altMatchingChs = lgName
+      ? _allMatchingChs.filter(m => m._lgGroupName !== lgName)
+      : [];
 
     // Determine if pinned team is home or away for THIS game using ESPN homeAway data
     const lgName2 = g._lgName || lgName || '';
@@ -5673,8 +5683,17 @@ function renderSportTab() {
       else if (pinMatchesAway) gamePin = false;
     }
 
-    // Build full sorted failover list
-    const allFailover = _buildGameFailover(matchingChs, lgPinned, gamePin);
+    // Build failover: primary channels first (sorted by tier), alt channels appended
+    const _primaryFailover = _buildGameFailover(matchingChs, lgPinned, gamePin);
+    const _altFailover = _altMatchingChs.map(m => ({
+      url: m.url, title: m.title, region: m.region || '',
+      tag: (m.tags && m.tags[0]) || '', category: m.category || m._lgGroupName || ''
+    }));
+    // Deduplicate alt vs primary by URL
+    const _primaryUrls = new Set(_primaryFailover.map(s => s.url));
+    const allFailover = _primaryFailover.concat(
+      _altFailover.filter(s => !_primaryUrls.has(s.url))
+    );
 
     // Group failover by button type for display:
     //   My Team button: tiers 0+1 streams
@@ -6050,7 +6069,9 @@ window.setSportSectionTab = (id) => {
   sportSectionTab = id;
   sportActiveTeam = 'All';
   sportSubLeague = ''; // reset sub-league filter on tab switch
-  _invalidateSportCache();
+  // Do NOT invalidate the items cache (_invalidateSportCache) here —
+  // tab switching doesn't change which leagues/repos exist, and busting
+  // that cache forces a full 60k-stream rescan on every tab click (freeze).
   _invalidateSportTabCache();
   renderSportTab();
   // Fix 3: keep TV focus on the tab that was clicked, not the bottom nav
