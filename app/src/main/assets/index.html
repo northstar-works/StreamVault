@@ -5057,6 +5057,28 @@ function findGamesForItem(item) {
       }
     }
   }
+  // Cross-league fallback: if no game found in this channel's own league cache,
+  // search ALL other leagues' caches. This lets channels from multi-group repos
+  // (US Sports, Paramount+) be matched to games fetched by specific leagues (MLB, NHL, etc.)
+  // so their streams are merged into the correct league game card.
+  if (found.length === 0) {
+    (settings.sportLeagues || []).forEach(function(lg) {
+      if (!lg.cachedGamesByPath) return;
+      if (cfg && lg.groupName === cfg.groupName) return; // skip own league
+      (lg.espnPaths || []).forEach(function(path) {
+        var games = lg.cachedGamesByPath[path];
+        if (!Array.isArray(games)) return;
+        games.forEach(function(g) {
+          if (g.teams.some(function(t) { return t && title.includes(t.toLowerCase()); })) {
+            if (!found.some(function(f) { return f.startTime === g.startTime && f.shortName === g.shortName; })) {
+              found.push(g);
+            }
+          }
+        });
+      });
+    });
+  }
+
   // Also match via EPG title if available
   if (item.epgTitle && epgData.programs && epgData.programs[item.epgTitle]) {
     const now = Date.now();
@@ -5163,12 +5185,12 @@ function _getLeagueTeamObjects(lgName) {
   var lg = settings.sportLeagues && settings.sportLeagues.find(function(l) { return l.groupName === lgName; });
   var lgPaths = lg ? (lg.espnPaths || []) : [];
   if (lgPaths.length > 0) {
-    // Strict: team must have an espnPath that matches this league.
-    // Teams with no espnPath are excluded from specific-path leagues — they only
-    // appear in catch-all groups (those with no ESPN paths configured).
-    return myTeams.filter(function(t) { return t.espnPath && lgPaths.includes(t.espnPath); });
+    // Include teams whose espnPath matches this league's paths, OR teams with no espnPath
+    // (untagged teams are treated as universal — they apply to any league).
+    // This prevents the filter from silently no-oping when teams haven't been path-tagged.
+    return myTeams.filter(function(t) { return !t.espnPath || lgPaths.includes(t.espnPath); });
   }
-  return myTeams; // catch-all group: show all teams
+  return myTeams; // catch-all group (no ESPN paths configured): show all teams
 }
 
 // Match a myTeam object (or plain name string) against a stream title.
@@ -5509,15 +5531,19 @@ function renderSportTab() {
           });
           if (_tabGames.length === 0) return; // fetched but truly no games today → hide
         }
-        // Fix 4 (updated): hide tab when My Teams Only is ON and no global team has a game here.
-        // Uses _getLeagueTeamObjects so US Sports / Paramount+ check their scoped teams.
+        // Hide tab when My Teams Only is ON and no pinned team has a game here.
+        // Use _effectiveTabTeams fallback: if the league-scoped list is empty (e.g.
+        // user's only myTeam has espnPath = "baseball/mlb" and we're checking NHL),
+        // fall back to all myTeams so the check always runs and hides irrelevant tabs.
         if (filterOn) {
           var _tabTeams = _getLeagueTeamObjects(lg.groupName);
-          if (_tabTeams.length > 0) {
+          var _allMyTeamsVis = settings.myTeams || [];
+          if (_allMyTeamsVis.length > 0) {
+            var _effectiveTabTeams = _tabTeams.length > 0 ? _tabTeams : _allMyTeamsVis;
             var hasPinnedGame = countableGames.some(function(g) {
               return (g.teams || []).some(function(espnName) {
                 var enl = espnName.toLowerCase();
-                return _tabTeams.some(function(t) { return _teamObjMatchesEspnName(t, enl); });
+                return _effectiveTabTeams.some(function(t) { return _teamObjMatchesEspnName(t, enl); });
               });
             });
             if (!hasPinnedGame) return;
@@ -5547,7 +5573,7 @@ function renderSportTab() {
 
   // ── Sub-league pills (multi-path groups only) ──
   // Single-path leagues: no pills (nothing to sub-filter).
-  // Multi-path groups: show "All | MLB | NHL" etc. for paths that have My Teams games today.
+  // Multi-path groups: show "All | MLB | NHL" etc. for paths that have games today.
   const teamTabs = $('sport-team-tabs');
   if (teamTabs) {
     if (sportSectionTab === 'allgames' || sportSectionTab === 'live') {
@@ -5555,20 +5581,36 @@ function renderSportTab() {
     } else {
       const lgForPills = settings.sportLeagues && settings.sportLeagues.find(function(l) { return l.groupName === sportSectionTab; });
       const allPaths = lgForPills ? (lgForPills.espnPaths || []) : [];
-      // Find paths where at least one My Team has a game today
+      // Also exclude paths exclusively owned by single-path leagues (same logic as tabGames above)
+      var _pillExclusivePaths = new Set();
+      if (lgForPills && allPaths.length > 1) {
+        (settings.sportLeagues || []).forEach(function(other) {
+          if (other.groupName === sportSectionTab) return;
+          if ((other.espnPaths || []).length === 1) _pillExclusivePaths.add(other.espnPaths[0]);
+        });
+      }
+      // Find paths that have games today matching My Teams (or any game if filter is off).
+      // Uses actual ESPN game data rather than espnPath tag on myTeam objects, so pills
+      // appear correctly even when myTeams have no espnPath tag set.
+      var _pillMyTeams = settings.myTeams || [];
       const activePaths = allPaths.filter(function(path) {
-        var scopedTeams = (settings.myTeams || []).filter(function(t) { return t.espnPath === path; });
-        if (!scopedTeams.length) return false;
+        if (_pillExclusivePaths.has(path)) return false; // owned by a specific league tab
         var pathGames = lgForPills && lgForPills.cachedGamesByPath && lgForPills.cachedGamesByPath[path];
         if (!Array.isArray(pathGames)) return false;
         var countable = showPast ? pathGames : pathGames.filter(function(g) { return g.state !== 'post'; });
-        return countable.some(function(g) {
-          return (g.teams || []).some(function(espnName) {
-            return scopedTeams.some(function(t) { return _teamObjMatchesEspnName(t, espnName.toLowerCase()); });
+        if (!countable.length) return false;
+        // If filterOn and myTeams exist, only show pill when a pinned team has a game here
+        if (filterOn && _pillMyTeams.length > 0) {
+          return countable.some(function(g) {
+            return (g.teams || []).some(function(espnName) {
+              var enl = espnName.toLowerCase();
+              return _pillMyTeams.some(function(t) { return _teamObjMatchesEspnName(t, enl); });
+            });
           });
-        });
+        }
+        return true; // filter off: show any path with games
       });
-      // Only show pills when 2+ paths have My Team games (otherwise single-path, no pills needed)
+      // Only show pills when 2+ paths have games (otherwise nothing to sub-filter)
       if (activePaths.length >= 2) {
         var subPills = ['', ...activePaths];
         teamTabs.innerHTML = subPills.map(function(path) {
@@ -5820,12 +5862,34 @@ function renderSportTab() {
     return true;
   });
 
-  // My Teams Only filter — use precise ESPN-name matching
-  if (filterOn && _pinnedTeamObjs.length > 0) {
+  // Multi-path groups (US Sports, Paramount+, etc.) must NOT duplicate games that are
+  // exclusively owned by a single-path specific league tab (e.g. MLB owns baseball/mlb alone).
+  // Those games already appear correctly in the specific league tab, and their streams from
+  // ALL groups are already merged into the specific league card via _altMatchingChs /
+  // cross-league fallback. Showing them again here creates duplicate cards.
+  if (lgConfig && lgEspnPaths.length > 1) {
+    var _exclusivePaths = new Set();
+    (settings.sportLeagues || []).forEach(function(other) {
+      if (other.groupName === lgConfig.groupName) return;
+      var otherPaths = other.espnPaths || [];
+      if (otherPaths.length === 1) _exclusivePaths.add(otherPaths[0]);
+    });
+    if (_exclusivePaths.size > 0) {
+      tabGames = tabGames.filter(function(g) { return !_exclusivePaths.has(g._path); });
+    }
+  }
+
+  // My Teams Only filter — use precise ESPN-name matching.
+  // Guard: run whenever filterOn AND myTeams is non-empty — even if the scoped
+  // _pinnedTeamObjs happens to be empty (which previously caused a silent no-op
+  // that let all games through unfiltered). Fall back to all myTeams if scoped list
+  // is empty so the filter always blocks games for non-pinned teams.
+  if (filterOn && (settings.myTeams || []).length > 0) {
+    var _effectivePins = _pinnedTeamObjs.length > 0 ? _pinnedTeamObjs : (settings.myTeams || []);
     tabGames = tabGames.filter(function(g) {
       return (g.teams || []).some(function(espnName) {
         var enl = espnName.toLowerCase();
-        return _pinnedTeamObjs.some(function(t) { return _teamObjMatchesEspnName(t, enl); });
+        return _effectivePins.some(function(t) { return _teamObjMatchesEspnName(t, enl); });
       });
     });
   }
