@@ -5466,13 +5466,30 @@ function renderSportTab() {
       if (anyFetched) {
         const countableGames = showPast ? lgGamesAny : lgGamesAny.filter(function(g) { return g.state !== 'post'; });
         if (countableGames.length === 0) return; // no cached games at all → hide tab
-        // Also hide if _getAllTodayGames would yield no results for this tab
-        // (e.g. NCAA/EPL with ESPN paths that returned [] today)
-        var _tabCheck = _getAllTodayGames().filter(function(g) {
-          if (!showPast && g.state === 'post') return false;
-          return g._lgName === lg.groupName;
-        });
-        if (anyFetched && _tabCheck.length === 0) return; // dedup shows tab empty → hide
+        // For multi-path groups (US Sports, Paramount+): hide tab when ALL paths
+        // are exclusively covered by other single-path leagues in settings.
+        // A path is "exclusively covered" when another league has ONLY that path.
+        // US Sports = [mlb, nhl, nba] and separate MLB/NHL/NBA leagues each own one path
+        // → every game would already show in the specific league tab → hide US Sports tab.
+        // If US Sports has a path (e.g. soccer/usa.1) NOT owned by any specific league
+        // → keep the tab (it has unique content).
+        if (lg.espnPaths && lg.espnPaths.length > 1) {
+          var _coveredPaths = new Set();
+          (settings.sportLeagues || []).forEach(function(other) {
+            if (other.groupName === lg.groupName) return;
+            var otherPaths = other.espnPaths || [];
+            if (otherPaths.length === 1) _coveredPaths.add(otherPaths[0]);
+          });
+          var _hasUniquePath = lg.espnPaths.some(function(p) { return !_coveredPaths.has(p); });
+          if (!_hasUniquePath) return; // all paths covered by specific leagues → hide tab
+        }
+        // Single-path leagues: hide if ESPN fetched data but today has no games
+        if (lg.espnPaths && lg.espnPaths.length === 1) {
+          var _tabGames = _getAllTodayGames().filter(function(g) {
+            return (showPast || g.state !== 'post') && g._path === lg.espnPaths[0];
+          });
+          if (_tabGames.length === 0) return; // fetched but truly no games today → hide
+        }
         // Fix 4 (updated): hide tab when My Teams Only is ON and no global team has a game here.
         // Uses _getLeagueTeamObjects so US Sports / Paramount+ check their scoped teams.
         if (filterOn) {
@@ -5810,9 +5827,10 @@ function renderSportTab() {
 
 // ── All Games tab: ESPN schedule cards ───────────────────────────────────────
 function _getAllTodayGames() {
-  // Dedup key includes groupName+path so multi-path groups (US Sports, Paramount+)
-  // each get their own copy of games that overlap with specific leagues.
-  // The All Games tab deduplicates further by shortName+startTime to avoid visual dupes.
+  // Simple dedup: first league to see a game (shortName|startTime) claims it.
+  // Multi-path catch-all groups (US Sports) share paths with specific leagues;
+  // their unique STREAMS are already in getAllSportItems() and appear in failover
+  // lists for specific league tabs without needing a separate duplicate game card.
   const seen = new Set();
   const out = [];
   (settings.sportLeagues || []).forEach(lg => {
@@ -5821,8 +5839,7 @@ function _getAllTodayGames() {
       const games = lg.cachedGamesByPath && lg.cachedGamesByPath[path];
       if (!Array.isArray(games)) return;
       games.forEach(g => {
-        // Key includes league so US Sports sees its own copy of MLB games
-        const key = lg.groupName + '|' + path + '|' + g.shortName + '|' + g.startTime;
+        const key = g.shortName + '|' + g.startTime;
         if (!seen.has(key)) { seen.add(key); out.push({ ...g, _path: path, _lgName: lg.groupName }); }
       });
     });
@@ -5842,15 +5859,8 @@ function _renderAllGamesTab(lst) {
       return _allPinObjs.some(function(t) { return _teamObjMatchesEspnName(t, enl); });
     });
   }
-  var allRaw = _getAllTodayGames().filter(function(g) { return showPast || g.state !== 'post'; });
-  if (filterOn && _allPinObjs.length > 0) { allRaw = allRaw.filter(_gameMatchesPins); }
-  // Deduplicate for display: keep first occurrence of each shortName|startTime
-  var _dispSeen = new Set();
-  var games = allRaw.filter(function(g) {
-    var dk = g.shortName + '|' + g.startTime;
-    if (_dispSeen.has(dk)) return false;
-    _dispSeen.add(dk); return true;
-  });
+  var games = _getAllTodayGames().filter(function(g) { return showPast || g.state !== 'post'; });
+  if (filterOn && _allPinObjs.length > 0) { games = games.filter(_gameMatchesPins); }
 
   if (!games.length) {
     lst.innerHTML = (filterOn && _allPinObjs.length > 0)
