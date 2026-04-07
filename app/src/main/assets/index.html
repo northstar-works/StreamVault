@@ -1697,9 +1697,16 @@ function showTab(id) {
   $(id).classList.add('on');
   document.querySelectorAll('.ni').forEach(n => n.classList.toggle('on', n.dataset.t === id));
   $('bnav').style.display = (id === 'player-scr' || id === 'br-scr') ? 'none' : 'flex';
-  if (id !== 'lib-scr') { plexAddMode = false; _plexView = ''; }
+  if (id !== 'lib-scr') {
+    plexAddMode = false; _plexView = '';
+    var _pr2 = $('plex-results'); if (_pr2) _pr2.innerHTML = '';
+  }
   if (id === 'guide-scr') renderGuide();
   if (id === 'set-scr') renderSettings();
+  if (id === 'lib-scr') {
+    // Rebuild PlexStr card fresh on return so stale library results don't persist
+    setTimeout(function() { if (typeof renderLibExtra === 'function') renderLibExtra(); }, 0);
+  }
   if (id === 'sport-scr') {
     renderSportTab();
     _startSportScoreRefresh(); // begin live score polling
@@ -3937,6 +3944,14 @@ function moveTvFocusSpatial(dirCode) {
     if (dirCode === 20) return focusNearestInSelector('.itm[data-tv-zone=\"channel-list\"]', current, true);
   }
   // ── Channel list (home grid): index-based navigation ──────────────────────
+  // ── Sport header buttons ─────────────────────────────────────────────
+  var _sH=['btn-sport-filter-tog','btn-sport-refresh'];
+  if(_sH.indexOf(current.id)>=0&&$('sport-scr')&&$('sport-scr').classList.contains('on')){
+    if(dirCode===19)return true;
+    if(dirCode===20){var _fp=document.querySelector('#sport-section-tabs [tabindex]');if(_fp){var _fpi=els.indexOf(_fp);if(_fpi>=0)return focusElementAtIndex(_fpi);}}
+    if(dirCode===22){var _hi=_sH.indexOf(current.id);if(_hi<_sH.length-1){var _n=$(_sH[_hi+1]);if(_n){var _ni=els.indexOf(_n);if(_ni>=0)return focusElementAtIndex(_ni);}}return true;}
+    if(dirCode===21){var _hi2=_sH.indexOf(current.id);if(_hi2>0){var _p=$(_sH[_hi2-1]);if(_p){var _pi=els.indexOf(_p);if(_pi>=0)return focusElementAtIndex(_pi);}}return true;}
+  }
   // ── Sport section/team tabs → DPad down to first game card ─────────────
   if (currentZone === 'sport-section-tabs' || currentZone === 'sport-team-tabs') {
     if (dirCode === 20) { // DOWN → first game card
@@ -3981,8 +3996,10 @@ function moveTvFocusSpatial(dirCode) {
       }
       return true; // swallow at all edges — never fall through to spatial nav
     }
-    if (dirCode === 19) { // UP → section-tabs should do nothing (already at top)
-      return true; // swallow
+    if (dirCode === 19) { // UP from pills → header buttons
+      var _hb=['btn-sport-filter-tog','btn-sport-refresh'].map(function(id){return $(id);}).filter(Boolean);
+      if (_hb.length){var _hl=_hb[_hb.length-1];var _hli=els.indexOf(_hl);if(_hli>=0)return focusElementAtIndex(_hli);_hl.focus();return true;}
+      return true;
     }
   }
 
@@ -4244,9 +4261,11 @@ window.__svHandleTvKey = function(code) {
     // ── PlexStr BACK navigation ───────────────────────────────────────────
     if ($('lib-scr') && $('lib-scr').classList.contains('on') && (activeLibPage === 'plex' || plexAddMode)) {
       const backEl = getTvFocusableElements()[tvFocusIndex] || document.activeElement;
-      // BACK from inside plex-results → focus the button that opened the view
+      // BACK from inside plex-results: clear results, reset view, focus button
       if (backEl && backEl.closest && backEl.closest('#plex-results')) {
         const targetId = _plexView === 'library' ? 'plex-open-lib' : 'plex-search-btn';
+        _plexView = '';
+        var _pr = $('plex-results'); if (_pr) _pr.innerHTML = '';
         const btn = $(targetId);
         if (btn) {
           const allEls = getTvFocusableElements();
@@ -5094,7 +5113,7 @@ function shouldShowSportTeam(item) {
   var _combatPaths = ['mma/ufc','boxing/boxing','mma/bellator','mma/pfl'];
   var isPpvGroup = /\bppv\b|pay.per.view|ufc|boxing|combat/i.test(cfg.groupName)
     || paths.some(function(p) { return _combatPaths.indexOf(p) >= 0; });
-  if (isPpvGroup && anyGames) return true;
+  if (isPpvGroup) return true; // always show PPV/UFC channels regardless of game state
   return !!findGameForItem(item);
 }
 
