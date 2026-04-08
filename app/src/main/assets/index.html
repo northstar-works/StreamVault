@@ -5250,6 +5250,29 @@ function _titleContainsTeamToken(titleLower, teamName) {
   return !isWordChar(before) && !isWordChar(after);
 }
 
+// Matchup validation: when a stream title has an explicit "@ " or " vs " separator,
+// verify that BOTH sides of the matchup correspond to teams in the ESPN game.
+// Prevents "Louisiana Tech @ Missouri St" from matching game "MOST @ TA&M"
+// (only one side, "Missouri St", matches; "Louisiana Tech" doesn't match Texas A&M).
+// Streams without a separator (broadcast channels like "ESPN", "FS1") always pass.
+function _streamMatchesGameMatchup(titleLower, gameTeams) {
+  var sepIdx = titleLower.indexOf(' @ ');
+  if (sepIdx === -1) sepIdx = titleLower.indexOf(' vs ');
+  if (sepIdx === -1) sepIdx = titleLower.indexOf(' v ');
+  if (sepIdx === -1) return true; // no matchup separator → broadcast channel → pass
+  var side1 = titleLower.substring(0, sepIdx);
+  var side2 = titleLower.substring(sepIdx + (titleLower.charAt(sepIdx+1)==='@' ? 3 : (titleLower.charAt(sepIdx+1)==='v'&&titleLower.charAt(sepIdx+2)==='s' ? 4 : 3)));
+  var s1hit = false, s2hit = false;
+  for (var i = 0; i < gameTeams.length; i++) {
+    var t = (gameTeams[i] || '').toLowerCase();
+    if (t.length < 3) continue;
+    if (!s1hit && side1.indexOf(t) >= 0) s1hit = true;
+    if (!s2hit && side2.indexOf(t) >= 0) s2hit = true;
+    if (s1hit && s2hit) return true;
+  }
+  return s1hit && s2hit;
+}
+
 // Fast O(1) channel→game lookup via pre-built index.
 // Requires team name to appear as a whole word/token in the channel title —
 // prevents "Football Event 09: Bosnia..." matching a game just because
@@ -5974,15 +5997,23 @@ function renderSportTab() {
       var gKey = (mg.shortName || '') + '|' + mg.startTime;
       if (!_chsByGameKey.has(gKey)) _chsByGameKey.set(gKey, { primary: [], alt: [] });
       var bucket = _chsByGameKey.get(gKey);
+
+      // Matchup validation: if stream title has "@ " or " vs ", both sides must
+      // correspond to teams in the ESPN game. Prevents wrong-game pairing when
+      // streams share one team name with a different game.
+      if (!_streamMatchesGameMatchup(title, mg.teams || [])) return;
+
       if (lgName) {
         if (m._lgGroupName === lgName) bucket.primary.push(m);
         else bucket.alt.push(m);
       } else {
-        // Live tab: streams whose sport group's ESPN paths include this game's path are
-        // primary (same sport); everything else is alt (cross-sport fallback only).
+        // Live tab: same-sport streams are primary, cross-sport are SKIPPED entirely
+        // (not alt). A cross-sport stream provides no value as fallback — showing
+        // "MLB 17: Cardinals @ Washington" under an MLS game misleads the user.
         var samePath = mPaths.length > 0 && !!mg._path && mPaths.includes(mg._path);
         if (samePath) bucket.primary.push(m);
-        else bucket.alt.push(m);
+        else if (mPaths.length === 0) bucket.alt.push(m); // no paths configured → keep as alt
+        // else: cross-sport → skip entirely (don't push to any bucket)
       }
     });
   });
@@ -6273,6 +6304,9 @@ function _renderAllGamesTab(lst) {
       // Sport-path check: stream must be from the same sport as the game
       var _agSameSport = _agPaths.length === 0 || !mg._path || _agPaths.includes(mg._path);
       if (!_agSameSport) return;
+
+      // Matchup validation: both sides of the stream title must match game teams
+      if (!_streamMatchesGameMatchup(title, mg.teams || [])) return;
 
       var gKey = (mg.shortName || '') + '|' + mg.startTime;
       if (!_chsByGameKeyAG.has(gKey)) _chsByGameKeyAG.set(gKey, []);
@@ -7365,7 +7399,7 @@ setTimeout(async () => {
   // (sport index build, EPG start, renderLib on sport channels, etc.).
   // Keep nav locked for 10s so cached D-pad presses during that window are dropped.
   window._setSplashStatus && window._setSplashStatus('Almost ready…');
-  await new Promise(function(r) { setTimeout(r, 10000); });
+  await new Promise(function(r) { setTimeout(r, 15000); });
   _navLocked = false;
   window._hideSplash && window._hideSplash('Ready');
   setTimeout(refreshTvFocus, 80);
