@@ -4976,14 +4976,19 @@ const ESPN_SPORT_OPTIONS = ESPN_LEAGUE_MAP.map(e => ({ path: e.path, label: e.la
 
 // Sport prefix detection: "MLB 01:", "NHL | 02", "NFL 03:" → ESPN path
 const SPORT_PREFIX_MAP = [
-  { prefix: 'mlb',  path: 'baseball/mlb'              },
-  { prefix: 'nhl',  path: 'hockey/nhl'                },
-  { prefix: 'nfl',  path: 'football/nfl'              },
-  { prefix: 'nba',  path: 'basketball/nba'            },
-  { prefix: 'mls',  path: 'soccer/usa.1'              },
-  { prefix: 'wnba', path: 'basketball/wnba'           },
-  { prefix: 'epl',  path: 'soccer/eng.1'              },
-  { prefix: 'ncaa', path: 'basketball/mens-college-basketball' },
+  { prefix: 'mlb',   path: 'baseball/mlb'                       },
+  { prefix: 'nhl',   path: 'hockey/nhl'                         },
+  { prefix: 'nfl',   path: 'football/nfl'                       },
+  { prefix: 'nba',   path: 'basketball/nba'                     },
+  { prefix: 'mls',   path: 'soccer/usa.1'                       },
+  { prefix: 'wnba',  path: 'basketball/wnba'                    },
+  { prefix: 'epl',   path: 'soccer/eng.1'                       },
+  { prefix: 'ncaaf', path: 'football/college-football'           },
+  { prefix: 'cfb',   path: 'football/college-football'           },
+  { prefix: 'cfp',   path: 'football/college-football'           },
+  { prefix: 'ncaam', path: 'basketball/mens-college-basketball'  },
+  { prefix: 'ncaaw', path: 'basketball/womens-college-basketball'},
+  { prefix: 'ncaa',  path: 'basketball/mens-college-basketball'  },
 ];
 const SPORT_KEYWORDS = ESPN_LEAGUE_MAP.flatMap(e => e.keys).concat([
   'sport','sports','ufc','mma','boxing','rugby','cricket','tennis','golf','nascar',
@@ -5117,19 +5122,23 @@ async function fetchLeagueSchedule(idx) {
   if (!lg.cachedGamesByPath) lg.cachedGamesByPath = {};
   const needsFetch = paths.filter(p => p && !(lg.cacheDate === today && Array.isArray(lg.cachedGamesByPath[p])));
   if (!needsFetch.length) return;
+  // Was the previous cache from today? Only preserve non-empty existing data against
+  // empty ESPN responses when the old data is from today (2-5 AM protection).
+  // Cross-day empty responses mean genuinely no games (off-season) → allow clearing.
+  const _prevCacheIsToday = lg.cacheDate === today;
   for (const path of needsFetch) {
     try {
       const fresh = await _fetchOnePath(path);
-      // Only overwrite existing non-empty data with an empty response if we have
-      // a recent cache (today). An empty ESPN response at 2-5 AM doesn't mean
-      // there are no games — it usually means the scoreboard API has no data yet
-      // for today's slate. Preserve existing populated cache in that case.
       const existing = lg.cachedGamesByPath[path];
       const hasExisting = Array.isArray(existing) && existing.length > 0;
-      if (fresh.length > 0 || !hasExisting) {
+      // Preserve existing data ONLY when:
+      //   1) fresh is empty AND existing has data AND existing was fetched today
+      // This protects against 2-5 AM empty ESPN responses wiping today's valid cache.
+      // But if existing data is from a PREVIOUS day and ESPN returns [] today,
+      // that means the league genuinely has no games → clear the stale data.
+      if (fresh.length > 0 || !hasExisting || !_prevCacheIsToday) {
         lg.cachedGamesByPath[path] = fresh;
       }
-      // If fresh is empty but we had data → keep the existing data (don't overwrite)
     } catch(e) {
       console.warn('[SportFilter] ESPN fetch failed:', path, e.message || e);
       if (!Array.isArray(lg.cachedGamesByPath[path])) lg.cachedGamesByPath[path] = [];
@@ -5196,7 +5205,9 @@ function _invalidateSportGameIndex() {
 }
 
 function _buildSportGameIndex() {
-  const key = (settings.sportLeagues || []).map(function(lg) {
+  const _idxNow = new Date();
+  const _idxToday = new Date(_idxNow.getFullYear(), _idxNow.getMonth(), _idxNow.getDate()).getTime();
+  const key = _idxToday + '|' + (settings.sportLeagues || []).map(function(lg) {
     return lg.groupName + ':' + Object.keys(lg.cachedGamesByPath || {}).length;
   }).join('|');
   if (_sportGameIndex && _sportGameIndexKey === key) return;
@@ -5204,12 +5215,17 @@ function _buildSportGameIndex() {
   _sportGameIndex = new Map();   // teamNameLower → Set<gameKey>
   _sportTeamNameSet = new Set(); // all team name strings (lowercase)
   var _gamesByKey = new Map();   // gameKey → game object
+  // Date guard: same window as _getAllTodayGames
+  var _idxWinStart = _idxToday - 6 * 3600000;
+  var _idxWinEnd   = _idxToday + 30 * 3600000;
 
   (settings.sportLeagues || []).forEach(function(lg) {
     (lg.espnPaths || []).forEach(function(path) {
       var games = lg.cachedGamesByPath && lg.cachedGamesByPath[path];
       if (!Array.isArray(games)) return;
       games.forEach(function(g) {
+        // Skip games outside today's window
+        if (g.startTime < _idxWinStart || g.startTime > _idxWinEnd) return;
         var gKey = (g.shortName || '') + '|' + g.startTime;
         if (!_gamesByKey.has(gKey)) {
           _gamesByKey.set(gKey, Object.assign({}, g, { _path: path, _lgName: lg.groupName }));
@@ -5963,19 +5979,40 @@ function renderSportTab() {
     var mLgCfg = lgName ? null : ((settings.sportLeagues || []).find(function(l) {
       return l.groupName === (m._lgGroupName || m.category);
     }) || null);
-    var mPaths = mLgCfg ? (mLgCfg.espnPaths || []) : [];
+    var mGroupPaths = mLgCfg ? (mLgCfg.espnPaths || []) : [];
+    // For multi-path groups (Paramount+, US Sports etc.), detect the stream's
+    // ACTUAL sport from its title prefix (e.g. "MLB 17:" → baseball/mlb).
+    // Without this, an MLB stream from Paramount+ would match any game from any
+    // sport because Paramount+ has paths for all sports.
+    var mDetectedPath = (mGroupPaths.length > 1) ? detectSportPathFromTitle(title) : null;
+    // If a sport prefix was detected, narrow to that single path; otherwise
+    // keep the full group paths (broadcast/generic channels with no prefix).
+    var mPaths = mDetectedPath ? [mDetectedPath] : mGroupPaths;
+
     matchedGames.forEach(function(mg) {
       var gKey = (mg.shortName || '') + '|' + mg.startTime;
       if (!_chsByGameKey.has(gKey)) _chsByGameKey.set(gKey, { primary: [], alt: [] });
       var bucket = _chsByGameKey.get(gKey);
+
+      // Two-team validation: count how many team names from the game appear in
+      // the stream title. A stream mentioning only 1 of 2 teams is likely a
+      // DIFFERENT matchup (e.g. "Louisiana Tech @ Missouri St" matching
+      // "MOST @ TA&M" via "missouri st" alone). Require 2+ team tokens for primary.
+      var _gameTeamHits = 0;
+      (mg.teams || []).forEach(function(t) {
+        if (t && t.length >= 4 && _titleContainsTeamToken(title, t.toLowerCase())) _gameTeamHits++;
+      });
+      var _bothTeamsMatch = _gameTeamHits >= 2;
+
       if (lgName) {
-        if (m._lgGroupName === lgName) bucket.primary.push(m);
+        if (m._lgGroupName === lgName && _bothTeamsMatch) bucket.primary.push(m);
         else bucket.alt.push(m);
       } else {
-        // Live tab: streams whose sport group's ESPN paths include this game's path are
+        // Live tab: streams whose detected sport path matches this game's path are
         // primary (same sport); everything else is alt (cross-sport fallback only).
+        // Additionally, single-team-only matches go to alt regardless of sport.
         var samePath = mPaths.length > 0 && !!mg._path && mPaths.includes(mg._path);
-        if (samePath) bucket.primary.push(m);
+        if (samePath && _bothTeamsMatch) bucket.primary.push(m);
         else bucket.alt.push(m);
       }
     });
@@ -6212,12 +6249,22 @@ function _getAllTodayGames() {
   // lists for specific league tabs without needing a separate duplicate game card.
   const seen = new Set();
   const out = [];
+  // Date guard: only include games whose startTime is actually today.
+  // Protects against stale cached data from previous days that slipped past
+  // the cache invalidation (e.g. off-season leagues returning empty responses).
+  const _now = new Date();
+  const _todayStart = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate()).getTime();
+  const _windowStart = _todayStart - 6 * 3600000;   // 6h before midnight (late finishes)
+  const _windowEnd   = _todayStart + 30 * 3600000;  // 6h after midnight next day
+
   (settings.sportLeagues || []).forEach(lg => {
     const paths = lg.espnPaths || (lg.espnPath ? [lg.espnPath] : []);
     paths.forEach(path => {
       const games = lg.cachedGamesByPath && lg.cachedGamesByPath[path];
       if (!Array.isArray(games)) return;
       games.forEach(g => {
+        // Skip games outside today's window — stale data from other dates
+        if (g.startTime < _windowStart || g.startTime > _windowEnd) return;
         const key = g.shortName + '|' + g.startTime;
         if (!seen.has(key)) { seen.add(key); out.push({ ...g, _path: path, _lgName: lg.groupName }); }
       });
@@ -6255,7 +6302,26 @@ function _renderAllGamesTab(lst) {
   _allChsAG.forEach(function(m) {
     var title = (m.title || '').toLowerCase();
     var matchedGames = _findGamesViaIndex(title);
+    // Detect stream sport from title prefix for multi-path groups
+    var _agLgCfg = (settings.sportLeagues || []).find(function(l) {
+      return l.groupName === (m._lgGroupName || m.category);
+    }) || null;
+    var _agGroupPaths = _agLgCfg ? (_agLgCfg.espnPaths || []) : [];
+    var _agDetected = (_agGroupPaths.length > 1) ? detectSportPathFromTitle(title) : null;
+    var _agPaths = _agDetected ? [_agDetected] : _agGroupPaths;
+
     matchedGames.forEach(function(mg) {
+      // Sport-path check: stream must be from the same sport as the game
+      var _agSameSport = _agPaths.length === 0 || !mg._path || _agPaths.includes(mg._path);
+      if (!_agSameSport) return; // cross-sport → skip entirely in All Games
+
+      // Two-team validation: require 2+ team name tokens from the game
+      var _agHits = 0;
+      (mg.teams || []).forEach(function(t) {
+        if (t && t.length >= 4 && _titleContainsTeamToken(title, t.toLowerCase())) _agHits++;
+      });
+      if (_agHits < 2) return; // single-team match → likely wrong game, skip
+
       var gKey = (mg.shortName || '') + '|' + mg.startTime;
       if (!_chsByGameKeyAG.has(gKey)) _chsByGameKeyAG.set(gKey, []);
       _chsByGameKeyAG.get(gKey).push(m);
