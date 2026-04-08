@@ -1577,7 +1577,7 @@ async function parseXMLTV(xml) {
   // Parse in async chunks to keep the UI/D-pad responsive on Fire TV.
   // DOMParser itself is synchronous but we yield the event loop between
   // batches of programme elements so input events can still be processed.
-  const CHUNK = 300;
+  const CHUNK = 100; // smaller chunks = more frequent yields = Fire TV stays responsive
   const yield_ = () => new Promise(r => setTimeout(r, 0));
 
   const parser = new DOMParser();
@@ -1697,7 +1697,13 @@ async function fetchEpgSource(src) {
 }
 
 async function fetchAllEpg() {
-  for (const s of epgSrc) await fetchEpgSource(s);
+  for (let i = 0; i < epgSrc.length; i++) {
+    const s = epgSrc[i];
+    if (window._setSplashStatus && document.getElementById('sv-splash') && document.getElementById('sv-splash').style.display !== 'none') {
+      window._setSplashStatus('Guide ' + (i + 1) + '/' + epgSrc.length + ': ' + (s.name || 'EPG') + '…');
+    }
+    await fetchEpgSource(s);
+  }
 }
 
 function getNowNext(epgId) {
@@ -5029,6 +5035,7 @@ function getSportGroupItems(lg) {
 function _invalidateSportCache() {
   _sportItemsCache = null;
   _sportItemsCacheKey = '';
+  _invalidateSportGameIndex(); // also wipe the channel→game index
 }
 
 function getAllSportItems() {
@@ -5137,6 +5144,7 @@ function fetchAllLeagueSchedules(force) {
       if (!cacheIsFresh) { lg.cacheDate = ''; }
     }
     fetchLeagueSchedule(i).then(() => {
+      _invalidateSportGameIndex(); // fresh schedule data = stale index
       renderSportLeagueSettings();
       renderCats(); renderLib();
       renderSportTab();
@@ -5161,55 +5169,83 @@ function _totalGameCount(cfg) {
 }
 
 // Returns all games for a channel item (across all relevant paths)
-function findGamesForItem(item) {
-  const cfg = getSportLeagueConfig(item.category || item._lgGroupName);
-  if (!cfg || !cfg.cachedGamesByPath) return [];
-  const title = (item.title || '').toLowerCase();
-  const detectedPath = detectSportPathFromTitle(title);
-  const paths = cfg.espnPaths || (cfg.espnPath ? [cfg.espnPath] : []);
-  const searchPaths = (detectedPath && paths.includes(detectedPath)) ? [detectedPath] : paths;
-  const found = [];
-  for (const path of searchPaths) {
-    const games = cfg.cachedGamesByPath[path];
-    if (!Array.isArray(games)) continue;
-    for (const g of games) {
-      if (g.teams.some(t => t && title.includes(t.toLowerCase()))) {
-        if (!found.some(f => f.startTime === g.startTime && f.shortName === g.shortName)) found.push(g);
-      }
-    }
-  }
-  // Cross-league fallback: if no game found in this channel's own league cache,
-  // search ALL other leagues' caches. This lets channels from multi-group repos
-  // (US Sports, Paramount+) be matched to games fetched by specific leagues (MLB, NHL, etc.)
-  // so their streams are merged into the correct league game card.
-  if (found.length === 0) {
-    (settings.sportLeagues || []).forEach(function(lg) {
-      if (!lg.cachedGamesByPath) return;
-      if (cfg && lg.groupName === cfg.groupName) return; // skip own league
-      (lg.espnPaths || []).forEach(function(path) {
-        var games = lg.cachedGamesByPath[path];
-        if (!Array.isArray(games)) return;
-        games.forEach(function(g) {
-          if (g.teams.some(function(t) { return t && title.includes(t.toLowerCase()); })) {
-            if (!found.some(function(f) { return f.startTime === g.startTime && f.shortName === g.shortName; })) {
-              found.push(g);
-            }
-          }
+// ── Sport channel→game index ──────────────────────────────────────────────
+// Built once per render, maps team name → game. O(1) lookups vs O(leagues×games×teams) loops.
+let _sportGameIndex = null;
+let _sportTeamNameSet = null;
+let _sportGameIndexKey = '';
+
+function _invalidateSportGameIndex() {
+  _sportGameIndex = null;
+  _sportTeamNameSet = null;
+  _sportGameIndexKey = '';
+}
+
+function _buildSportGameIndex() {
+  const key = (settings.sportLeagues || []).map(function(lg) {
+    return lg.groupName + ':' + Object.keys(lg.cachedGamesByPath || {}).length;
+  }).join('|');
+  if (_sportGameIndex && _sportGameIndexKey === key) return;
+
+  _sportGameIndex = new Map();   // teamNameLower → Set<gameKey>
+  _sportTeamNameSet = new Set(); // all team name fragments (lowercase)
+  var _gamesByKey = new Map();   // gameKey → game object
+
+  (settings.sportLeagues || []).forEach(function(lg) {
+    (lg.espnPaths || []).forEach(function(path) {
+      var games = lg.cachedGamesByPath && lg.cachedGamesByPath[path];
+      if (!Array.isArray(games)) return;
+      games.forEach(function(g) {
+        var gKey = (g.shortName || '') + '|' + g.startTime;
+        if (!_gamesByKey.has(gKey)) {
+          _gamesByKey.set(gKey, Object.assign({}, g, { _path: path, _lgName: lg.groupName }));
+        }
+        (g.teams || []).forEach(function(t) {
+          if (!t) return;
+          var tl = t.toLowerCase();
+          _sportTeamNameSet.add(tl);
+          if (!_sportGameIndex.has(tl)) _sportGameIndex.set(tl, new Set());
+          _sportGameIndex.get(tl).add(gKey);
         });
       });
     });
-  }
+  });
 
-  // Also match via EPG title if available
+  _sportGameIndex._gamesByKey = _gamesByKey;
+  _sportGameIndexKey = key;
+}
+
+// Fast O(1) channel→game lookup via pre-built index.
+function _findGamesViaIndex(titleLower) {
+  _buildSportGameIndex();
+  if (!_sportGameIndex || !_sportGameIndex._gamesByKey) return [];
+  var found = new Map();
+  _sportGameIndex.forEach(function(gameKeys, teamName) {
+    if (titleLower.includes(teamName)) {
+      gameKeys.forEach(function(gKey) {
+        if (!found.has(gKey)) found.set(gKey, _sportGameIndex._gamesByKey.get(gKey));
+      });
+    }
+  });
+  return Array.from(found.values());
+}
+
+function findGamesForItem(item) {
+  const cfg = getSportLeagueConfig(item.category || item._lgGroupName);
+  if (!cfg) return [];
+  const title = (item.title || '').toLowerCase();
+  // Use index — includes cross-league results automatically, zero nested loops
+  var found = _findGamesViaIndex(title);
+  // EPG fallback
   if (item.epgTitle && epgData.programs && epgData.programs[item.epgTitle]) {
-    const now = Date.now();
-    const progs = epgData.programs[item.epgTitle];
+    var now = Date.now();
+    var progs = epgData.programs[item.epgTitle];
     var _epgTeamObjs = _getLeagueTeamObjects(cfg.groupName);
     progs.filter(function(p) { return p.stop > now - 3600000; }).forEach(function(p) {
       var ptitle = (p.title || '').toLowerCase();
       if (_epgTeamObjs.some(function(t) { return _teamObjMatchesTitle(t, ptitle); })) {
-        // Synthesize a game object from EPG
-        found.push({ teams: allPinnedTeams, teamObjects: [], startTime: p.start, endTime: p.stop, state: p.start <= now ? (p.stop > now ? 'in' : 'post') : 'pre', name: p.title, shortName: p.title });
+        found.push({ teams: [], teamObjects: [], startTime: p.start, endTime: p.stop,
+          state: p.start <= now ? (p.stop > now ? 'in' : 'post') : 'pre', name: p.title, shortName: p.title });
       }
     });
   }
@@ -5257,23 +5293,16 @@ function shouldShowSportTeam(item) {
   var isPpvGroup = /\bppv\b|pay.per.view|ufc|boxing|combat/i.test(cfg.groupName)
     || paths.some(function(p) { return _combatPaths.indexOf(p) >= 0; });
   if (isPpvGroup) return true; // always show PPV/UFC channels regardless of game state
-  // Broadcast channel bypass: if the channel title contains NO team name from any
-  // cached game across all leagues, it's a generic broadcast (e.g. "ESPN", "ESPN2",
-  // "ESPN Deportes", "FS1") — not a team-specific stream. Always show these.
-  // This prevents generic network channels from disappearing after schedule loads.
+  // Broadcast channel bypass: generic broadcast channels (ESPN, ESPN2, FS1, TNT…)
+  // have no team name in their title — always show them regardless of filter.
+  // Uses pre-built _sportTeamNameSet for O(1) lookup instead of nested league/game loops.
+  _buildSportGameIndex();
   var _titleHasTeam = false;
-  (settings.sportLeagues || []).forEach(function(lg) {
-    if (_titleHasTeam) return;
-    Object.values(lg.cachedGamesByPath || {}).forEach(function(games) {
-      if (_titleHasTeam || !Array.isArray(games)) return;
-      games.forEach(function(g) {
-        if (_titleHasTeam) return;
-        (g.teams || []).forEach(function(t) {
-          if (t && title.includes(t.toLowerCase())) _titleHasTeam = true;
-        });
-      });
+  if (_sportTeamNameSet) {
+    _sportTeamNameSet.forEach(function(teamName) {
+      if (!_titleHasTeam && title.includes(teamName)) _titleHasTeam = true;
     });
-  });
+  }
   if (!_titleHasTeam) return true; // no team name in title → broadcast channel → always show
   return !!findGameForItem(item);
 }
@@ -5848,6 +5877,23 @@ function renderSportTab() {
     return tiers.flat();
   };
 
+  // Pre-build gameKey → channels map ONCE before the game card loop.
+  // Without this, each game card calls findGamesForItem for every channel = O(games × channels).
+  // With this map it's O(channels) once + O(1) per game card lookup.
+  const _chsByGameKey = new Map(); // gameKey → { primary: [], alt: [] }
+  allChs.forEach(function(m) {
+    var title = (m.title || '').toLowerCase();
+    var matchedGames = _findGamesViaIndex(title);
+    matchedGames.forEach(function(mg) {
+      var gKey = (mg.shortName || '') + '|' + mg.startTime;
+      if (!_chsByGameKey.has(gKey)) _chsByGameKey.set(gKey, { primary: [], alt: [] });
+      var bucket = _chsByGameKey.get(gKey);
+      if (lgName && m._lgGroupName === lgName) bucket.primary.push(m);
+      else if (lgName && m._lgGroupName !== lgName) bucket.alt.push(m);
+      else bucket.primary.push(m); // no lgName (live tab) → all go to primary
+    });
+  });
+
   // Build a shared renderGameCard with registry (reused from _renderAllGamesTab logic)
   const renderGameCard = (g) => {
     const t1 = g.teamObjects[0] || {}, t2 = g.teamObjects[1] || {}; // t1=home, t2=away
@@ -5859,21 +5905,11 @@ function renderSportTab() {
     const scoreStr = (g.state === 'in' || g.state === 'post') && t1.score && t2.score
       ? t1.score + ' – ' + t2.score : '';
 
-    // Channels matching this game:
-    // Primary = from the current tab's group (shown as play buttons on card)
-    // Alt     = from other groups (silently added to failover JSON only)
-    // This prevents Paramount+ tab from showing PPV/US Sports channels as buttons.
-    const _allMatchingChs = allChs.filter(m => {
-      const gms = findGamesForItem(m);
-      return gms.some(gg => gg.startTime === g.startTime && gg.shortName === g.shortName);
-    });
-    const matchingChs = lgName
-      ? _allMatchingChs.filter(m => m._lgGroupName === lgName)
-      : _allMatchingChs;
-    // Alt channels from other groups become silent failover at the end of allFailover
-    const _altMatchingChs = lgName
-      ? _allMatchingChs.filter(m => m._lgGroupName !== lgName)
-      : [];
+    // Channels matching this game — O(1) lookup via pre-built map
+    const _gameKey = (g.shortName || '') + '|' + g.startTime;
+    const _chBucket = _chsByGameKey.get(_gameKey) || { primary: [], alt: [] };
+    const matchingChs = _chBucket.primary;
+    const _altMatchingChs = _chBucket.alt;
 
     // Determine if pinned team is home or away for THIS game using ESPN homeAway data
     const lgName2 = g._lgName || lgName || '';
@@ -6132,17 +6168,28 @@ function _renderAllGamesTab(lst) {
   const pre = games.filter(g => g.state === 'pre');
   const post = games.filter(g => g.state === 'post');
 
+  // Pre-build gameKey → channels map once (same pattern as renderSportTab)
+  const _allChsAG = getAllSportItems();
+  const _chsByGameKeyAG = new Map();
+  _allChsAG.forEach(function(m) {
+    var title = (m.title || '').toLowerCase();
+    var matchedGames = _findGamesViaIndex(title);
+    matchedGames.forEach(function(mg) {
+      var gKey = (mg.shortName || '') + '|' + mg.startTime;
+      if (!_chsByGameKeyAG.has(gKey)) _chsByGameKeyAG.set(gKey, []);
+      _chsByGameKeyAG.get(gKey).push(m);
+    });
+  });
+
   const renderGameCard = (g) => {
     const t1 = g.teamObjects[0] || {}, t2 = g.teamObjects[1] || {};
     const name = g.shortName || g.name || (t1.name && t2.name ? t1.name + ' vs ' + t2.name : 'Game');
     const d = new Date(g.startTime), h = d.getHours() % 12 || 12, mi = d.getMinutes();
     const timeStr = g.state === 'in' ? '🔴 LIVE' : g.state === 'post' ? '✓ Final' : h + (mi ? ':' + String(mi).padStart(2,'0') : '') + (d.getHours()>=12?'PM':'AM');
     const scoreStr = (g.state === 'in' || g.state === 'post') && t1.score && t2.score ? t1.score + ' – ' + t2.score : '';
-    // Find channels that match this game
-    const matchingChs = getAllSportItems().filter(m => {
-      const games2 = findGamesForItem(m);
-      return games2.some(gg => gg.startTime === g.startTime && gg.shortName === g.shortName);
-    }).slice(0, 4);
+    // O(1) lookup via pre-built map
+    const _gKeyAG = (g.shortName || '') + '|' + g.startTime;
+    const matchingChs = (_chsByGameKeyAG.get(_gKeyAG) || []).slice(0, 4);
     // Build failover list for All Games tab — first channel is primary, rest are alts
     const allEntries = matchingChs.map(m => ({ url: m.url || '', title: m.title || '', region: m.region || '', tag: (m.tags && m.tags[0]) || '', category: m.category || m._lgGroupName || '' }));
     const cardSi2 = window._svSportItems.length;
@@ -7191,16 +7238,19 @@ setTimeout(async () => {
         refreshed++;
       } catch(e) { console.warn('[SV] startup repo refresh:', repo.name, e.message); }
     }
-    if (refreshed) renderLib(); // update ITV list with freshly loaded sport channels
+    if (refreshed) {
+      _invalidateSportGameIndex();
+      renderLib(); // update ITV list with freshly loaded channels
+    }
   }
-  if (epgSrc.length) {
-    window._setSplashStatus && window._setSplashStatus('Updating guide data…');
-    fetchAllEpg().catch(() => {});
-  }
-  // Unlock nav and hide splash
+  // Repos loaded — app is usable now. Unlock nav and hide splash immediately.
+  // EPG fetch runs in background (async with yields), does NOT block the thread.
   _navLocked = false;
   window._hideSplash && window._hideSplash('Ready');
   setTimeout(refreshTvFocus, 80);
+  if (epgSrc.length) {
+    fetchAllEpg().catch(function() {});
+  }
 }, 800);
 
 // ── Live score auto-refresh ───────────────────────────────────────────────
