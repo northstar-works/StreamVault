@@ -415,14 +415,28 @@ document.addEventListener('keydown', function(e) {
     <div class="sr" style="margin-top:8px"><div><div class="sl">Default EPG source</div><div class="sd">Used for new streams and imports when no EPG source is set</div></div><select id="s-def-epg"><option value="">None</option></select></div>
   </div>
 
-  <div class="ss"><h3>Home Tabs</h3>
-    <div id="tab-order-lst"></div>
+  <div class="ss">
+    <div onclick="window.toggleHomeTabsAcc&&window.toggleHomeTabsAcc()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.toggleHomeTabsAcc&&window.toggleHomeTabsAcc();}" tabindex="0" role="button" style="font-size:10px;font-weight:700;color:var(--t1);cursor:pointer;padding:4px 0;display:flex;align-items:center;gap:6px;user-select:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      Home Tabs
+      <svg id="hometabs-acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;margin-left:auto;transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div id="hometabs-acc-body" style="display:none;padding-top:8px">
+      <div id="tab-order-lst"></div>
+    </div>
   </div>
 
-  <div class="ss"><h3>Locality Priorities</h3>
-    <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Local areas prioritized in search, filters & failover. Top = highest priority.</p>
-    <div class="ll" id="loc-lst"></div>
-    <div class="la tv-row" data-tv-group="locality-add"><input id="loc-in" placeholder="Add: DFW, Dallas…"><button id="loc-add">Add</button></div>
+  <div class="ss">
+    <div onclick="window.toggleLocalityAcc&&window.toggleLocalityAcc()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.toggleLocalityAcc&&window.toggleLocalityAcc();}" tabindex="0" role="button" style="font-size:10px;font-weight:700;color:var(--t1);cursor:pointer;padding:4px 0;display:flex;align-items:center;gap:6px;user-select:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      Locality Priorities
+      <svg id="locality-acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;margin-left:auto;transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div id="locality-acc-body" style="display:none;padding-top:8px">
+      <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Local areas prioritized in search, filters & failover. Top = highest priority.</p>
+      <div class="ll" id="loc-lst"></div>
+      <div class="la tv-row" data-tv-group="locality-add"><input id="loc-in" placeholder="Add: DFW, Dallas…"><button id="loc-add">Add</button></div>
+    </div>
   </div>
   <div class="ss" id="ss-sport-leagues">
     <h3>Live Sports</h3>
@@ -5434,6 +5448,11 @@ function _teamObjMatchesTitle(teamObj, titleLower) {
 function _teamObjMatchesEspnName(teamObj, espnNameLower) {
   var name = (typeof teamObj === 'string' ? teamObj : (teamObj.name || '')).toLowerCase();
   if (espnNameLower.includes(name)) return true; // ESPN name contains full team name
+  // Nick-only match is only safe when espnPath is set — the path guard in _teamMatchesGame
+  // blocks cross-sport false-positives (e.g. "Dallas Cowboys" nick="cowboys" matching
+  // "Oklahoma State Cowboys" in NCAAF). Without a path, require full-name match only.
+  var hasPath = typeof teamObj === 'object' && !!teamObj.espnPath;
+  if (!hasPath) return false;
   var words = name.split(/\s+/);
   var nick = words[words.length - 1]; // last word = nickname (Rangers, Cowboys, Stars...)
   return nick.length >= 5 && espnNameLower.includes(nick); // 5+ chars prevents "star"/"bear"/etc
@@ -5938,13 +5957,27 @@ function renderSportTab() {
   allChs.forEach(function(m) {
     var title = (m.title || '').toLowerCase();
     var matchedGames = _findGamesViaIndex(title);
+    // For the Live tab, resolve which sport group this stream belongs to so we can
+    // prefer same-path game matches over cross-sport ones. Prevents an NHL stream
+    // containing "Dallas" from appearing as the primary stream on an MLS game card.
+    var mLgCfg = lgName ? null : ((settings.sportLeagues || []).find(function(l) {
+      return l.groupName === (m._lgGroupName || m.category);
+    }) || null);
+    var mPaths = mLgCfg ? (mLgCfg.espnPaths || []) : [];
     matchedGames.forEach(function(mg) {
       var gKey = (mg.shortName || '') + '|' + mg.startTime;
       if (!_chsByGameKey.has(gKey)) _chsByGameKey.set(gKey, { primary: [], alt: [] });
       var bucket = _chsByGameKey.get(gKey);
-      if (lgName && m._lgGroupName === lgName) bucket.primary.push(m);
-      else if (lgName && m._lgGroupName !== lgName) bucket.alt.push(m);
-      else bucket.primary.push(m); // no lgName (live tab) → all go to primary
+      if (lgName) {
+        if (m._lgGroupName === lgName) bucket.primary.push(m);
+        else bucket.alt.push(m);
+      } else {
+        // Live tab: streams whose sport group's ESPN paths include this game's path are
+        // primary (same sport); everything else is alt (cross-sport fallback only).
+        var samePath = mPaths.length > 0 && !!mg._path && mPaths.includes(mg._path);
+        if (samePath) bucket.primary.push(m);
+        else bucket.alt.push(m);
+      }
     });
   });
 
@@ -6701,6 +6734,25 @@ window.toggleSportAccordion = () => {
   const chevron = $('sport-acc-chevron');
   if (body) body.style.display = sportConfigOpen ? 'block' : 'none';
   if (chevron) chevron.style.transform = sportConfigOpen ? 'rotate(180deg)' : '';
+
+};
+
+let _homeTabsAccOpen = false;
+window.toggleHomeTabsAcc = () => {
+  _homeTabsAccOpen = !_homeTabsAccOpen;
+  const body = $('hometabs-acc-body');
+  const chevron = $('hometabs-acc-chevron');
+  if (body) body.style.display = _homeTabsAccOpen ? 'block' : 'none';
+  if (chevron) chevron.style.transform = _homeTabsAccOpen ? 'rotate(180deg)' : '';
+};
+
+let _localityAccOpen = false;
+window.toggleLocalityAcc = () => {
+  _localityAccOpen = !_localityAccOpen;
+  const body = $('locality-acc-body');
+  const chevron = $('locality-acc-chevron');
+  if (body) body.style.display = _localityAccOpen ? 'block' : 'none';
+  if (chevron) chevron.style.transform = _localityAccOpen ? 'rotate(180deg)' : '';
 };
 
 window.toggleSportPast = () => {
