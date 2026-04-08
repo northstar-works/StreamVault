@@ -282,6 +282,72 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
 </head>
 <body>
 
+<!-- ═══ SPLASH SCREEN ═══ -->
+<div id="sv-splash" style="position:fixed;inset:0;z-index:99999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px;transition:opacity .5s ease">
+  <div style="font-size:28px;font-weight:800;color:var(--ac);letter-spacing:.04em;margin-bottom:40px">StreamVault</div>
+  <div id="sv-splash-quote" style="max-width:640px;text-align:center;font-size:15px;color:var(--t1);line-height:1.7;min-height:64px;transition:opacity .4s ease"></div>
+  <div id="sv-splash-author" style="margin-top:14px;font-size:10px;color:var(--t3);letter-spacing:.06em;min-height:18px"></div>
+  <div style="margin-top:48px;display:flex;align-items:center;gap:10px">
+    <div class="spn" style="width:18px;height:18px;border-width:2px"></div>
+    <span id="sv-splash-status" style="font-size:9px;color:var(--t3)">Loading…</span>
+  </div>
+</div>
+<script>
+(function(){
+  var _quotes=[
+    {q:"The best time to plant a tree was 20 years ago. The second best time is now.",a:"Chinese Proverb"},
+    {q:"In the middle of every difficulty lies opportunity.",a:"Albert Einstein"},
+    {q:"It does not matter how slowly you go as long as you do not stop.",a:"Confucius"},
+    {q:"Success is not final, failure is not fatal: it is the courage to continue that counts.",a:"Winston Churchill"},
+    {q:"Whether you think you can or think you can't, you're right.",a:"Henry Ford"},
+    {q:"The only way to do great work is to love what you do.",a:"Steve Jobs"},
+    {q:"Life is what happens when you're busy making other plans.",a:"John Lennon"},
+    {q:"Strive not to be a success, but rather to be of value.",a:"Albert Einstein"},
+    {q:"The future belongs to those who believe in the beauty of their dreams.",a:"Eleanor Roosevelt"},
+    {q:"It is during our darkest moments that we must focus to see the light.",a:"Aristotle"},
+    {q:"The only impossible journey is the one you never begin.",a:"Tony Robbins"},
+    {q:"Tell me and I forget. Teach me and I remember. Involve me and I learn.",a:"Benjamin Franklin"},
+    {q:"An unexamined life is not worth living.",a:"Socrates"},
+    {q:"Spread love everywhere you go. Let no one ever come to you without leaving happier.",a:"Mother Teresa"},
+    {q:"When you reach the end of your rope, tie a knot in it and hang on.",a:"Franklin D. Roosevelt"},
+    {q:"Always remember that you are absolutely unique. Just like everyone else.",a:"Margaret Mead"},
+    {q:"Do not go where the path may lead, go instead where there is no path and leave a trail.",a:"Ralph Waldo Emerson"},
+    {q:"You will face many defeats in life, but never let yourself be defeated.",a:"Maya Angelou"},
+    {q:"The greatest glory in living lies not in never falling, but in rising every time we fall.",a:"Nelson Mandela"},
+    {q:"In the end, it's not the years in your life that count. It's the life in your years.",a:"Abraham Lincoln"}
+  ];
+  var _qi=Math.floor(Math.random()*_quotes.length);
+  function _showQ(){
+    var qEl=document.getElementById('sv-splash-quote');
+    var aEl=document.getElementById('sv-splash-author');
+    if(!qEl||!aEl)return;
+    qEl.style.opacity=0;aEl.style.opacity=0;
+    setTimeout(function(){
+      var q=_quotes[_qi%_quotes.length];
+      qEl.textContent='"'+q.q+'"';
+      aEl.textContent='— '+q.a;
+      qEl.style.opacity=1;aEl.style.opacity=1;
+      _qi++;
+    },400);
+  }
+  _showQ();
+  window._splashQuoteTimer=setInterval(_showQ,5000);
+  window._hideSplash=function(status){
+    clearInterval(window._splashQuoteTimer);
+    var el=document.getElementById('sv-splash');
+    if(!el)return;
+    var st=document.getElementById('sv-splash-status');
+    if(st&&status)st.textContent=status;
+    el.style.opacity=0;
+    setTimeout(function(){el.style.display='none';},550);
+  };
+  window._setSplashStatus=function(msg){
+    var st=document.getElementById('sv-splash-status');
+    if(st)st.textContent=msg;
+  };
+})();
+</script>
+
 <div class="app">
 <div class="app-body">
 
@@ -553,7 +619,7 @@ document.addEventListener('keydown', function(e) {
 
 <!-- ═══ BROWSE REPO ═══ -->
 <div id="br-scr" class="scr">
-  <div class="hd"><button class="ib" id="br-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button><h1 id="br-title" style="flex:1;margin-left:6px;font-size:14px">Repo</h1><span class="cnt" id="br-cnt">0</span></div>
+  <div class="hd"><button class="ib" id="br-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button><h1 id="br-title" style="flex:1;margin-left:6px;font-size:14px">Repo</h1><button class="ib" id="br-filter-added" title="Show only added channels" style="font-size:8px;padding:2px 8px;border-radius:8px">✓ Added</button><span class="cnt" id="br-cnt">0</span></div>
   <div class="sb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="br-q" placeholder="Search…"></div>
   <!-- TV-friendly filter bar: buttons open list modal instead of native <select> -->
   <div class="fbar" id="filter-bar">
@@ -921,6 +987,8 @@ let activeLibPage = 'all';
 let libSearchOpen = false;
 let isTvDevice = false;
 let tvFocusIndex = 0;
+let _navLocked = true; // locked until startup completes — prevents ghost keypresses during load
+let _navLastMs = 0;   // debounce timestamp
 
 // Browse state
 let brRepo = null;
@@ -932,6 +1000,7 @@ let brFilteredCache = { key: '', items: [] };
 let brWindowStart = 0;
 let brWindowSize = 80;
 let brActiveIndex = 0;
+let brShowAdded = false; // filter repo browser to only show already-added channels
 
 // ─── Utilities ───
 const $ = id => document.getElementById(id);
@@ -2256,7 +2325,13 @@ function renderLib() {
     $('lib-lst').innerHTML = '<div class="emp"><h3>' + emptyTitle + '</h3><p>' + emptyBody + '</p></div>';
     return;
   }
-  $('lib-lst').innerHTML = f.map((m, i) => {
+  // Render cap: building innerHTML for thousands of items causes a multi-minute
+  // freeze on Fire TV (string allocation + DOM parse + layout all at once).
+  // Cap at 300; show a hint to use search/category to narrow when over limit.
+  const LIB_RENDER_CAP = 300;
+  const fSlice = f.length > LIB_RENDER_CAP ? f.slice(0, LIB_RENDER_CAP) : f;
+  const overCap = f.length > LIB_RENDER_CAP;
+  $('lib-lst').innerHTML = fSlice.map((m, i) => {
     const thumb = m.icon
       ? `<img src="${esc(m.icon)}" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><svg style="display:none" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>`
       : `<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>`;
@@ -2290,7 +2365,7 @@ function renderLib() {
         <button onclick="event.stopPropagation();confirmDel('${m.id}','item')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button>
       </div>
     </div>`;
-  }).join('');
+  }).join('') + (overCap ? `<div class="emp" style="padding:12px;text-align:center"><p style="font-size:9px;color:var(--t3)">Showing 300 of ${f.length} — use Search or a Category pill to narrow results.</p></div>` : '');
 }
 
 $('lib-q').addEventListener('input', renderLib);
@@ -2810,21 +2885,24 @@ window.refreshRepo = async (id) => {
   const repo = repos.find(r => r.id === id);
   if (!repo || !repo.sourceUrl) { toast('No source URL saved for this repo'); return; }
   toast('Refreshing ' + repo.name + '…');
+  const wasLocked = _navLocked;
+  _navLocked = true; // block D-pad during async M3U parse to prevent ghost keypresses
   try {
     const resp = await fetch(repo.sourceUrl);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const text = await resp.text();
     const streams = (await parseM3U(text)).filter(d => d.name && d.url);
     if (!streams.length) throw new Error('No streams in response');
-    const oldCount = repo.streams.length;
     repo.streams = streams;
     repo.lastRefresh = Date.now();
     saveRepos();
     refreshAltCache(true);
     renderRepos();
-    refreshGuideOnly(repo.name + ': guide refreshed from updated library');
+    refreshGuideOnly(repo.name + ': ' + streams.length + ' channels loaded');
   } catch(e) {
     toast('Refresh failed: ' + e.message);
+  } finally {
+    if (!wasLocked) _navLocked = false; // restore to unlocked only if we locked it here
   }
 };
 
@@ -2836,11 +2914,19 @@ function renderRepos() {
   }
   $('repo-lst').innerHTML = repos.map(r => {
     const regs = new Set((r.streams || []).map(s => s.region).filter(Boolean));
+    const streamCount = (r.streams || []).length;
+    // URL repos: if streams not yet loaded in memory, show loading indicator.
+    // streamCount from saved metadata tells us how many were there last time.
+    const isUrlRepo = !!r.sourceUrl;
+    const savedCount = r.streamCount || 0;
+    const streamsLabel = isUrlRepo && streamCount === 0 && savedCount > 0
+      ? `<span style="color:var(--or)">⏳ Loading… (${savedCount} last refresh)</span>`
+      : streamCount + ' streams · ' + regs.size + ' regions';
     const urlInfo = r.sourceUrl ? '<div style="font-size:7px;color:var(--t3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🔗 ' + esc(r.sourceUrl).substring(0, 40) + '…</div>' : '';
     const refreshBtn = r.sourceUrl ? '<button class="rd" onclick="event.stopPropagation();refreshRepo(\'' + r.id + '\')" title="Refresh from URL" style="color:var(--ac)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg></button>' : '';
     return `<div class="rc" onclick="openRepo('${r.id}')">
       <div class="ri2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div>
-      <div class="rf2"><div class="rn2">${esc(r.name)}</div><div class="rm2">${(r.streams||[]).length} streams · ${regs.size} regions</div>${urlInfo}</div>
+      <div class="rf2"><div class="rn2">${esc(r.name)}</div><div class="rm2">${streamsLabel}</div>${urlInfo}</div>
       ${refreshBtn}
       <button class="rd" onclick="event.stopPropagation();confirmDel('${r.id}','repo')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button>
     </div>`;
@@ -2855,6 +2941,7 @@ window.openRepo = async (id) => {
   brSel = new Set();
   brReg = loadBrowseRegionDefault(r);
   brGen = 'All';
+  brShowAdded = false;
   brFilteredCache = { key: '', items: [] };
   brWindowStart = 0;
   brActiveIndex = 0;
@@ -2884,6 +2971,25 @@ window.openRepo = async (id) => {
 };
 
 $('br-back').onclick = () => showTab('repo-scr');
+$('br-filter-added').onclick = () => {
+  brShowAdded = !brShowAdded;
+  $('br-filter-added').style.background = brShowAdded ? 'var(--ac)' : '';
+  $('br-filter-added').style.color = brShowAdded ? '#fff' : '';
+  invalidateBrowseCache(); brWindowStart = 0; brActiveIndex = 0; renderBrowse();
+};
+window._brRemoveAdded = function(url) {
+  const existing = items.find(m => m.url === url);
+  if (!existing) return;
+  if (!confirm('Remove "' + (existing.title || url) + '" from your library?')) return;
+  items = items.filter(m => m.url !== url);
+  saveItems();
+  refreshAltCache(true);
+  renderCats();
+  renderLib();
+  invalidateBrowseCache();
+  renderBrowse();
+  toast('Removed from library');
+};
 
 
 function getLocaleRegionDefault() {
@@ -2980,10 +3086,12 @@ $('f-gen-btn').onclick = () => {
 function getBrowseFiltered() {
   if (!brRepo) return [];
   const q = getBrowseSearchValue();
-  const key = [brRepo.id || brRepo.name || '', brReg, brGen, q].join('|');
+  const key = [brRepo.id || brRepo.name || '', brReg, brGen, q, brShowAdded ? '1' : '0'].join('|');
   if (brFilteredCache.key === key) return brFilteredCache.items;
+  const existingUrls = brShowAdded ? new Set(items.map(m => m.url)) : null;
   let filtered = (brRepo.streams || []).filter(s => {
     if (!s._svSearch) s._svSearch = ((s.name || '') + ' ' + (s.category || '') + ' ' + (s.region || '')).toLowerCase();
+    if (brShowAdded && !existingUrls.has(s.url)) return false;
     return (brReg === 'All' || s.region === brReg) &&
            (brGen === 'All' || s.category === brGen) &&
            (!q || s._svSearch.includes(q));
@@ -3029,13 +3137,17 @@ function renderBrowse() {
     const sourceBadge = `<span class="tg2" style="background:rgba(108,92,231,.12);color:#8f7bff">${esc(getSourceType(s.url))}</span>`;
     const regB = s.region ? '<span style="background:rgba(46,213,115,.12);color:var(--gn);padding:0 3px;border-radius:2px;font-size:7px;font-weight:600;margin-right:2px">' + esc(s.region) + '</span>' : '';
     const catB = s.category ? '<span style="background:var(--acs);color:var(--ac);padding:0 3px;border-radius:2px;font-size:7px;font-weight:600">' + esc(s.category) + '</span>' : '';
-    const exMark = exists ? '<span style="color:var(--gn);font-size:7px;margin-left:3px">✓</span>' : '';
+    const exMark = exists ? '<span style="color:var(--gn);font-size:7px;margin-left:3px">✓ Added</span>' : '';
+    const removeBtn = exists
+      ? `<button onclick="event.stopPropagation();window._brRemoveAdded(${JSON.stringify(s.url)})" title="Remove from library" style="flex-shrink:0;background:none;border:none;cursor:pointer;color:var(--rd);padding:4px 6px;font-size:11px" tabindex="-1">🗑</button>`
+      : '';
     const tvCls = (isTvDevice && $('br-scr').classList.contains('on') && realIdx === brActiveIndex) ? ' tv-f' : '';
 
     return `<div class="ri${sel ? ' sel' : ''}${tvCls}" data-url="${esc(key)}" data-idx="${realIdx}" onclick="toggleBrSel(this)">
       <div class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
       ${thumb ? '<div>' + thumb + '</div>' : ''}
       <div class="rf"><div class="rn">${esc(s.name)}${exMark}</div><div class="rm">${regB}${catB}${sourceBadge}</div></div>
+      ${removeBtn}
     </div>`;
   }).join('');
   const activeEl = $('br-lst').querySelector('.ri.tv-f');
@@ -4175,6 +4287,15 @@ function moveTvFocusSpatial(dirCode) {
 }
 window.__svHandleTvKey = function(code) {
   if (!isTvDevice) return false;
+  // ── Nav guard: drop ALL input while the app is loading or mid-render ─────
+  // This prevents ghost keypresses queuing during async parseM3U/repo refresh
+  // (which yield the event loop) from all firing in a burst when the thread
+  // frees — each one calls getTvFocusableElements() which thrashes layout.
+  if (window._navLocked) return true; // swallow silently
+  // Debounce: drop repeat events within 80ms to prevent remote key-repeat flooding
+  var _now = Date.now();
+  if (_now - (window._navLastMs || 0) < 80) return true;
+  window._navLastMs = _now;
   // ── Custom TV picker overlay: intercept ALL keys while open ──────────
   if (window._svPickerCtrl) {
     if (code === 19) { window._svPickerCtrl.up();      return true; }
@@ -5136,6 +5257,24 @@ function shouldShowSportTeam(item) {
   var isPpvGroup = /\bppv\b|pay.per.view|ufc|boxing|combat/i.test(cfg.groupName)
     || paths.some(function(p) { return _combatPaths.indexOf(p) >= 0; });
   if (isPpvGroup) return true; // always show PPV/UFC channels regardless of game state
+  // Broadcast channel bypass: if the channel title contains NO team name from any
+  // cached game across all leagues, it's a generic broadcast (e.g. "ESPN", "ESPN2",
+  // "ESPN Deportes", "FS1") — not a team-specific stream. Always show these.
+  // This prevents generic network channels from disappearing after schedule loads.
+  var _titleHasTeam = false;
+  (settings.sportLeagues || []).forEach(function(lg) {
+    if (_titleHasTeam) return;
+    Object.values(lg.cachedGamesByPath || {}).forEach(function(games) {
+      if (_titleHasTeam || !Array.isArray(games)) return;
+      games.forEach(function(g) {
+        if (_titleHasTeam) return;
+        (g.teams || []).forEach(function(t) {
+          if (t && title.includes(t.toLowerCase())) _titleHasTeam = true;
+        });
+      });
+    });
+  });
+  if (!_titleHasTeam) return true; // no team name in title → broadcast channel → always show
   return !!findGameForItem(item);
 }
 
@@ -5476,14 +5615,29 @@ function renderSportTab() {
   }
 
   // ── Section tabs ──
-  // Show Live Now only when ESPN reports live games.
+  // "Live · Today" pill: always visible when any games exist today, shows live+upcoming.
+  // Badge = total games today (filtered by My Teams when filterOn).
   // Show league tabs when the league has ESPN paths OR loaded channels.
   // Always show All Games.
   const secTabs = $('sport-section-tabs');
   const tabs = [];
 
-  if (liveGames.length > 0) {
-    tabs.push({ id: 'live', label: '🔴 Live Now', badge: liveGames.length });
+  // Compute today's game count for the Live·Today badge (respects My Teams filter)
+  const _allPinObjsLive = filterOn ? (settings.myTeams || []) : [];
+  const todayCountForBadge = allGames.filter(function(g) {
+    if (showPast ? false : g.state === 'post') return false;
+    if (!_allPinObjsLive.length) return true;
+    return (g.teams || []).some(function(espnName) {
+      var enl = espnName.toLowerCase();
+      return _allPinObjsLive.some(function(t) { return _teamObjMatchesEspnName(t, enl); });
+    });
+  }).length;
+
+  // Always show the Live·Today tab when there are any games (live or upcoming)
+  if (allGames.length > 0) {
+    const liveCount = liveGames.length;
+    const tabLabel = liveCount > 0 ? '🔴 Live · Today' : '📅 Today';
+    tabs.push({ id: 'live', label: tabLabel, badge: todayCountForBadge });
   } else if (sportSectionTab === 'live') {
     sportSectionTab = leagues.length ? leagues[0].groupName : 'allgames';
   }
@@ -5851,7 +6005,7 @@ function renderSportTab() {
   const lgEspnPaths = lgConfig ? (lgConfig.espnPaths || []) : [];
   let tabGames = allGames.filter(g => {
     // Live tab: only live games
-    if (isLiveTab && g.state !== 'in') return false;
+    if (isLiveTab && g.state === 'post') return false; // live tab: exclude completed, show live+upcoming
     // League tab: game's ESPN path must be in this league's configured paths
     if (lgName) {
       if (lgEspnPaths.length > 0 && !lgEspnPaths.includes(g._path)) return false;
@@ -5914,7 +6068,10 @@ function renderSportTab() {
   // Group by state
   if (isLiveTab) {
     // Live tab: just live games, no need to sub-section
-    lst.innerHTML = renderSection('🔴 Live Now', tabGames) || '<div class="emp"><h3>No live games</h3></div>';
+    const liveNow   = tabGames.filter(g => g.state === 'in');
+    const upcoming  = tabGames.filter(g => g.state === 'pre');
+    lst.innerHTML = (renderSection('🔴 Live Now', liveNow) + renderSection('🏟 Upcoming Today', upcoming))
+      || '<div class="emp"><h3>No games scheduled today</h3><p>Tap ↻ to refresh schedules.</p></div>';
   } else {
     const live    = tabGames.filter(g => g.state === 'in');
     const pre     = tabGames.filter(g => g.state === 'pre');
@@ -6420,7 +6577,7 @@ window.toggleSportFilter = () => {
   settings.sportLeagueFilterEnabled = !settings.sportLeagueFilterEnabled;
   _invalidateSportCache();
   _invalidateSportTabCache();
-  // Fix 5: switching to My Teams Only defaults to All Games (the filtered view)
+  // Switching to My Teams Only defaults to All Games (the filtered view)
   if (settings.sportLeagueFilterEnabled) { sportSectionTab = 'allgames'; }
   sportSubLeague = ''; // reset sub-league filter on toggle
   const tgl = $('s-sport-enable');
@@ -6428,12 +6585,19 @@ window.toggleSportFilter = () => {
   const tog2 = $('btn-sport-filter-tog');
   if (tog2) tog2.style.color = settings.sportLeagueFilterEnabled ? 'var(--ac)' : '';
   saveSettings();
-  // Only re-render lib tab if currently on it (avoids full item scan when on Sports screen)
-  if ($('lib-scr') && $('lib-scr').classList.contains('on')) {
-    renderCats(); renderLib();
-  }
   renderSportLeagueSettings();
-  renderSportTab();
+  renderSportTab(); // Sports tab is lightweight (game cards only)
+  // Library re-render is expensive for large repos — lock nav, show toast, defer.
+  if ($('lib-scr') && $('lib-scr').classList.contains('on')) {
+    toast('Updating channels…');
+    _navLocked = true;
+    setTimeout(() => {
+      renderCats();
+      renderLib();
+      _navLocked = false;
+      setTimeout(refreshTvFocus, 80);
+    }, 60);
+  }
 };
 
 window.toggleSportAccordion = () => {
@@ -7014,14 +7178,30 @@ setTimeout(() => fetchAllLeagueSchedules(false), 800);
 // Refresh all repos with a sourceUrl so channels are always current on launch,
 // then re-fetch EPG so guide channel matching is fresh.
 // Staggered so the UI renders first and fetchAllLeagueSchedules fires first.
+// Nav stays locked the entire time so D-pad presses during loading don't queue.
 setTimeout(async () => {
   const urlRepos = repos.filter(r => r.sourceUrl);
-  for (const repo of urlRepos) {
-    try { await window.refreshRepo(repo.id); }
-    catch(e) { console.warn('[SV] startup repo refresh:', repo.name, e.message); }
+  if (urlRepos.length) {
+    window._setSplashStatus && window._setSplashStatus('Refreshing ' + urlRepos.length + ' repo' + (urlRepos.length > 1 ? 's' : '') + '…');
+    let refreshed = 0;
+    for (const repo of urlRepos) {
+      try {
+        window._setSplashStatus && window._setSplashStatus('Loading ' + (repo.name || 'repo') + '…');
+        await window.refreshRepo(repo.id);
+        refreshed++;
+      } catch(e) { console.warn('[SV] startup repo refresh:', repo.name, e.message); }
+    }
+    if (refreshed) renderLib(); // update ITV list with freshly loaded sport channels
   }
-  if (epgSrc.length) fetchAllEpg().catch(() => {});
-}, 2000);
+  if (epgSrc.length) {
+    window._setSplashStatus && window._setSplashStatus('Updating guide data…');
+    fetchAllEpg().catch(() => {});
+  }
+  // Unlock nav and hide splash
+  _navLocked = false;
+  window._hideSplash && window._hideSplash('Ready');
+  setTimeout(refreshTvFocus, 80);
+}, 800);
 
 // ── Live score auto-refresh ───────────────────────────────────────────────
 // Re-polls the ESPN scoreboard every 30s when the Sport tab is active.
