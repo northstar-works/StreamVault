@@ -5994,25 +5994,14 @@ function renderSportTab() {
       if (!_chsByGameKey.has(gKey)) _chsByGameKey.set(gKey, { primary: [], alt: [] });
       var bucket = _chsByGameKey.get(gKey);
 
-      // Two-team validation: count how many team names from the game appear in
-      // the stream title. A stream mentioning only 1 of 2 teams is likely a
-      // DIFFERENT matchup (e.g. "Louisiana Tech @ Missouri St" matching
-      // "MOST @ TA&M" via "missouri st" alone). Require 2+ team tokens for primary.
-      var _gameTeamHits = 0;
-      (mg.teams || []).forEach(function(t) {
-        if (t && t.length >= 4 && _titleContainsTeamToken(title, t.toLowerCase())) _gameTeamHits++;
-      });
-      var _bothTeamsMatch = _gameTeamHits >= 2;
-
       if (lgName) {
-        if (m._lgGroupName === lgName && _bothTeamsMatch) bucket.primary.push(m);
+        if (m._lgGroupName === lgName) bucket.primary.push(m);
         else bucket.alt.push(m);
       } else {
         // Live tab: streams whose detected sport path matches this game's path are
         // primary (same sport); everything else is alt (cross-sport fallback only).
-        // Additionally, single-team-only matches go to alt regardless of sport.
         var samePath = mPaths.length > 0 && !!mg._path && mPaths.includes(mg._path);
-        if (samePath && _bothTeamsMatch) bucket.primary.push(m);
+        if (samePath) bucket.primary.push(m);
         else bucket.alt.push(m);
       }
     });
@@ -6314,13 +6303,6 @@ function _renderAllGamesTab(lst) {
       // Sport-path check: stream must be from the same sport as the game
       var _agSameSport = _agPaths.length === 0 || !mg._path || _agPaths.includes(mg._path);
       if (!_agSameSport) return; // cross-sport → skip entirely in All Games
-
-      // Two-team validation: require 2+ team name tokens from the game
-      var _agHits = 0;
-      (mg.teams || []).forEach(function(t) {
-        if (t && t.length >= 4 && _titleContainsTeamToken(title, t.toLowerCase())) _agHits++;
-      });
-      if (_agHits < 2) return; // single-team match → likely wrong game, skip
 
       var gKey = (mg.shortName || '') + '|' + mg.startTime;
       if (!_chsByGameKeyAG.has(gKey)) _chsByGameKeyAG.set(gKey, []);
