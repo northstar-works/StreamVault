@@ -5122,20 +5122,12 @@ async function fetchLeagueSchedule(idx) {
   if (!lg.cachedGamesByPath) lg.cachedGamesByPath = {};
   const needsFetch = paths.filter(p => p && !(lg.cacheDate === today && Array.isArray(lg.cachedGamesByPath[p])));
   if (!needsFetch.length) return;
-  // Was the previous cache from today? Only preserve non-empty existing data against
-  // empty ESPN responses when the old data is from today (2-5 AM protection).
-  // Cross-day empty responses mean genuinely no games (off-season) → allow clearing.
   const _prevCacheIsToday = lg.cacheDate === today;
   for (const path of needsFetch) {
     try {
       const fresh = await _fetchOnePath(path);
       const existing = lg.cachedGamesByPath[path];
       const hasExisting = Array.isArray(existing) && existing.length > 0;
-      // Preserve existing data ONLY when:
-      //   1) fresh is empty AND existing has data AND existing was fetched today
-      // This protects against 2-5 AM empty ESPN responses wiping today's valid cache.
-      // But if existing data is from a PREVIOUS day and ESPN returns [] today,
-      // that means the league genuinely has no games → clear the stale data.
       if (fresh.length > 0 || !hasExisting || !_prevCacheIsToday) {
         lg.cachedGamesByPath[path] = fresh;
       }
@@ -5205,9 +5197,7 @@ function _invalidateSportGameIndex() {
 }
 
 function _buildSportGameIndex() {
-  const _idxNow = new Date();
-  const _idxToday = new Date(_idxNow.getFullYear(), _idxNow.getMonth(), _idxNow.getDate()).getTime();
-  const key = _idxToday + '|' + (settings.sportLeagues || []).map(function(lg) {
+  const key = (settings.sportLeagues || []).map(function(lg) {
     return lg.groupName + ':' + Object.keys(lg.cachedGamesByPath || {}).length;
   }).join('|');
   if (_sportGameIndex && _sportGameIndexKey === key) return;
@@ -5215,17 +5205,12 @@ function _buildSportGameIndex() {
   _sportGameIndex = new Map();   // teamNameLower → Set<gameKey>
   _sportTeamNameSet = new Set(); // all team name strings (lowercase)
   var _gamesByKey = new Map();   // gameKey → game object
-  // Date guard: same window as _getAllTodayGames
-  var _idxWinStart = _idxToday - 6 * 3600000;
-  var _idxWinEnd   = _idxToday + 30 * 3600000;
 
   (settings.sportLeagues || []).forEach(function(lg) {
     (lg.espnPaths || []).forEach(function(path) {
       var games = lg.cachedGamesByPath && lg.cachedGamesByPath[path];
       if (!Array.isArray(games)) return;
       games.forEach(function(g) {
-        // Skip games outside today's window
-        if (g.startTime < _idxWinStart || g.startTime > _idxWinEnd) return;
         var gKey = (g.shortName || '') + '|' + g.startTime;
         if (!_gamesByKey.has(gKey)) {
           _gamesByKey.set(gKey, Object.assign({}, g, { _path: path, _lgName: lg.groupName }));
@@ -5980,25 +5965,20 @@ function renderSportTab() {
       return l.groupName === (m._lgGroupName || m.category);
     }) || null);
     var mGroupPaths = mLgCfg ? (mLgCfg.espnPaths || []) : [];
-    // For multi-path groups (Paramount+, US Sports etc.), detect the stream's
-    // ACTUAL sport from its title prefix (e.g. "MLB 17:" → baseball/mlb).
-    // Without this, an MLB stream from Paramount+ would match any game from any
-    // sport because Paramount+ has paths for all sports.
+    // For multi-path groups (Paramount+, US Sports), detect the stream's actual
+    // sport from its title prefix ("MLB 17:" → baseball/mlb). Without this, all
+    // streams from Paramount+ match all game paths because the group has all paths.
     var mDetectedPath = (mGroupPaths.length > 1) ? detectSportPathFromTitle(title) : null;
-    // If a sport prefix was detected, narrow to that single path; otherwise
-    // keep the full group paths (broadcast/generic channels with no prefix).
     var mPaths = mDetectedPath ? [mDetectedPath] : mGroupPaths;
-
     matchedGames.forEach(function(mg) {
       var gKey = (mg.shortName || '') + '|' + mg.startTime;
       if (!_chsByGameKey.has(gKey)) _chsByGameKey.set(gKey, { primary: [], alt: [] });
       var bucket = _chsByGameKey.get(gKey);
-
       if (lgName) {
         if (m._lgGroupName === lgName) bucket.primary.push(m);
         else bucket.alt.push(m);
       } else {
-        // Live tab: streams whose detected sport path matches this game's path are
+        // Live tab: streams whose sport group's ESPN paths include this game's path are
         // primary (same sport); everything else is alt (cross-sport fallback only).
         var samePath = mPaths.length > 0 && !!mg._path && mPaths.includes(mg._path);
         if (samePath) bucket.primary.push(m);
@@ -6238,22 +6218,12 @@ function _getAllTodayGames() {
   // lists for specific league tabs without needing a separate duplicate game card.
   const seen = new Set();
   const out = [];
-  // Date guard: only include games whose startTime is actually today.
-  // Protects against stale cached data from previous days that slipped past
-  // the cache invalidation (e.g. off-season leagues returning empty responses).
-  const _now = new Date();
-  const _todayStart = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate()).getTime();
-  const _windowStart = _todayStart - 6 * 3600000;   // 6h before midnight (late finishes)
-  const _windowEnd   = _todayStart + 30 * 3600000;  // 6h after midnight next day
-
   (settings.sportLeagues || []).forEach(lg => {
     const paths = lg.espnPaths || (lg.espnPath ? [lg.espnPath] : []);
     paths.forEach(path => {
       const games = lg.cachedGamesByPath && lg.cachedGamesByPath[path];
       if (!Array.isArray(games)) return;
       games.forEach(g => {
-        // Skip games outside today's window — stale data from other dates
-        if (g.startTime < _windowStart || g.startTime > _windowEnd) return;
         const key = g.shortName + '|' + g.startTime;
         if (!seen.has(key)) { seen.add(key); out.push({ ...g, _path: path, _lgName: lg.groupName }); }
       });
@@ -6302,7 +6272,7 @@ function _renderAllGamesTab(lst) {
     matchedGames.forEach(function(mg) {
       // Sport-path check: stream must be from the same sport as the game
       var _agSameSport = _agPaths.length === 0 || !mg._path || _agPaths.includes(mg._path);
-      if (!_agSameSport) return; // cross-sport → skip entirely in All Games
+      if (!_agSameSport) return;
 
       var gKey = (mg.shortName || '') + '|' + mg.startTime;
       if (!_chsByGameKeyAG.has(gKey)) _chsByGameKeyAG.set(gKey, []);
