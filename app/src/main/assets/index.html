@@ -5188,7 +5188,7 @@ function _buildSportGameIndex() {
   if (_sportGameIndex && _sportGameIndexKey === key) return;
 
   _sportGameIndex = new Map();   // teamNameLower → Set<gameKey>
-  _sportTeamNameSet = new Set(); // all team name fragments (lowercase)
+  _sportTeamNameSet = new Set(); // all team name strings (lowercase)
   var _gamesByKey = new Map();   // gameKey → game object
 
   (settings.sportLeagues || []).forEach(function(lg) {
@@ -5201,11 +5201,19 @@ function _buildSportGameIndex() {
           _gamesByKey.set(gKey, Object.assign({}, g, { _path: path, _lgName: lg.groupName }));
         }
         (g.teams || []).forEach(function(t) {
-          if (!t) return;
+          if (!t || t.length < 4) return; // skip trivially short team names
           var tl = t.toLowerCase();
           _sportTeamNameSet.add(tl);
           if (!_sportGameIndex.has(tl)) _sportGameIndex.set(tl, new Set());
           _sportGameIndex.get(tl).add(gKey);
+          // Also index the last word (nickname) if it's 6+ chars and different from full name
+          var words = tl.split(/\s+/);
+          var nick = words[words.length - 1];
+          if (nick.length >= 6 && nick !== tl) {
+            _sportTeamNameSet.add(nick);
+            if (!_sportGameIndex.has(nick)) _sportGameIndex.set(nick, new Set());
+            _sportGameIndex.get(nick).add(gKey);
+          }
         });
       });
     });
@@ -5215,13 +5223,28 @@ function _buildSportGameIndex() {
   _sportGameIndexKey = key;
 }
 
+// Word-boundary check: teamName must appear as a complete token in the title,
+// not embedded inside a longer word (prevents "bears" matching "beards" etc.)
+function _titleContainsTeamToken(titleLower, teamName) {
+  var idx = titleLower.indexOf(teamName);
+  if (idx === -1) return false;
+  var before = idx === 0 ? 0 : titleLower.charCodeAt(idx - 1);
+  var after  = idx + teamName.length >= titleLower.length ? 0 : titleLower.charCodeAt(idx + teamName.length);
+  // char before and after must NOT be a letter or digit
+  var isWordChar = function(code) { return (code >= 97 && code <= 122) || (code >= 48 && code <= 57); };
+  return !isWordChar(before) && !isWordChar(after);
+}
+
 // Fast O(1) channel→game lookup via pre-built index.
+// Requires team name to appear as a whole word/token in the channel title —
+// prevents "Football Event 09: Bosnia..." matching a game just because
+// a 4-letter team abbreviation appears inside another word.
 function _findGamesViaIndex(titleLower) {
   _buildSportGameIndex();
   if (!_sportGameIndex || !_sportGameIndex._gamesByKey) return [];
   var found = new Map();
   _sportGameIndex.forEach(function(gameKeys, teamName) {
-    if (titleLower.includes(teamName)) {
+    if (_titleContainsTeamToken(titleLower, teamName)) {
       gameKeys.forEach(function(gKey) {
         if (!found.has(gKey)) found.set(gKey, _sportGameIndex._gamesByKey.get(gKey));
       });
@@ -5365,6 +5388,33 @@ function _getLeagueTeamObjects(lgName) {
 // ESPN-sourced teams (have espnPath): exact full-name OR nickname (last word) only.
 //   "Texas Rangers" → matches "rangers" but NOT just "texas" (too generic).
 // Manually-added teams (no espnPath): any significant word (length >= 4).
+// Normalize a sport group name for display: if it contains a major league
+// identifier, show just the standard abbreviation. Keeps settings labels verbose.
+// Examples: "MLB Baseball League" → "MLB", "NBA Basketball" → "NBA",
+//           "US Sports" → "US Sports" (multi-sport, unchanged)
+function _normalizeSportGroupLabel(groupName) {
+  if (!groupName) return groupName;
+  var g = groupName;
+  // Ordered: check most-specific first so "NCAAF" beats "NFL" if both somehow present
+  var _leagues = [
+    { re: /\bncaaf\b|\bcollege\s*football\b/i,     abbr: 'NCAAF' },
+    { re: /\bncaab\b|\bcollege\s*basketball\b/i,   abbr: 'NCAAB' },
+    { re: /\bnfl\b|\bnat(?:ional)?\s*football\b/i, abbr: 'NFL'   },
+    { re: /\bnba\b|\bnat(?:ional)?\s*basketball\b/i, abbr: 'NBA' },
+    { re: /\bmlb\b|\bbaseball\b/i,                 abbr: 'MLB'   },
+    { re: /\bnhl\b|\bhockey\b/i,                   abbr: 'NHL'   },
+    { re: /\bmls\b/i,                              abbr: 'MLS'   },
+    { re: /\bnascar\b/i,                           abbr: 'NASCAR'},
+    { re: /\bufc\b|\bmma\b/i,                      abbr: 'UFC'   },
+    { re: /\bwnba\b/i,                             abbr: 'WNBA'  },
+    { re: /\bpga\b|\bgolf\b/i,                     abbr: 'PGA'   },
+  ];
+  for (var i = 0; i < _leagues.length; i++) {
+    if (_leagues[i].re.test(g)) return _leagues[i].abbr;
+  }
+  return g; // no match — keep as-is
+}
+
 function _teamObjMatchesTitle(teamObj, titleLower) {
   var name = (typeof teamObj === 'string' ? teamObj : (teamObj.name || '')).toLowerCase();
   var hasPath = typeof teamObj === 'object' && teamObj.espnPath;
@@ -5387,6 +5437,19 @@ function _teamObjMatchesEspnName(teamObj, espnNameLower) {
   var words = name.split(/\s+/);
   var nick = words[words.length - 1]; // last word = nickname (Rangers, Cowboys, Stars...)
   return nick.length >= 5 && espnNameLower.includes(nick); // 5+ chars prevents "star"/"bear"/etc
+}
+
+// Path-scoped game match: only match a myTeam against a game when their sport paths agree.
+// Prevents "Dallas Cowboys" (espnPath=football/nfl, nick="cowboys") from matching
+// "Oklahoma State Cowboys" in NCAAF, or "FC Dallas" (nick="dallas") from matching
+// college teams with "dallas" in their name.
+function _teamMatchesGame(teamObj, game) {
+  // If the team has a known sport path and the game has a path, they must be the same sport.
+  if (teamObj && teamObj.espnPath && game._path && teamObj.espnPath !== game._path) return false;
+  var espnTeams = game.teams || [];
+  return espnTeams.some(function(t) {
+    return _teamObjMatchesEspnName(teamObj, (t || '').toLowerCase());
+  });
 }
 
 function getAllPinnedTeams() {
@@ -5656,10 +5719,7 @@ function renderSportTab() {
   const todayCountForBadge = allGames.filter(function(g) {
     if (showPast ? false : g.state === 'post') return false;
     if (!_allPinObjsLive.length) return true;
-    return (g.teams || []).some(function(espnName) {
-      var enl = espnName.toLowerCase();
-      return _allPinObjsLive.some(function(t) { return _teamObjMatchesEspnName(t, enl); });
-    });
+    return _allPinObjsLive.some(function(t) { return _teamMatchesGame(t, g); });
   }).length;
 
   // Always show the Live·Today tab when there are any games (live or upcoming)
@@ -5724,10 +5784,7 @@ function renderSportTab() {
           if (_allMyTeamsVis.length > 0) {
             var _effectiveTabTeams = _tabTeams.length > 0 ? _tabTeams : _allMyTeamsVis;
             var hasPinnedGame = countableGames.some(function(g) {
-              return (g.teams || []).some(function(espnName) {
-                var enl = espnName.toLowerCase();
-                return _effectiveTabTeams.some(function(t) { return _teamObjMatchesEspnName(t, enl); });
-              });
+              return _effectiveTabTeams.some(function(t) { return _teamMatchesGame(t, g); });
             });
             if (!hasPinnedGame) return;
           }
@@ -5737,7 +5794,7 @@ function renderSportTab() {
       else if (!hasChs) return;
     }
 
-    tabs.push({ id: lg.groupName, label: lg.groupName, badge: null });
+    tabs.push({ id: lg.groupName, label: _normalizeSportGroupLabel(lg.groupName), badge: null });
   });
   tabs.push({ id: 'allgames', label: '📅 All Games', badge: null });
 
@@ -5785,10 +5842,7 @@ function renderSportTab() {
         // If filterOn and myTeams exist, only show pill when a pinned team has a game here
         if (filterOn && _pillMyTeams.length > 0) {
           return countable.some(function(g) {
-            return (g.teams || []).some(function(espnName) {
-              var enl = espnName.toLowerCase();
-              return _pillMyTeams.some(function(t) { return _teamObjMatchesEspnName(t, enl); });
-            });
+            return _pillMyTeams.some(function(t) { return _teamMatchesGame(t, g); });
           });
         }
         return true; // filter off: show any path with games
@@ -6000,7 +6054,7 @@ function renderSportTab() {
       chButtons += makeBtn('📡 Broadcast', bcBest, allFailover, '#666');
     }
 
-    const leagueLabel = (ESPN_SPORT_OPTIONS.find(o => o.path === g._path) || {}).label || g._lgName || '';
+    const leagueLabel = (ESPN_SPORT_OPTIONS.find(o => o.path === g._path) || {}).label || _normalizeSportGroupLabel(g._lgName) || '';
     // Register full failover on the card — Enter/Select plays top stream directly
     const cardSi = window._svSportItems.length;
     if (allFailover.length > 0) window._svSportItems.push(allFailover);
@@ -6077,10 +6131,7 @@ function renderSportTab() {
   if (filterOn && (settings.myTeams || []).length > 0) {
     var _effectivePins = _pinnedTeamObjs.length > 0 ? _pinnedTeamObjs : (settings.myTeams || []);
     tabGames = tabGames.filter(function(g) {
-      return (g.teams || []).some(function(espnName) {
-        var enl = espnName.toLowerCase();
-        return _effectivePins.some(function(t) { return _teamObjMatchesEspnName(t, enl); });
-      });
+      return _effectivePins.some(function(t) { return _teamMatchesGame(t, g); });
     });
   }
 
@@ -6149,10 +6200,7 @@ function _renderAllGamesTab(lst) {
   var _allPinObjs = filterOn ? (settings.myTeams || []) : [];
   function _gameMatchesPins(g) {
     if (!_allPinObjs.length) return false;
-    return (g.teams || []).some(function(espnName) {
-      var enl = espnName.toLowerCase();
-      return _allPinObjs.some(function(t) { return _teamObjMatchesEspnName(t, enl); });
-    });
+    return _allPinObjs.some(function(t) { return _teamMatchesGame(t, g); });
   }
   var games = _getAllTodayGames().filter(function(g) { return showPast || g.state !== 'post'; });
   if (filterOn && _allPinObjs.length > 0) { games = games.filter(_gameMatchesPins); }
@@ -6196,7 +6244,7 @@ function _renderAllGamesTab(lst) {
     if (allEntries.length > 0) window._svSportItems.push(allEntries);
     const hasChannel2 = allEntries.length > 0;
     const cardClick2 = hasChannel2 ? `onclick="window._svPlaySport(${cardSi2})"` : '';
-    const leagueLabel = (ESPN_SPORT_OPTIONS.find(o => o.path === g._path) || {}).label || g._lgName;
+    const leagueLabel = (ESPN_SPORT_OPTIONS.find(o => o.path === g._path) || {}).label || _normalizeSportGroupLabel(g._lgName);
     return `<div tabindex="0" role="listitem" data-tv-zone="sport-game-card" class="sport-gc"
       style="border:1px solid var(--bd);border-radius:var(--rs);margin:4px 12px;padding:10px;outline:none;cursor:${hasChannel2?'pointer':'default'}"
       ${cardClick2}>
@@ -7243,8 +7291,11 @@ setTimeout(async () => {
       renderLib(); // update ITV list with freshly loaded channels
     }
   }
-  // Repos loaded — app is usable now. Unlock nav and hide splash immediately.
-  // EPG fetch runs in background (async with yields), does NOT block the thread.
+  // Repos loaded but the app still has post-load rendering to settle
+  // (sport index build, EPG start, renderLib on sport channels, etc.).
+  // Keep nav locked for 10s so cached D-pad presses during that window are dropped.
+  window._setSplashStatus && window._setSplashStatus('Almost ready…');
+  await new Promise(function(r) { setTimeout(r, 10000); });
   _navLocked = false;
   window._hideSplash && window._hideSplash('Ready');
   setTimeout(refreshTvFocus, 80);
