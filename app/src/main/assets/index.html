@@ -5767,8 +5767,12 @@ function renderSportTab() {
 
   // Always show the Live·Today tab when there are any games (live or upcoming)
   if (allGames.length > 0) {
-    const liveCount = liveGames.length;
-    const tabLabel = liveCount > 0 ? '🔴 Live · Today' : '📅 Today';
+    // Red dot only when there's an ACTUAL live game (scoped to My Teams when filterOn)
+    const _liveForDot = liveGames.filter(function(g) {
+      if (!_allPinObjsLive.length) return true;
+      return _allPinObjsLive.some(function(t) { return _teamMatchesGame(t, g); });
+    });
+    const tabLabel = _liveForDot.length > 0 ? '🔴 Live · Today' : '📅 Today';
     tabs.push({ id: 'live', label: tabLabel, badge: todayCountForBadge });
   } else if (sportSectionTab === 'live') {
     sportSectionTab = leagues.length ? leagues[0].groupName : 'allgames';
@@ -5783,7 +5787,6 @@ function renderSportTab() {
     // Uses any cached data (any path populated), not just today's date-matched cache.
     // This correctly hides PPV/UFC etc when no events are scheduled.
     if (hasPaths) {
-      // Date guard: same window as _getAllTodayGames — filter out stale ESPN games
       var _tNow = new Date();
       var _tDayStart = new Date(_tNow.getFullYear(), _tNow.getMonth(), _tNow.getDate()).getTime();
       var _tWinStart = _tDayStart - 6 * 3600000;
@@ -5917,6 +5920,33 @@ function renderSportTab() {
 
   // ── All Games tab ──
   if (sportSectionTab === 'allgames') {
+    // Render sub-league pills: one per ESPN path that has games today
+    // Priority order — major leagues first
+    var _agPillOrder = [
+      'baseball/mlb', 'football/nfl', 'hockey/nhl', 'football/college-football',
+      'soccer/usa.1', 'basketball/nba', 'mma/ufc', 'boxing/boxing',
+      'basketball/wnba', 'soccer/eng.1', 'soccer/esp.1', 'soccer/ger.1',
+      'soccer/ita.1', 'soccer/fra.1', 'soccer/uefa.champions', 'soccer/mex.1',
+      'basketball/mens-college-basketball', 'tennis/atp', 'golf/leaderboard',
+      'racing/nascar', 'racing/f1', 'cricket/icc-cricket'
+    ];
+    var _agAllGames = _getAllTodayGames();
+    var _agPathsWithGames = new Set();
+    _agAllGames.forEach(function(g) { if (g._path) _agPathsWithGames.add(g._path); });
+    // Sort by priority, then any unlisted paths at the end
+    var _agActivePaths = _agPillOrder.filter(function(p) { return _agPathsWithGames.has(p); });
+    _agPathsWithGames.forEach(function(p) { if (_agActivePaths.indexOf(p) < 0) _agActivePaths.push(p); });
+    if (teamTabs && _agActivePaths.length >= 2) {
+      var _agSubPills = ['', ..._agActivePaths];
+      teamTabs.innerHTML = _agSubPills.map(function(path) {
+        var label = path === '' ? '⚽ All' : ((ESPN_LEAGUE_MAP.find(function(e) { return e.path === path; }) || {}).label || path.split('/').pop().toUpperCase());
+        var active = path === sportSubLeague;
+        return '<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" data-team="' + path + '" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;' + (active ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)') + '" onclick="window.setSportSubLeague(' + JSON.stringify(path) + ')">' + esc(label) + '</span>';
+      }).join('');
+    } else if (teamTabs) {
+      teamTabs.innerHTML = '';
+      sportSubLeague = '';
+    }
     _renderAllGamesTab(lst);
     return;
   }
@@ -6256,13 +6286,10 @@ function _getAllTodayGames() {
   // lists for specific league tabs without needing a separate duplicate game card.
   const seen = new Set();
   const out = [];
-  // Date guard: ESPN scoreboard can return recent past games (bowl games, spring
-  // football) with startTimes from days/weeks ago. Only include games whose
-  // startTime falls within today (with buffer for late finishes and timezone).
   var _now = new Date();
   var _dayStart = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate()).getTime();
-  var _winStart = _dayStart - 6 * 3600000;   // 6h before midnight (late finishes)
-  var _winEnd   = _dayStart + 30 * 3600000;  // 6h past end of day
+  var _winStart = _dayStart - 6 * 3600000;
+  var _winEnd   = _dayStart + 30 * 3600000;
 
   (settings.sportLeagues || []).forEach(lg => {
     const paths = lg.espnPaths || (lg.espnPath ? [lg.espnPath] : []);
@@ -6270,7 +6297,7 @@ function _getAllTodayGames() {
       const games = lg.cachedGamesByPath && lg.cachedGamesByPath[path];
       if (!Array.isArray(games)) return;
       games.forEach(g => {
-        if (g.startTime < _winStart || g.startTime > _winEnd) return; // stale game
+        if (g.startTime < _winStart || g.startTime > _winEnd) return;
         const key = g.shortName + '|' + g.startTime;
         if (!seen.has(key)) { seen.add(key); out.push({ ...g, _path: path, _lgName: lg.groupName }); }
       });
@@ -6281,20 +6308,14 @@ function _getAllTodayGames() {
 
 function _renderAllGamesTab(lst) {
   const showPast = settings.sportShowPastGames !== false;
-  const filterOn = settings.sportLeagueFilterEnabled;
-  // Fix 5: global pinned-team union for cross-league All Games filtering
-  var _allPinObjs = filterOn ? (settings.myTeams || []) : [];
-  function _gameMatchesPins(g) {
-    if (!_allPinObjs.length) return false;
-    return _allPinObjs.some(function(t) { return _teamMatchesGame(t, g); });
-  }
   var games = _getAllTodayGames().filter(function(g) { return showPast || g.state !== 'post'; });
-  if (filterOn && _allPinObjs.length > 0) { games = games.filter(_gameMatchesPins); }
+  // Sub-league pill filter: when a sub-pill is selected, show only that sport
+  if (sportSubLeague) {
+    games = games.filter(function(g) { return g._path === sportSubLeague; });
+  }
 
   if (!games.length) {
-    lst.innerHTML = (filterOn && _allPinObjs.length > 0)
-      ? '<div class="emp"><h3>No games for your teams today</h3><p>Your pinned teams have no games scheduled. Disable My Teams Only to see all games.</p></div>'
-      : '<div class="emp"><h3>No games scheduled today</h3><p>Fetch schedules using the ↻ button, or check Settings → Live Sports.</p></div>';
+    lst.innerHTML = '<div class="emp"><h3>No games scheduled today</h3><p>Fetch schedules using the ↻ button, or check Settings → Live Sports.</p></div>';
     return;
   }
 
@@ -7411,13 +7432,14 @@ setTimeout(async () => {
       renderLib(); // update ITV list with freshly loaded channels
     }
   }
-  // Repos loaded — now fetch EPG while splash is still visible.
-  // Splash stays up until everything finishes loading.
+  // Repos loaded but the app still has post-load rendering to settle
+  // (sport index build, EPG start, renderLib on sport channels, etc.).
+  // Keep nav locked for 10s so cached D-pad presses during that window are dropped.
+  // Fetch EPG while splash is still visible
   if (epgSrc.length) {
     try { await fetchAllEpg(); } catch(e) {}
   }
   window._setSplashStatus && window._setSplashStatus('Ready');
-  // Brief pause after EPG so final renderLib/renderGuide DOM updates settle
   await new Promise(function(r) { setTimeout(r, 2000); });
   _navLocked = false;
   window._hideSplash && window._hideSplash('Ready');
