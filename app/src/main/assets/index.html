@@ -5783,9 +5783,16 @@ function renderSportTab() {
     // Uses any cached data (any path populated), not just today's date-matched cache.
     // This correctly hides PPV/UFC etc when no events are scheduled.
     if (hasPaths) {
+      // Date guard: same window as _getAllTodayGames — filter out stale ESPN games
+      var _tNow = new Date();
+      var _tDayStart = new Date(_tNow.getFullYear(), _tNow.getMonth(), _tNow.getDate()).getTime();
+      var _tWinStart = _tDayStart - 6 * 3600000;
+      var _tWinEnd   = _tDayStart + 30 * 3600000;
       const lgGamesAny = (lg.espnPaths || []).reduce(function(arr, p) {
         const g = lg.cachedGamesByPath && lg.cachedGamesByPath[p];
-        return Array.isArray(g) ? arr.concat(g) : arr;
+        return Array.isArray(g) ? arr.concat(g.filter(function(gm) {
+          return gm.startTime >= _tWinStart && gm.startTime <= _tWinEnd;
+        })) : arr;
       }, []);
       const anyFetched = (lg.espnPaths || []).some(function(p) {
         return Array.isArray(lg.cachedGamesByPath && lg.cachedGamesByPath[p]);
@@ -6249,12 +6256,21 @@ function _getAllTodayGames() {
   // lists for specific league tabs without needing a separate duplicate game card.
   const seen = new Set();
   const out = [];
+  // Date guard: ESPN scoreboard can return recent past games (bowl games, spring
+  // football) with startTimes from days/weeks ago. Only include games whose
+  // startTime falls within today (with buffer for late finishes and timezone).
+  var _now = new Date();
+  var _dayStart = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate()).getTime();
+  var _winStart = _dayStart - 6 * 3600000;   // 6h before midnight (late finishes)
+  var _winEnd   = _dayStart + 30 * 3600000;  // 6h past end of day
+
   (settings.sportLeagues || []).forEach(lg => {
     const paths = lg.espnPaths || (lg.espnPath ? [lg.espnPath] : []);
     paths.forEach(path => {
       const games = lg.cachedGamesByPath && lg.cachedGamesByPath[path];
       if (!Array.isArray(games)) return;
       games.forEach(g => {
+        if (g.startTime < _winStart || g.startTime > _winEnd) return; // stale game
         const key = g.shortName + '|' + g.startTime;
         if (!seen.has(key)) { seen.add(key); out.push({ ...g, _path: path, _lgName: lg.groupName }); }
       });
@@ -7395,17 +7411,17 @@ setTimeout(async () => {
       renderLib(); // update ITV list with freshly loaded channels
     }
   }
-  // Repos loaded but the app still has post-load rendering to settle
-  // (sport index build, EPG start, renderLib on sport channels, etc.).
-  // Keep nav locked for 10s so cached D-pad presses during that window are dropped.
-  window._setSplashStatus && window._setSplashStatus('Almost ready…');
-  await new Promise(function(r) { setTimeout(r, 15000); });
+  // Repos loaded — now fetch EPG while splash is still visible.
+  // Splash stays up until everything finishes loading.
+  if (epgSrc.length) {
+    try { await fetchAllEpg(); } catch(e) {}
+  }
+  window._setSplashStatus && window._setSplashStatus('Ready');
+  // Brief pause after EPG so final renderLib/renderGuide DOM updates settle
+  await new Promise(function(r) { setTimeout(r, 2000); });
   _navLocked = false;
   window._hideSplash && window._hideSplash('Ready');
   setTimeout(refreshTvFocus, 80);
-  if (epgSrc.length) {
-    fetchAllEpg().catch(function() {});
-  }
 }, 800);
 
 // ── Live score auto-refresh ───────────────────────────────────────────────
