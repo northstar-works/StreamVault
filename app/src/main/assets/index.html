@@ -5778,19 +5778,35 @@ function renderSportTab() {
     sportSectionTab = leagues.length ? leagues[0].groupName : 'allgames';
   }
 
+  // Date window for tab visibility checks (computed once, reused per league)
+  var _tNow = new Date();
+  var _tDayStart = new Date(_tNow.getFullYear(), _tNow.getMonth(), _tNow.getDate()).getTime();
+  var _tWinStart = _tDayStart - 6 * 3600000;
+  var _tWinEnd   = _tDayStart + 30 * 3600000;
+
   leagues.forEach(lg => {
     const hasPaths = (lg.espnPaths || (lg.espnPath ? [lg.espnPath] : [])).length > 0;
     const hasChs   = getSportGroupItems(lg).length > 0;
     if (!hasPaths && !hasChs) return; // no ESPN paths AND no channels — skip
 
+    // If group has channels but no ESPN paths configured (auto-detected from M3U),
+    // guess the sport from the group name and hide if no games today for that sport.
+    // Prevents NCAAF/CFB/NCAAB tabs from showing year-round when off-season.
+    if (!hasPaths && hasChs) {
+      var _guessedPaths = guessEspnPaths(lg.groupName);
+      if (_guessedPaths.length > 0) {
+        var _todayGames = allGames;
+        var _hasGamesForGuessed = _todayGames.some(function(g) {
+          return _guessedPaths.indexOf(g._path) >= 0;
+        });
+        if (!_hasGamesForGuessed) return; // known sport with no games today → hide tab
+      }
+    }
+
     // Hide tab when ESPN data is fetched but zero countable games exist.
     // Uses any cached data (any path populated), not just today's date-matched cache.
     // This correctly hides PPV/UFC etc when no events are scheduled.
     if (hasPaths) {
-      var _tNow = new Date();
-      var _tDayStart = new Date(_tNow.getFullYear(), _tNow.getMonth(), _tNow.getDate()).getTime();
-      var _tWinStart = _tDayStart - 6 * 3600000;
-      var _tWinEnd   = _tDayStart + 30 * 3600000;
       const lgGamesAny = (lg.espnPaths || []).reduce(function(arr, p) {
         const g = lg.cachedGamesByPath && lg.cachedGamesByPath[p];
         return Array.isArray(g) ? arr.concat(g.filter(function(gm) {
@@ -5822,7 +5838,7 @@ function renderSportTab() {
         }
         // Single-path leagues: hide if ESPN fetched data but today has no games
         if (lg.espnPaths && lg.espnPaths.length === 1) {
-          var _tabGames = _getAllTodayGames().filter(function(g) {
+          var _tabGames = allGames.filter(function(g) {
             return (showPast || g.state !== 'post') && g._path === lg.espnPaths[0];
           });
           if (_tabGames.length === 0) return; // fetched but truly no games today → hide
@@ -5930,7 +5946,7 @@ function renderSportTab() {
       'basketball/mens-college-basketball', 'tennis/atp', 'golf/leaderboard',
       'racing/nascar', 'racing/f1', 'cricket/icc-cricket'
     ];
-    var _agAllGames = _getAllTodayGames();
+    var _agAllGames = allGames;
     var _agPathsWithGames = new Set();
     _agAllGames.forEach(function(g) { if (g._path) _agPathsWithGames.add(g._path); });
     // Sort by priority, then any unlisted paths at the end
@@ -6015,6 +6031,18 @@ function renderSportTab() {
   // Without this, each game card calls findGamesForItem for every channel = O(games × channels).
   // With this map it's O(channels) once + O(1) per game card lookup.
   const _chsByGameKey = new Map(); // gameKey → { primary: [], alt: [] }
+
+  // PPV/combat sport bypass: pre-collect all combat game keys so PPV streams
+  // (whose titles contain "Main Card", "Prelims" etc. — NOT fighter names)
+  // can be linked to UFC/Boxing game cards without team-name matching.
+  var _combatPathSet = new Set(['mma/ufc','boxing/boxing','mma/bellator','mma/pfl']);
+  var _combatGameKeys = []; // [{gKey, game}] for all combat sport games today
+  _getAllTodayGames().forEach(function(g) {
+    if (g._path && _combatPathSet.has(g._path)) {
+      _combatGameKeys.push({ gKey: (g.shortName || '') + '|' + g.startTime, game: g });
+    }
+  });
+
   allChs.forEach(function(m) {
     var title = (m.title || '').toLowerCase();
     var matchedGames = _findGamesViaIndex(title);
@@ -6053,6 +6081,27 @@ function renderSportTab() {
         // else: cross-sport → skip entirely (don't push to any bucket)
       }
     });
+
+    // PPV/combat sport bypass: UFC/Boxing streams use generic titles like
+    // "PPV 01: Main Card" or "UFC 327: Prelims" that contain NO fighter names.
+    // Normal team-name matching finds nothing. If this stream belongs to a
+    // PPV/combat group AND wasn't matched to any combat game above, link it
+    // to ALL combat sport game cards today.
+    if (_combatGameKeys.length > 0 && matchedGames.length === 0) {
+      var _mCfgPpv = (settings.sportLeagues || []).find(function(l) {
+        return l.groupName === (m._lgGroupName || m.category);
+      }) || null;
+      var _mPathsPpv = _mCfgPpv ? (_mCfgPpv.espnPaths || []) : [];
+      var _mNamePpv = (_mCfgPpv && _mCfgPpv.groupName) || (m.category || m._lgGroupName || '');
+      var _isPpv = /\bppv\b|pay.per.view|ufc|boxing|combat|fight/i.test(_mNamePpv)
+        || _mPathsPpv.some(function(p) { return _combatPathSet.has(p); });
+      if (_isPpv) {
+        _combatGameKeys.forEach(function(cg) {
+          if (!_chsByGameKey.has(cg.gKey)) _chsByGameKey.set(cg.gKey, { primary: [], alt: [] });
+          _chsByGameKey.get(cg.gKey).primary.push(m);
+        });
+      }
+    }
   });
 
   // Build a shared renderGameCard with registry (reused from _renderAllGamesTab logic)
@@ -6326,6 +6375,15 @@ function _renderAllGamesTab(lst) {
   // Pre-build gameKey → channels map once (same pattern as renderSportTab)
   const _allChsAG = getAllSportItems();
   const _chsByGameKeyAG = new Map();
+  // PPV bypass: pre-collect combat game keys
+  var _agCombatPaths = new Set(['mma/ufc','boxing/boxing','mma/bellator','mma/pfl']);
+  var _agCombatKeys = [];
+  _getAllTodayGames().forEach(function(g) {
+    if (g._path && _agCombatPaths.has(g._path)) {
+      _agCombatKeys.push({ gKey: (g.shortName || '') + '|' + g.startTime, game: g });
+    }
+  });
+
   _allChsAG.forEach(function(m) {
     var title = (m.title || '').toLowerCase();
     var matchedGames = _findGamesViaIndex(title);
@@ -6349,6 +6407,19 @@ function _renderAllGamesTab(lst) {
       if (!_chsByGameKeyAG.has(gKey)) _chsByGameKeyAG.set(gKey, []);
       _chsByGameKeyAG.get(gKey).push(m);
     });
+
+    // PPV bypass for All Games tab — same logic as renderSportTab
+    if (_agCombatKeys.length > 0 && matchedGames.length === 0) {
+      var _agNamePpv = (_agLgCfg && _agLgCfg.groupName) || (m.category || m._lgGroupName || '');
+      var _agIsPpv = /\bppv\b|pay.per.view|ufc|boxing|combat|fight/i.test(_agNamePpv)
+        || _agGroupPaths.some(function(p) { return _agCombatPaths.has(p); });
+      if (_agIsPpv) {
+        _agCombatKeys.forEach(function(cg) {
+          if (!_chsByGameKeyAG.has(cg.gKey)) _chsByGameKeyAG.set(cg.gKey, []);
+          _chsByGameKeyAG.get(cg.gKey).push(m);
+        });
+      }
+    }
   });
 
   const renderGameCard = (g) => {
@@ -7432,15 +7503,15 @@ setTimeout(async () => {
       renderLib(); // update ITV list with freshly loaded channels
     }
   }
-  // Repos loaded but the app still has post-load rendering to settle
-  // (sport index build, EPG start, renderLib on sport channels, etc.).
-  // Keep nav locked for 10s so cached D-pad presses during that window are dropped.
-  // Fetch EPG while splash is still visible
+  // Repos loaded — fire EPG in background (don't await — EPG parse takes 60-90s
+  // on Fire TV with 32k channels; splash should hide well before that finishes).
+  // EPG shows its own toast ("Fetching EPG: ITV…") while running in background.
   if (epgSrc.length) {
-    try { await fetchAllEpg(); } catch(e) {}
+    fetchAllEpg().catch(function() {});
   }
+  // Brief settle for post-repo renders (sport index, renderLib), then unlock
   window._setSplashStatus && window._setSplashStatus('Ready');
-  await new Promise(function(r) { setTimeout(r, 2000); });
+  await new Promise(function(r) { setTimeout(r, 3000); });
   _navLocked = false;
   window._hideSplash && window._hideSplash('Ready');
   setTimeout(refreshTvFocus, 80);
