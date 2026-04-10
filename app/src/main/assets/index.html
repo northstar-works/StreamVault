@@ -507,6 +507,22 @@ document.addEventListener('keydown', function(e) {
 
       </div><!-- sport-acc-body -->
     </div><!-- sport-config-details -->
+
+    <hr style="border:none;border-top:1px solid var(--bd);margin:8px 0 12px">
+
+    <!-- Excluded Leagues accordion -->
+    <div id="excl-league-details" style="margin-bottom:4px">
+      <div onclick="window.toggleExclLeagueAccordion && window.toggleExclLeagueAccordion()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.toggleExclLeagueAccordion&&window.toggleExclLeagueAccordion();}" tabindex="0" role="button" style="font-size:10px;font-weight:700;color:var(--t1);cursor:pointer;padding:6px 0;display:flex;align-items:center;gap:6px;user-select:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0"><path d="M18.36 6.64a9 9 0 11-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+        Excluded Leagues (All Games)
+        <svg id="excl-acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;margin-left:auto;transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div id="excl-acc-body" style="display:none;padding-top:8px">
+        <p style="font-size:8px;color:var(--t3);margin-bottom:8px">Excluded leagues won't appear on the All Games tab. Uncheck to show.</p>
+        <div id="excl-league-lst"></div>
+      </div>
+    </div>
+
     <div id="s-sport-cfg" style="display:none"></div>
   </div>
 
@@ -993,7 +1009,7 @@ let epgData = { channels: {}, programs: {} };
 let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [], tabOrder: ['itv','plex','icam','local','network'], tvMode: 'auto', plex: { server: '', token: '', section: '', sections: [] }, timeshiftEnabled: true, timeshiftMaxMin: 30, dvrCfg: { remoteEnabled: false, proto: 'ftp', host: '', port: '21', user: '', pass: '', path: '/recordings' }, sportLeagueFilterEnabled: true, sportLeagues: [], sportShowPastGames: true, myTeams: [],
   localEnable: true, localPath: '',
   icamCfg: {},
-  networkCfg: {} };
+  networkCfg: {}, excludedLeagues: [] };
 let plexAddMode = false;
 let _plexView = ''; // '' | 'search' | 'library' — tracks which plex result view is showing
 
@@ -3139,6 +3155,7 @@ function renderBrowse() {
   if (brSel.size > 0) {
     $('slb').classList.add('on');
     $('slcnt').textContent = brSel.size + ' selected';
+    _updateSlAddLabel();
   } else {
     $('slb').classList.remove('on');
   }
@@ -3168,16 +3185,12 @@ function renderBrowse() {
     const regB = s.region ? '<span style="background:rgba(46,213,115,.12);color:var(--gn);padding:0 3px;border-radius:2px;font-size:7px;font-weight:600;margin-right:2px">' + esc(s.region) + '</span>' : '';
     const catB = s.category ? '<span style="background:var(--acs);color:var(--ac);padding:0 3px;border-radius:2px;font-size:7px;font-weight:600">' + esc(s.category) + '</span>' : '';
     const exMark = exists ? '<span style="color:var(--gn);font-size:7px;margin-left:3px">✓ Added</span>' : '';
-    const removeBtn = exists
-      ? `<button onclick="event.stopPropagation();window._brRemoveAdded(${JSON.stringify(s.url)})" title="Remove from library" style="flex-shrink:0;background:none;border:none;cursor:pointer;color:var(--rd);padding:4px 6px;font-size:11px" tabindex="-1">🗑</button>`
-      : '';
     const tvCls = (isTvDevice && $('br-scr').classList.contains('on') && realIdx === brActiveIndex) ? ' tv-f' : '';
 
     return `<div class="ri${sel ? ' sel' : ''}${tvCls}" data-url="${esc(key)}" data-idx="${realIdx}" onclick="toggleBrSel(this)">
       <div class="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
       ${thumb ? '<div>' + thumb + '</div>' : ''}
       <div class="rf"><div class="rn">${esc(s.name)}${exMark}</div><div class="rm">${regB}${catB}${sourceBadge}</div></div>
-      ${removeBtn}
     </div>`;
   }).join('');
   const activeEl = $('br-lst').querySelector('.ri.tv-f');
@@ -3201,7 +3214,7 @@ window.toggleBrSel = (el) => {
   const url = el.dataset.url;
   if (brSel.has(url)) { brSel.delete(url); el.classList.remove('sel'); }
   else { brSel.add(url); el.classList.add('sel'); }
-  if (brSel.size > 0) { $('slb').classList.add('on'); $('slcnt').textContent = brSel.size + ' selected'; }
+  if (brSel.size > 0) { $('slb').classList.add('on'); $('slcnt').textContent = brSel.size + ' selected'; _updateSlAddLabel(); }
   else { $('slb').classList.remove('on'); }
 };
 
@@ -3214,6 +3227,29 @@ $('br-q').addEventListener('input', () => {
     renderBrowse();
   }, 180);
 });
+function _updateSlAddLabel() {
+  var btn = $('sl-add');
+  if (!btn) return;
+  var existingUrls = new Set(items.map(m => m.url));
+  var hasNew = false, hasExisting = false;
+  brSel.forEach(function(url) {
+    if (existingUrls.has(url)) hasExisting = true;
+    else hasNew = true;
+  });
+  if (hasNew && hasExisting) {
+    btn.textContent = 'Add & Remove';
+    btn.className = 'sba'; // accent style
+  } else if (hasExisting) {
+    btn.textContent = 'Remove from Playlist';
+    btn.style.background = 'var(--rd)'; btn.style.color = '#fff';
+    btn.className = 'sba';
+  } else {
+    btn.textContent = 'Add to Playlist';
+    btn.style.background = ''; btn.style.color = '';
+    btn.className = 'sba';
+  }
+}
+
 $('sl-all').onclick = () => { getBrowseFiltered().forEach(s => brSel.add(s.url)); renderBrowse(); };
 $('sl-clr').onclick = () => { brSel.clear(); renderBrowse(); };
 $('sl-play').onclick = () => {
@@ -3284,9 +3320,32 @@ $('be-yes').onclick = () => {
 
 $('sl-add').onclick = () => {
   if (!brRepo || brSel.size === 0) return;
-  let added = 0, skipped = 0;
+  var existingUrls = new Set(items.map(m => m.url));
+  var toAdd = [], toRemove = [];
   (brRepo.streams || []).filter(x => brSel.has(x.url)).forEach(d => {
-    if (items.some(m => m.url === d.url)) { skipped++; return; }
+    if (existingUrls.has(d.url)) toRemove.push(d);
+    else toAdd.push(d);
+  });
+  // Also catch selected URLs not in repo streams but in library (edge case)
+  brSel.forEach(function(url) {
+    if (existingUrls.has(url) && !toRemove.some(d => d.url === url)) {
+      var existing = items.find(m => m.url === url);
+      if (existing) toRemove.push(existing);
+    }
+  });
+
+  // Confirm removal if any
+  if (toRemove.length > 0) {
+    var msg = toRemove.length === 1
+      ? 'Remove "' + (toRemove[0].name || toRemove[0].title || toRemove[0].url) + '" from your playlist?'
+      : 'Remove ' + toRemove.length + ' channel' + (toRemove.length > 1 ? 's' : '') + ' from your playlist?';
+    if (toAdd.length > 0) msg = 'Add ' + toAdd.length + ' and remove ' + toRemove.length + ' channel' + (toRemove.length > 1 ? 's' : '') + '?';
+    if (!confirm(msg)) return;
+  }
+
+  // Perform additions
+  var added = 0;
+  toAdd.forEach(d => {
     items.push(applyDefaultEpgSource({
       id: gid(), title: d.name, url: d.url, category: d.category, icon: d.icon,
       epgLink: d.epgLink, epgTitle: d.epgTitle, region: d.region,
@@ -3294,14 +3353,28 @@ $('sl-add').onclick = () => {
     }));
     added++;
   });
+
+  // Perform removals
+  var removed = 0;
+  if (toRemove.length > 0) {
+    var removeUrls = new Set(toRemove.map(d => d.url));
+    items = items.filter(m => !removeUrls.has(m.url));
+    removed = toRemove.length;
+  }
+
   saveItems();
   brSel.clear();
+  invalidateBrowseCache();
   renderBrowse();
   renderCats();
   renderLib();
   refreshAltCache(true);
-  toast('Added ' + added + (skipped ? ' · ' + skipped + ' dupes' : ''));
-  // Keep TV focus on the Add button, not the bottom nav
+
+  var parts = [];
+  if (added) parts.push('Added ' + added);
+  if (removed) parts.push('Removed ' + removed);
+  toast(parts.join(' · ') || 'No changes');
+
   if (isTvDevice) {
     const addBtn = $('sl-add');
     if (addBtn) {
@@ -5177,7 +5250,12 @@ function fetchAllLeagueSchedules(force) {
   });
 }
 
-window.refreshAllSportData = () => { toast('Refreshing sport schedules…'); fetchAllLeagueSchedules(true); };
+window.refreshAllSportData = () => {
+  toast('Refreshing sport schedules…');
+  _extraLeagueCache = {}; // clear extra cache so all re-fetch
+  fetchAllLeagueSchedules(true);
+  _fetchExtraLeagues();
+};
 
 // ── Matching ──────────────────────────────────────────────────────────────────
 
@@ -5410,6 +5488,9 @@ let sportSubLeague = ''; // sub-league filter for multi-path groups (espnPath st
 let sportConfigOpen = false; // accordion open/close state
 let sportSectionTab = 'live'; // 'live' | league groupName | 'allgames'
 let _sportItemsCache = null;  // invalidated when leagues change
+// Extra league cache for All Games tab — stores games from ESPN leagues NOT in sportLeagues config
+// Structure: { path: { games: [], cacheDate: '', lastFetchMs: 0 } }
+let _extraLeagueCache = {};
 let _sportItemsCacheKey = ''; // JSON key of sportLeagues for invalidation
 let _sportTabCache = null;    // getSportTabItems result cache
 let _sportTabCacheKey = '';   // key: filterOn+showPast+activeTeam+leagueEnabledFlags
@@ -5913,7 +5994,34 @@ function renderSportTab() {
         teamTabs.innerHTML = '';
         sportSubLeague = '';
       }
-    } else if (sportSectionTab === 'allgames' || sportSectionTab === 'live') {
+    } else if (sportSectionTab === 'allgames' && !filterOn) {
+      // All Sport Channels + All Games: show sub-pills from expanded game set (includes extra leagues)
+      var _expandedGames = _getAllTodayGames(true);
+      var _subPillPriority2 = ['baseball/mlb','football/nfl','hockey/nhl','football/college-football','soccer/usa.1','basketball/nba','mma/ufc','boxing/boxing','basketball/wnba','soccer/eng.1'];
+      var _subPillPaths2 = [];
+      _expandedGames.forEach(function(g) {
+        if (g._path && _subPillPaths2.indexOf(g._path) < 0) {
+          if (showPast || g.state !== 'post') _subPillPaths2.push(g._path);
+        }
+      });
+      _subPillPaths2.sort(function(a, b) {
+        var ai = _subPillPriority2.indexOf(a); if (ai < 0) ai = 999;
+        var bi = _subPillPriority2.indexOf(b); if (bi < 0) bi = 999;
+        return ai - bi;
+      });
+      if (_subPillPaths2.length >= 2) {
+        var subPills2 = ['', ..._subPillPaths2];
+        teamTabs.innerHTML = subPills2.map(function(path) {
+          var label = path === '' ? '⚽ All' : ((ESPN_LEAGUE_MAP.find(function(e) { return e.path === path; }) || {}).label || path.split('/').pop().toUpperCase());
+          var active = path === sportSubLeague;
+          var escaped = path.replace(/'/g, "\\'");
+          return '<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" data-team="' + path + '" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;' + (active ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)') + "\" onclick=\"window.setSportSubLeague('" + escaped + "')\">" + esc(label) + '</span>';
+        }).join('');
+      } else {
+        teamTabs.innerHTML = '';
+        sportSubLeague = '';
+      }
+    } else if (sportSectionTab === 'live') {
       teamTabs.innerHTML = '';
     } else {
       const lgForPills = settings.sportLeagues && settings.sportLeagues.find(function(l) { return l.groupName === sportSectionTab; });
@@ -6320,7 +6428,7 @@ function renderSportTab() {
 
 
 // ── All Games tab: ESPN schedule cards ───────────────────────────────────────
-function _getAllTodayGames() {
+function _getAllTodayGames(includeExtras) {
   // Simple dedup: first league to see a game (shortName|startTime) claims it.
   // Multi-path catch-all groups (US Sports) share paths with specific leagues;
   // their unique STREAMS are already in getAllSportItems() and appear in failover
@@ -6331,6 +6439,7 @@ function _getAllTodayGames() {
   var _dayStart = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate()).getTime();
   var _winStart = _dayStart - 6 * 3600000;
   var _winEnd   = _dayStart + 30 * 3600000;
+  var excluded = new Set(settings.excludedLeagues || []);
   (settings.sportLeagues || []).forEach(lg => {
     const paths = lg.espnPaths || (lg.espnPath ? [lg.espnPath] : []);
     paths.forEach(path => {
@@ -6343,12 +6452,31 @@ function _getAllTodayGames() {
       });
     });
   });
+  // Include extra league games (fetched for All Games tab) when requested
+  if (includeExtras && _extraLeagueCache) {
+    Object.keys(_extraLeagueCache).forEach(function(path) {
+      if (excluded.has(path)) return; // user excluded this league
+      var cached = _extraLeagueCache[path];
+      if (!cached || !Array.isArray(cached.games)) return;
+      cached.games.forEach(function(g) {
+        if (g.startTime < _winStart || g.startTime > _winEnd) return;
+        var key = g.shortName + '|' + g.startTime;
+        if (!seen.has(key)) {
+          seen.add(key);
+          var label = (ESPN_LEAGUE_MAP.find(function(e) { return e.path === path; }) || {}).label || path;
+          out.push({ ...g, _path: path, _lgName: label });
+        }
+      });
+    });
+  }
   return out.sort((a, b) => a.startTime - b.startTime);
 }
 
 function _renderAllGamesTab(lst) {
   const showPast = settings.sportShowPastGames !== false;
-  var games = _getAllTodayGames().filter(function(g) { return showPast || g.state !== 'post'; });
+  // When filter is off (All Sport Channels), include games from extra leagues too
+  var _includeExtras = !settings.sportLeagueFilterEnabled;
+  var games = _getAllTodayGames(_includeExtras).filter(function(g) { return showPast || g.state !== 'post'; });
   if (sportSubLeague) {
     games = games.filter(function(g) { return g._path === sportSubLeague; });
   }
@@ -6876,6 +7004,71 @@ window.toggleSportAccordion = () => {
   if (chevron) chevron.style.transform = sportConfigOpen ? 'rotate(180deg)' : '';
 
 };
+
+// ── Excluded Leagues accordion ──
+let _exclAccOpen = false;
+window.toggleExclLeagueAccordion = () => {
+  _exclAccOpen = !_exclAccOpen;
+  const body = $('excl-acc-body');
+  const chevron = $('excl-acc-chevron');
+  if (body) body.style.display = _exclAccOpen ? 'block' : 'none';
+  if (chevron) chevron.style.transform = _exclAccOpen ? 'rotate(180deg)' : '';
+  if (_exclAccOpen) renderExcludedLeagues();
+};
+
+function renderExcludedLeagues() {
+  var lst = $('excl-league-lst');
+  if (!lst) return;
+  if (!settings.excludedLeagues) settings.excludedLeagues = [];
+  // Show all ESPN leagues; ones in your sportLeagues config are marked and can still be excluded from All Games
+  var html = ESPN_LEAGUE_MAP.map(function(e) {
+    var excluded = settings.excludedLeagues.indexOf(e.path) >= 0;
+    return '<label tabindex="0" style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:9px;color:var(--t1)" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.querySelector(\'input\').click();}">'
+      + '<input type="checkbox" ' + (excluded ? 'checked' : '') + ' onchange="window.toggleExclLeague(\'' + e.path.replace(/'/g, "\\'") + '\')" style="accent-color:var(--rd)">'
+      + '<span>' + esc(e.label) + '</span>'
+      + '<span style="font-size:7px;color:var(--t3)">' + esc(e.path) + '</span>'
+      + '</label>';
+  }).join('');
+  lst.innerHTML = html;
+}
+
+window.toggleExclLeague = function(path) {
+  if (!settings.excludedLeagues) settings.excludedLeagues = [];
+  var idx = settings.excludedLeagues.indexOf(path);
+  if (idx >= 0) settings.excludedLeagues.splice(idx, 1);
+  else settings.excludedLeagues.push(path);
+  saveSettings();
+  _invalidateSportGameIndex();
+  renderSportTab();
+};
+
+// ── Fetch extra leagues for All Games tab ──
+// Fetches ESPN data for leagues NOT in user's sportLeagues config (minus excluded).
+// Stores in _extraLeagueCache so All Games can show everything.
+async function _fetchExtraLeagues() {
+  var configuredPaths = new Set();
+  (settings.sportLeagues || []).forEach(function(lg) {
+    (lg.espnPaths || []).forEach(function(p) { configuredPaths.add(p); });
+  });
+  var excluded = new Set(settings.excludedLeagues || []);
+  var today = new Date().toISOString().slice(0, 10);
+  for (var i = 0; i < ESPN_LEAGUE_MAP.length; i++) {
+    var e = ESPN_LEAGUE_MAP[i];
+    if (configuredPaths.has(e.path)) continue; // already fetched by sportLeagues
+    if (excluded.has(e.path)) continue; // user excluded
+    var cached = _extraLeagueCache[e.path];
+    if (cached && cached.cacheDate === today) continue; // already fetched today
+    try {
+      var games = await _fetchOnePath(e.path);
+      _extraLeagueCache[e.path] = { games: games, cacheDate: today, lastFetchMs: Date.now() };
+    } catch(err) {
+      console.warn('[SV] extra league fetch:', e.path, err.message);
+      if (!_extraLeagueCache[e.path]) _extraLeagueCache[e.path] = { games: [], cacheDate: today, lastFetchMs: Date.now() };
+    }
+  }
+  _invalidateSportGameIndex();
+  renderSportTab();
+}
 
 let _homeTabsAccOpen = false;
 window.toggleHomeTabsAcc = () => {
@@ -7460,6 +7653,8 @@ queueStartupAltCheck();
 // Do NOT use force=true here: that would nuke today's cached data and re-fetch
 // from ESPN at whatever time the app opens, which returns 0 games at off-peak hours.
 setTimeout(() => fetchAllLeagueSchedules(false), 800);
+// Fetch extra leagues (not in sportLeagues config) for the All Games tab
+setTimeout(() => _fetchExtraLeagues(), 2000);
 
 // ── Startup repo + EPG refresh ────────────────────────────────────────────
 // Refresh all repos with a sourceUrl so channels are always current on launch,
