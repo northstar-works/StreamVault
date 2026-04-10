@@ -7436,13 +7436,14 @@ setTimeout(async () => {
       renderLib(); // update ITV list with freshly loaded channels
     }
   }
-  // Repos loaded — hide splash and unlock nav immediately.
-  // EPG fires 1.5s later so parseXMLTV blocking doesn't freeze the splash fade.
+  // b120 original: 10s settle wait, then unlock + hide + EPG
+  window._setSplashStatus && window._setSplashStatus('Almost ready…');
+  await new Promise(function(r) { setTimeout(r, 15000); });
   _navLocked = false;
   window._hideSplash && window._hideSplash('Ready');
   setTimeout(refreshTvFocus, 80);
   if (epgSrc.length) {
-    setTimeout(function() { fetchAllEpg().catch(function() {}); }, 1500);
+    fetchAllEpg().catch(function() {});
   }
 }, 800);
 
