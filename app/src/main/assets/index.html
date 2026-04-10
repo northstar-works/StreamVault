@@ -510,6 +510,11 @@ document.addEventListener('keydown', function(e) {
 
     <hr style="border:none;border-top:1px solid var(--bd);margin:8px 0 12px">
 
+    <div class="sr" style="margin-bottom:8px">
+      <div><div class="sl">Show all ESPN leagues in All Games</div><div class="sd">When ON, the All Games tab (All Sport Channels mode) fetches and shows games from all ESPN leagues, not just your configured groups. Configure exclusions below.</div></div>
+      <div class="tgl" id="s-allgames-extra" onclick="window.toggleAllGamesExtra && window.toggleAllGamesExtra()"></div>
+    </div>
+
     <!-- Excluded Leagues accordion -->
     <div id="excl-league-details" style="margin-bottom:4px">
       <div onclick="window.toggleExclLeagueAccordion && window.toggleExclLeagueAccordion()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.toggleExclLeagueAccordion&&window.toggleExclLeagueAccordion();}" tabindex="0" role="button" style="font-size:10px;font-weight:700;color:var(--t1);cursor:pointer;padding:6px 0;display:flex;align-items:center;gap:6px;user-select:none">
@@ -1009,7 +1014,7 @@ let epgData = { channels: {}, programs: {} };
 let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [], tabOrder: ['itv','plex','icam','local','network'], tvMode: 'auto', plex: { server: '', token: '', section: '', sections: [] }, timeshiftEnabled: true, timeshiftMaxMin: 30, dvrCfg: { remoteEnabled: false, proto: 'ftp', host: '', port: '21', user: '', pass: '', path: '/recordings' }, sportLeagueFilterEnabled: true, sportLeagues: [], sportShowPastGames: true, myTeams: [],
   localEnable: true, localPath: '',
   icamCfg: {},
-  networkCfg: {}, excludedLeagues: [] };
+  networkCfg: {}, excludedLeagues: [], allGamesExtraEnabled: false };
 let plexAddMode = false;
 let _plexView = ''; // '' | 'search' | 'library' — tracks which plex result view is showing
 
@@ -5032,30 +5037,44 @@ function triggerScheduledRecording(sched, autoMinutes) {
 
 // ESPN scoreboard slug map
 const ESPN_LEAGUE_MAP = [
-  { keys:['nfl','national football league'],               path:'football/nfl',                         label:'NFL' },
-  { keys:['mlb','major league baseball','baseball'],       path:'baseball/mlb',                         label:'MLB' },
-  { keys:['nba','national basketball'],                    path:'basketball/nba',                       label:'NBA' },
-  { keys:['nhl','national hockey','hockey'],               path:'hockey/nhl',                           label:'NHL' },
-  { keys:['mls','major league soccer'],                    path:'soccer/usa.1',                         label:'MLS' },
-  { keys:['wnba'],                                         path:'basketball/wnba',                      label:'WNBA' },
-  { keys:['premier league','epl','bpl'],                   path:'soccer/eng.1',                         label:'EPL' },
-  { keys:['la liga','laliga'],                             path:'soccer/esp.1',                         label:'La Liga' },
-  { keys:['bundesliga'],                                   path:'soccer/ger.1',                         label:'Bundesliga' },
-  { keys:['serie a'],                                      path:'soccer/ita.1',                         label:'Serie A' },
-  { keys:['ligue 1','ligue1'],                             path:'soccer/fra.1',                         label:'Ligue 1' },
-  { keys:['champions league','ucl'],                       path:'soccer/uefa.champions',                label:'UCL' },
-  { keys:['ncaaf','ncaa football','cfb','college football'], path:'football/college-football',            label:'CFB' },
-  { keys:['ncaa basketball','ncaab','college basketball'], path:'basketball/mens-college-basketball',   label:'NCAAB' },
-  { keys:['liga mx'],                                      path:'soccer/mex.1',                         label:'Liga MX' },
-  { keys:['ufc','mma','ultimate fighting'],                path:'mma/ufc',                              label:'UFC/MMA' },
-  { keys:['boxing','ppv boxing'],                          path:'boxing/boxing',                        label:'Boxing' },
-  { keys:['tennis','atp','wta'],                           path:'tennis/atp',                           label:'Tennis' },
-  { keys:['golf','pga'],                                   path:'golf/leaderboard',                     label:'Golf' },
-  { keys:['racing','nascar'],                              path:'racing/nascar',                        label:'NASCAR' },
-  { keys:['formula 1','formula one','f1'],                 path:'racing/f1',                            label:'Formula 1' },
-  { keys:['cricket'],                                      path:'cricket/icc-cricket',                  label:'Cricket' },
+  { keys:['nfl','national football league'],               path:'football/nfl',                         label:'NFL',         icon:'🏈' },
+  { keys:['mlb','major league baseball','baseball'],       path:'baseball/mlb',                         label:'MLB',         icon:'⚾' },
+  { keys:['nba','national basketball'],                    path:'basketball/nba',                       label:'NBA',         icon:'🏀' },
+  { keys:['nhl','national hockey','hockey'],               path:'hockey/nhl',                           label:'NHL',         icon:'🏒' },
+  { keys:['mls','major league soccer'],                    path:'soccer/usa.1',                         label:'MLS',         icon:'⚽' },
+  { keys:['wnba'],                                         path:'basketball/wnba',                      label:'WNBA',        icon:'🏀' },
+  { keys:['premier league','epl','bpl'],                   path:'soccer/eng.1',                         label:'EPL',         icon:'🏴\u200D☠️' },
+  { keys:['la liga','laliga'],                             path:'soccer/esp.1',                         label:'La Liga',     icon:'🇪🇸' },
+  { keys:['bundesliga'],                                   path:'soccer/ger.1',                         label:'Bundesliga',  icon:'🇩🇪' },
+  { keys:['serie a'],                                      path:'soccer/ita.1',                         label:'Serie A',     icon:'🇮🇹' },
+  { keys:['ligue 1','ligue1'],                             path:'soccer/fra.1',                         label:'Ligue 1',     icon:'🇫🇷' },
+  { keys:['champions league','ucl'],                       path:'soccer/uefa.champions',                label:'UCL',         icon:'🏆' },
+  { keys:['ncaaf','ncaa football','cfb','college football'], path:'football/college-football',            label:'CFB',         icon:'🎓🏈' },
+  { keys:['ncaa basketball','ncaab','college basketball'], path:'basketball/mens-college-basketball',   label:'NCAAB',       icon:'🎓🏀' },
+  { keys:['liga mx'],                                      path:'soccer/mex.1',                         label:'Liga MX',     icon:'🇲🇽' },
+  { keys:['ufc','mma','ultimate fighting'],                path:'mma/ufc',                              label:'UFC/MMA',     icon:'🥊' },
+  { keys:['boxing','ppv boxing'],                          path:'boxing/boxing',                        label:'Boxing',      icon:'🥊' },
+  { keys:['tennis','atp','wta'],                           path:'tennis/atp',                           label:'Tennis',      icon:'🎾' },
+  { keys:['golf','pga'],                                   path:'golf/leaderboard',                     label:'Golf',        icon:'⛳' },
+  { keys:['racing','nascar'],                              path:'racing/nascar',                        label:'NASCAR',      icon:'🏁' },
+  { keys:['formula 1','formula one','f1'],                 path:'racing/f1',                            label:'Formula 1',   icon:'🏎️' },
+  { keys:['cricket'],                                      path:'cricket/icc-cricket',                  label:'Cricket',     icon:'🏏' },
+  { keys:['cfl','canadian football'],                      path:'football/cfl',                         label:'CFL',         icon:'🇨🇦🏈' },
+  { keys:['rugby','mlr','major league rugby'],             path:'rugby/289262',                         label:'MLR',         icon:'🏉' },
+  { keys:['nrl','rugby league','national rugby'],          path:'rugby/3',                              label:'NRL',         icon:'🏉🇦🇺' },
+  { keys:['world cup','fifa','fifa world cup'],            path:'soccer/fifa.world',                    label:'World Cup',   icon:'🏆⚽' },
+  { keys:['ncaaw','women\'s college basketball'],          path:'basketball/womens-college-basketball', label:'NCAAW',       icon:'🎓🏀' },
 ];
 const ESPN_SPORT_OPTIONS = ESPN_LEAGUE_MAP.map(e => ({ path: e.path, label: e.label }));
+function _leagueIcon(path) {
+  var e = ESPN_LEAGUE_MAP.find(function(m) { return m.path === path; });
+  return e && e.icon ? e.icon + ' ' : '';
+}
+function _leagueIconLabel(path) {
+  var e = ESPN_LEAGUE_MAP.find(function(m) { return m.path === path; });
+  if (!e) return path.split('/').pop().toUpperCase();
+  return (e.icon ? e.icon + ' ' : '') + e.label;
+}
 
 // Sport prefix detection: "MLB 01:", "NHL | 02", "NFL 03:" → ESPN path
 const SPORT_PREFIX_MAP = [
@@ -5072,6 +5091,9 @@ const SPORT_PREFIX_MAP = [
   { prefix: 'ncaam', path: 'basketball/mens-college-basketball'  },
   { prefix: 'ncaaw', path: 'basketball/womens-college-basketball'},
   { prefix: 'ncaa',  path: 'basketball/mens-college-basketball'  },
+  { prefix: 'cfl',   path: 'football/cfl'                        },
+  { prefix: 'rugby', path: 'rugby/289262'                        },
+  { prefix: 'nrl',   path: 'rugby/3'                             },
 ];
 const SPORT_KEYWORDS = ESPN_LEAGUE_MAP.flatMap(e => e.keys).concat([
   'sport','sports','ufc','mma','boxing','rugby','cricket','tennis','golf','nascar',
@@ -5252,9 +5274,11 @@ function fetchAllLeagueSchedules(force) {
 
 window.refreshAllSportData = () => {
   toast('Refreshing sport schedules…');
-  _extraLeagueCache = {}; // clear extra cache so all re-fetch
+  if (settings.allGamesExtraEnabled) _extraLeagueCache = {};
   fetchAllLeagueSchedules(true);
-  _fetchExtraLeagues();
+  if (settings.allGamesExtraEnabled) {
+    _fetchExtraLeagues().then(function() { renderSportTab(); });
+  }
 };
 
 // ── Matching ──────────────────────────────────────────────────────────────────
@@ -5539,6 +5563,9 @@ function _normalizeSportGroupLabel(groupName) {
     { re: /\bpga\b|\bgolf\b/i,                     abbr: 'PGA'   },
     { re: /\bepl\b|\bpremier\s*league\b/i,          abbr: 'EPL'   },
     { re: /\bparamount\b/i,                         abbr: 'Paramount+' },
+    { re: /\bcfl\b|\bcanadian\s*football\b/i,       abbr: 'CFL'   },
+    { re: /\bnrl\b|\brugby\s*league\b/i,            abbr: 'NRL'   },
+    { re: /\bmlr\b|\bmajor\s*league\s*rugby\b/i,    abbr: 'MLR'   },
   ];
   for (var i = 0; i < _leagues.length; i++) {
     if (_leagues[i].re.test(g)) return _leagues[i].abbr;
@@ -5985,7 +6012,7 @@ function renderSportTab() {
       if (_subPillPaths.length >= 2) {
         var subPills = ['', ..._subPillPaths];
         teamTabs.innerHTML = subPills.map(function(path) {
-          var label = path === '' ? '⚽ All' : ((ESPN_LEAGUE_MAP.find(function(e) { return e.path === path; }) || {}).label || path.split('/').pop().toUpperCase());
+          var label = path === '' ? '⚽ All' : _leagueIconLabel(path);
           var active = path === sportSubLeague;
           var escaped = path.replace(/'/g, "\\'");
           return '<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" data-team="' + path + '" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;' + (active ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)') + "\" onclick=\"window.setSportSubLeague('" + escaped + "')\">" + esc(label) + '</span>';
@@ -5996,7 +6023,7 @@ function renderSportTab() {
       }
     } else if (sportSectionTab === 'allgames' && !filterOn) {
       // All Sport Channels + All Games: show sub-pills from expanded game set (includes extra leagues)
-      var _expandedGames = _getAllTodayGames(true);
+      var _expandedGames = _getAllTodayGames(settings.allGamesExtraEnabled);
       var _subPillPriority2 = ['baseball/mlb','football/nfl','hockey/nhl','football/college-football','soccer/usa.1','basketball/nba','mma/ufc','boxing/boxing','basketball/wnba','soccer/eng.1'];
       var _subPillPaths2 = [];
       _expandedGames.forEach(function(g) {
@@ -6012,7 +6039,7 @@ function renderSportTab() {
       if (_subPillPaths2.length >= 2) {
         var subPills2 = ['', ..._subPillPaths2];
         teamTabs.innerHTML = subPills2.map(function(path) {
-          var label = path === '' ? '⚽ All' : ((ESPN_LEAGUE_MAP.find(function(e) { return e.path === path; }) || {}).label || path.split('/').pop().toUpperCase());
+          var label = path === '' ? '⚽ All' : _leagueIconLabel(path);
           var active = path === sportSubLeague;
           var escaped = path.replace(/'/g, "\\'");
           return '<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" data-team="' + path + '" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;' + (active ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)') + "\" onclick=\"window.setSportSubLeague('" + escaped + "')\">" + esc(label) + '</span>';
@@ -6056,7 +6083,7 @@ function renderSportTab() {
       if (activePaths.length >= 2) {
         var subPills = ['', ...activePaths];
         teamTabs.innerHTML = subPills.map(function(path) {
-          var label = path === '' ? '⚽ All' : ((ESPN_LEAGUE_MAP.find(function(e) { return e.path === path; }) || {}).label || path.split('/').pop().toUpperCase());
+          var label = path === '' ? '⚽ All' : _leagueIconLabel(path);
           var active = path === sportSubLeague;
           var escaped = path.replace(/'/g, "\\'");
           return '<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" data-team="' + path + '" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;' + (active ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)') + "\" onclick=\"window.setSportSubLeague('" + escaped + "')\">" + esc(label) + '</span>';
@@ -6089,6 +6116,9 @@ function renderSportTab() {
   // Get pinned teams scoped to this league (prevents cross-league contamination)
   const pinnedTeams = getPinnedTeamsForLeague(sportSectionTab).map(t => t.toLowerCase());
   const _pinnedTeamObjs = _getLeagueTeamObjects(sportSectionTab);
+
+  // My Teams list for star flag on game cards
+  const _allMyTeamsForStar = settings.myTeams || [];
 
   // ── Smart stream classifier for a single channel item ──────────────────────
   // Returns: { isMyTeam, isHome, isAway, isBroadcast }
@@ -6316,13 +6346,16 @@ function renderSportTab() {
     if (allFailover.length > 0) window._svSportItems.push(allFailover);
     const hasChannel = allFailover.length > 0;
     const cardClick = hasChannel ? `onclick="window._svPlaySport(${cardSi})"` : '';
+    const _isMyTeamCard = (_allMyTeamsForStar || []).length > 0 && _allMyTeamsForStar.some(function(t) { return _teamMatchesGame(t, g); });
+    const _starFlag = _isMyTeamCard ? '⭐ ' : '';
+    const _lgIcon = _leagueIcon(g._path);
     return `<div tabindex="0" role="listitem" data-tv-zone="sport-game-card" class="sport-gc"
-      style="border:1px solid var(--bd);border-radius:var(--rs);margin:4px 12px;padding:10px;outline:none;cursor:${hasChannel?'pointer':'default'}"
+      style="border:1px solid ${_isMyTeamCard ? 'var(--ac)' : 'var(--bd)'};border-radius:var(--rs);margin:4px 12px;padding:10px;outline:none;cursor:${hasChannel?'pointer':'default'}${_isMyTeamCard ? ';background:rgba(108,92,231,.06)' : ''}"
       ${cardClick}>
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div style="flex:1;min-width:0">
-          <div style="font-size:10px;font-weight:700;color:var(--t1)">${esc(name)}</div>
-          ${!isLiveTab && lgName ? '' : `<div style="font-size:8px;color:var(--t3)">${esc(leagueLabel)}</div>`}
+          <div style="font-size:10px;font-weight:700;color:var(--t1)">${_starFlag}${esc(name)}</div>
+          ${!isLiveTab && lgName ? '' : `<div style="font-size:8px;color:var(--t3)">${_lgIcon}${esc(leagueLabel)}</div>`}
           ${hasChannel
             ? `<div style="font-size:8px;color:var(--ac);margin-top:3px">▶ ${esc((allFailover[0].title||'').slice(0,40)||'Watch')}</div>`
             : '<div style="font-size:8px;color:var(--t3);margin-top:3px">No channels in your groups</div>'}
@@ -6474,8 +6507,12 @@ function _getAllTodayGames(includeExtras) {
 
 function _renderAllGamesTab(lst) {
   const showPast = settings.sportShowPastGames !== false;
-  // When filter is off (All Sport Channels), include games from extra leagues too
-  var _includeExtras = !settings.sportLeagueFilterEnabled;
+  // When filter is off (All Sport Channels) and extra leagues enabled, include extra games
+  var _includeExtras = settings.allGamesExtraEnabled && !settings.sportLeagueFilterEnabled;
+  // Lazy fetch: if extras are enabled but cache is empty, trigger fetch in background
+  if (_includeExtras && Object.keys(_extraLeagueCache).length === 0) {
+    _fetchExtraLeagues().then(function() { renderSportTab(); });
+  }
   var games = _getAllTodayGames(_includeExtras).filter(function(g) { return showPast || g.state !== 'post'; });
   if (sportSubLeague) {
     games = games.filter(function(g) { return g._path === sportSubLeague; });
@@ -6530,9 +6567,14 @@ function _renderAllGamesTab(lst) {
     }
   });
 
+  // Pre-check My Teams for star flag
+  var _agMyTeams = settings.myTeams || [];
+
   const renderGameCard = (g) => {
     const t1 = g.teamObjects[0] || {}, t2 = g.teamObjects[1] || {};
     const name = g.shortName || g.name || (t1.name && t2.name ? t1.name + ' vs ' + t2.name : 'Game');
+    const isMyTeam = _agMyTeams.length > 0 && _agMyTeams.some(function(t) { return _teamMatchesGame(t, g); });
+    const starFlag = isMyTeam ? '⭐ ' : '';
     const d = new Date(g.startTime), h = d.getHours() % 12 || 12, mi = d.getMinutes();
     const timeStr = g.state === 'in' ? '🔴 LIVE' : g.state === 'post' ? '✓ Final' : h + (mi ? ':' + String(mi).padStart(2,'0') : '') + (d.getHours()>=12?'PM':'AM');
     const scoreStr = (g.state === 'in' || g.state === 'post') && t1.score && t2.score ? t1.score + ' – ' + t2.score : '';
@@ -6545,13 +6587,14 @@ function _renderAllGamesTab(lst) {
     if (allEntries.length > 0) window._svSportItems.push(allEntries);
     const hasChannel2 = allEntries.length > 0;
     const cardClick2 = hasChannel2 ? `onclick="window._svPlaySport(${cardSi2})"` : '';
-    const leagueLabel = (ESPN_SPORT_OPTIONS.find(o => o.path === g._path) || {}).label || _normalizeSportGroupLabel(g._lgName);
+    const leagueIcon = _leagueIcon(g._path);
+    const leagueLabel = leagueIcon + ((ESPN_SPORT_OPTIONS.find(o => o.path === g._path) || {}).label || _normalizeSportGroupLabel(g._lgName));
     return `<div tabindex="0" role="listitem" data-tv-zone="sport-game-card" class="sport-gc"
-      style="border:1px solid var(--bd);border-radius:var(--rs);margin:4px 12px;padding:10px;outline:none;cursor:${hasChannel2?'pointer':'default'}"
+      style="border:1px solid ${isMyTeam ? 'var(--ac)' : 'var(--bd)'};border-radius:var(--rs);margin:4px 12px;padding:10px;outline:none;cursor:${hasChannel2?'pointer':'default'}${isMyTeam ? ';background:rgba(108,92,231,.06)' : ''}"
       ${cardClick2}>
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div style="flex:1;min-width:0">
-          <div style="font-size:10px;font-weight:700;color:var(--t1)">${esc(name)}</div>
+          <div style="font-size:10px;font-weight:700;color:var(--t1)">${starFlag}${esc(name)}</div>
           <div style="font-size:8px;color:var(--t3)">${esc(leagueLabel)}</div>
           ${hasChannel2
             ? `<div style="font-size:8px;color:var(--ac);margin-top:3px">▶ ${esc((allEntries[0].title||'').replace(/\s*\(home\)|\s*\(away\)/i,'').trim().slice(0,40)||'Watch')}</div>`
@@ -6761,6 +6804,8 @@ function renderSportLeagueSettings() {
   if (tgl) tgl.className = 'tgl' + (settings.sportLeagueFilterEnabled ? ' on' : '');
   const pastTgl = $('s-sport-past');
   if (pastTgl) pastTgl.className = 'tgl' + (settings.sportShowPastGames !== false ? ' on' : '');
+  const extraTgl = $('s-allgames-extra');
+  if (extraTgl) extraTgl.className = 'tgl' + (settings.allGamesExtraEnabled ? ' on' : '');
   // Restore accordion open/close state after re-render
   const accBody = $('sport-acc-body');
   const accChevron = $('sport-acc-chevron');
@@ -7025,7 +7070,7 @@ function renderExcludedLeagues() {
     var excluded = settings.excludedLeagues.indexOf(e.path) >= 0;
     return '<label tabindex="0" style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:9px;color:var(--t1)" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.querySelector(\'input\').click();}">'
       + '<input type="checkbox" ' + (excluded ? 'checked' : '') + ' onchange="window.toggleExclLeague(\'' + e.path.replace(/'/g, "\\'") + '\')" style="accent-color:var(--rd)">'
-      + '<span>' + esc(e.label) + '</span>'
+      + '<span>' + (e.icon || '') + ' ' + esc(e.label) + '</span>'
       + '<span style="font-size:7px;color:var(--t3)">' + esc(e.path) + '</span>'
       + '</label>';
   }).join('');
@@ -7046,6 +7091,7 @@ window.toggleExclLeague = function(path) {
 // Fetches ESPN data for leagues NOT in user's sportLeagues config (minus excluded).
 // Stores in _extraLeagueCache so All Games can show everything.
 async function _fetchExtraLeagues() {
+  if (!settings.allGamesExtraEnabled) return; // disabled — skip all fetches
   var configuredPaths = new Set();
   (settings.sportLeagues || []).forEach(function(lg) {
     (lg.espnPaths || []).forEach(function(p) { configuredPaths.add(p); });
@@ -7063,11 +7109,11 @@ async function _fetchExtraLeagues() {
       _extraLeagueCache[e.path] = { games: games, cacheDate: today, lastFetchMs: Date.now() };
     } catch(err) {
       console.warn('[SV] extra league fetch:', e.path, err.message);
-      if (!_extraLeagueCache[e.path]) _extraLeagueCache[e.path] = { games: [], cacheDate: today, lastFetchMs: Date.now() };
+      _extraLeagueCache[e.path] = { games: [], cacheDate: today, lastFetchMs: Date.now() };
     }
   }
   _invalidateSportGameIndex();
-  renderSportTab();
+  // Don't call renderSportTab here — caller handles re-render
 }
 
 let _homeTabsAccOpen = false;
@@ -7096,6 +7142,23 @@ window.toggleSportPast = () => {
   saveSettings();
   if ($('lib-scr') && $('lib-scr').classList.contains('on')) { renderCats(); renderLib(); }
   renderSportTab();
+};
+
+window.toggleAllGamesExtra = () => {
+  settings.allGamesExtraEnabled = !settings.allGamesExtraEnabled;
+  const tgl = $('s-allgames-extra');
+  if (tgl) tgl.className = 'tgl' + (settings.allGamesExtraEnabled ? ' on' : '');
+  saveSettings();
+  _invalidateSportTabCache();
+  // If just enabled, trigger the fetch (lazy — only when turned on)
+  if (settings.allGamesExtraEnabled) {
+    toast('Fetching extra league schedules…');
+    _fetchExtraLeagues().then(function() { renderSportTab(); });
+  } else {
+    _extraLeagueCache = {};
+    _invalidateSportGameIndex();
+    renderSportTab();
+  }
 };
 
 window.rmSportLeague = (i) => {
@@ -7653,8 +7716,6 @@ queueStartupAltCheck();
 // Do NOT use force=true here: that would nuke today's cached data and re-fetch
 // from ESPN at whatever time the app opens, which returns 0 games at off-peak hours.
 setTimeout(() => fetchAllLeagueSchedules(false), 800);
-// Fetch extra leagues (not in sportLeagues config) for the All Games tab
-setTimeout(() => _fetchExtraLeagues(), 2000);
 
 // ── Startup repo + EPG refresh ────────────────────────────────────────────
 // Refresh all repos with a sourceUrl so channels are always current on launch,
