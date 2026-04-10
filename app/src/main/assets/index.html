@@ -345,6 +345,22 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     var st=document.getElementById('sv-splash-status');
     if(st)st.textContent=msg;
   };
+  window._splashElapsed=0;
+  window._splashCountdownEl=null;
+  window._splashTimerInterval=setInterval(function(){
+    window._splashElapsed++;
+    if(window._splashElapsed>=10){
+      var sp=document.getElementById('sv-splash');
+      if(!sp||sp.style.display==='none'){clearInterval(window._splashTimerInterval);return;}
+      if(!window._splashCountdownEl){
+        window._splashCountdownEl=document.createElement('div');
+        window._splashCountdownEl.style.cssText='margin-top:18px;font-size:10px;color:var(--t3);text-align:center;opacity:.7';
+        var statusEl=document.getElementById('sv-splash-status');
+        if(statusEl&&statusEl.parentNode)statusEl.parentNode.appendChild(window._splashCountdownEl);
+      }
+      window._splashCountdownEl.textContent='Large channel lists may take 15\u201330s to load safely';
+    }
+  },1000);
 })();
 </script>
 
@@ -5250,18 +5266,14 @@ function _titleContainsTeamToken(titleLower, teamName) {
   return !isWordChar(before) && !isWordChar(after);
 }
 
-// Matchup validation: when a stream title has an explicit "@ " or " vs " separator,
-// verify that BOTH sides of the matchup correspond to teams in the ESPN game.
-// Prevents "Louisiana Tech @ Missouri St" from matching game "MOST @ TA&M"
-// (only one side, "Missouri St", matches; "Louisiana Tech" doesn't match Texas A&M).
-// Streams without a separator (broadcast channels like "ESPN", "FS1") always pass.
 function _streamMatchesGameMatchup(titleLower, gameTeams) {
   var sepIdx = titleLower.indexOf(' @ ');
   if (sepIdx === -1) sepIdx = titleLower.indexOf(' vs ');
   if (sepIdx === -1) sepIdx = titleLower.indexOf(' v ');
-  if (sepIdx === -1) return true; // no matchup separator → broadcast channel → pass
+  if (sepIdx === -1) return true;
+  var sepLen = titleLower.charAt(sepIdx+1)==='@' ? 3 : (titleLower.charAt(sepIdx+1)==='v'&&titleLower.charAt(sepIdx+2)==='s' ? 4 : 3);
   var side1 = titleLower.substring(0, sepIdx);
-  var side2 = titleLower.substring(sepIdx + (titleLower.charAt(sepIdx+1)==='@' ? 3 : (titleLower.charAt(sepIdx+1)==='v'&&titleLower.charAt(sepIdx+2)==='s' ? 4 : 3)));
+  var side2 = titleLower.substring(sepIdx + sepLen);
   var s1hit = false, s2hit = false;
   for (var i = 0; i < gameTeams.length; i++) {
     var t = (gameTeams[i] || '').toLowerCase();
@@ -5767,8 +5779,7 @@ function renderSportTab() {
 
   // Always show the Live·Today tab when there are any games (live or upcoming)
   if (allGames.length > 0) {
-    // Red dot only when there's an ACTUAL live game (scoped to My Teams when filterOn)
-    const _liveForDot = liveGames.filter(function(g) {
+    var _liveForDot = liveGames.filter(function(g) {
       if (!_allPinObjsLive.length) return true;
       return _allPinObjsLive.some(function(t) { return _teamMatchesGame(t, g); });
     });
@@ -5778,34 +5789,20 @@ function renderSportTab() {
     sportSectionTab = leagues.length ? leagues[0].groupName : 'allgames';
   }
 
-  // Date window for tab visibility checks (computed once, reused per league)
   var _tNow = new Date();
   var _tDayStart = new Date(_tNow.getFullYear(), _tNow.getMonth(), _tNow.getDate()).getTime();
   var _tWinStart = _tDayStart - 6 * 3600000;
   var _tWinEnd   = _tDayStart + 30 * 3600000;
-
   leagues.forEach(lg => {
     const hasPaths = (lg.espnPaths || (lg.espnPath ? [lg.espnPath] : [])).length > 0;
     const hasChs   = getSportGroupItems(lg).length > 0;
-    if (!hasPaths && !hasChs) return; // no ESPN paths AND no channels — skip
-
-    // If group has channels but no ESPN paths configured (auto-detected from M3U),
-    // guess the sport from the group name and hide if no games today for that sport.
-    // Prevents NCAAF/CFB/NCAAB tabs from showing year-round when off-season.
+    if (!hasPaths && !hasChs) return;
     if (!hasPaths && hasChs) {
       var _guessedPaths = guessEspnPaths(lg.groupName);
       if (_guessedPaths.length > 0) {
-        var _todayGames = allGames;
-        var _hasGamesForGuessed = _todayGames.some(function(g) {
-          return _guessedPaths.indexOf(g._path) >= 0;
-        });
-        if (!_hasGamesForGuessed) return; // known sport with no games today → hide tab
+        if (!allGames.some(function(g) { return _guessedPaths.indexOf(g._path) >= 0; })) return;
       }
     }
-
-    // Hide tab when ESPN data is fetched but zero countable games exist.
-    // Uses any cached data (any path populated), not just today's date-matched cache.
-    // This correctly hides PPV/UFC etc when no events are scheduled.
     if (hasPaths) {
       const lgGamesAny = (lg.espnPaths || []).reduce(function(arr, p) {
         const g = lg.cachedGamesByPath && lg.cachedGamesByPath[p];
@@ -5936,8 +5933,6 @@ function renderSportTab() {
 
   // ── All Games tab ──
   if (sportSectionTab === 'allgames') {
-    // Render sub-league pills: one per ESPN path that has games today
-    // Priority order — major leagues first
     var _agPillOrder = [
       'baseball/mlb', 'football/nfl', 'hockey/nhl', 'football/college-football',
       'soccer/usa.1', 'basketball/nba', 'mma/ufc', 'boxing/boxing',
@@ -5946,10 +5941,8 @@ function renderSportTab() {
       'basketball/mens-college-basketball', 'tennis/atp', 'golf/leaderboard',
       'racing/nascar', 'racing/f1', 'cricket/icc-cricket'
     ];
-    var _agAllGames = allGames;
     var _agPathsWithGames = new Set();
-    _agAllGames.forEach(function(g) { if (g._path) _agPathsWithGames.add(g._path); });
-    // Sort by priority, then any unlisted paths at the end
+    allGames.forEach(function(g) { if (g._path) _agPathsWithGames.add(g._path); });
     var _agActivePaths = _agPillOrder.filter(function(p) { return _agPathsWithGames.has(p); });
     _agPathsWithGames.forEach(function(p) { if (_agActivePaths.indexOf(p) < 0) _agActivePaths.push(p); });
     if (teamTabs && _agActivePaths.length >= 2) {
@@ -5961,7 +5954,6 @@ function renderSportTab() {
       }).join('');
     } else if (teamTabs) {
       teamTabs.innerHTML = '';
-      sportSubLeague = '';
     }
     _renderAllGamesTab(lst);
     return;
@@ -6031,18 +6023,13 @@ function renderSportTab() {
   // Without this, each game card calls findGamesForItem for every channel = O(games × channels).
   // With this map it's O(channels) once + O(1) per game card lookup.
   const _chsByGameKey = new Map(); // gameKey → { primary: [], alt: [] }
-
-  // PPV/combat sport bypass: pre-collect all combat game keys so PPV streams
-  // (whose titles contain "Main Card", "Prelims" etc. — NOT fighter names)
-  // can be linked to UFC/Boxing game cards without team-name matching.
   var _combatPathSet = new Set(['mma/ufc','boxing/boxing','mma/bellator','mma/pfl']);
-  var _combatGameKeys = []; // [{gKey, game}] for all combat sport games today
-  _getAllTodayGames().forEach(function(g) {
+  var _combatGameKeys = [];
+  allGames.forEach(function(g) {
     if (g._path && _combatPathSet.has(g._path)) {
       _combatGameKeys.push({ gKey: (g.shortName || '') + '|' + g.startTime, game: g });
     }
   });
-
   allChs.forEach(function(m) {
     var title = (m.title || '').toLowerCase();
     var matchedGames = _findGamesViaIndex(title);
@@ -6053,40 +6040,23 @@ function renderSportTab() {
       return l.groupName === (m._lgGroupName || m.category);
     }) || null);
     var mGroupPaths = mLgCfg ? (mLgCfg.espnPaths || []) : [];
-    // For multi-path groups (Paramount+, US Sports), detect the stream's actual
-    // sport from its title prefix ("MLB 17:" → baseball/mlb). Without this, all
-    // streams from Paramount+ match all game paths because the group has all paths.
     var mDetectedPath = (mGroupPaths.length > 1) ? detectSportPathFromTitle(title) : null;
     var mPaths = mDetectedPath ? [mDetectedPath] : mGroupPaths;
     matchedGames.forEach(function(mg) {
       var gKey = (mg.shortName || '') + '|' + mg.startTime;
       if (!_chsByGameKey.has(gKey)) _chsByGameKey.set(gKey, { primary: [], alt: [] });
       var bucket = _chsByGameKey.get(gKey);
-
-      // Matchup validation: if stream title has "@ " or " vs ", both sides must
-      // correspond to teams in the ESPN game. Prevents wrong-game pairing when
-      // streams share one team name with a different game.
       if (!_streamMatchesGameMatchup(title, mg.teams || [])) return;
-
       if (lgName) {
         if (m._lgGroupName === lgName) bucket.primary.push(m);
         else bucket.alt.push(m);
       } else {
-        // Live tab: same-sport streams are primary, cross-sport are SKIPPED entirely
-        // (not alt). A cross-sport stream provides no value as fallback — showing
-        // "MLB 17: Cardinals @ Washington" under an MLS game misleads the user.
         var samePath = mPaths.length > 0 && !!mg._path && mPaths.includes(mg._path);
         if (samePath) bucket.primary.push(m);
-        else if (mPaths.length === 0) bucket.alt.push(m); // no paths configured → keep as alt
-        // else: cross-sport → skip entirely (don't push to any bucket)
+        else if (mPaths.length === 0) bucket.alt.push(m);
       }
     });
-
-    // PPV/combat sport bypass: UFC/Boxing streams use generic titles like
-    // "PPV 01: Main Card" or "UFC 327: Prelims" that contain NO fighter names.
-    // Normal team-name matching finds nothing. If this stream belongs to a
-    // PPV/combat group AND wasn't matched to any combat game above, link it
-    // to ALL combat sport game cards today.
+    // PPV/combat bypass: link unmatched PPV streams to all combat game cards
     if (_combatGameKeys.length > 0 && matchedGames.length === 0) {
       var _mCfgPpv = (settings.sportLeagues || []).find(function(l) {
         return l.groupName === (m._lgGroupName || m.category);
@@ -6339,7 +6309,6 @@ function _getAllTodayGames() {
   var _dayStart = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate()).getTime();
   var _winStart = _dayStart - 6 * 3600000;
   var _winEnd   = _dayStart + 30 * 3600000;
-
   (settings.sportLeagues || []).forEach(lg => {
     const paths = lg.espnPaths || (lg.espnPath ? [lg.espnPath] : []);
     paths.forEach(path => {
@@ -6358,11 +6327,9 @@ function _getAllTodayGames() {
 function _renderAllGamesTab(lst) {
   const showPast = settings.sportShowPastGames !== false;
   var games = _getAllTodayGames().filter(function(g) { return showPast || g.state !== 'post'; });
-  // Sub-league pill filter: when a sub-pill is selected, show only that sport
   if (sportSubLeague) {
     games = games.filter(function(g) { return g._path === sportSubLeague; });
   }
-
   if (!games.length) {
     lst.innerHTML = '<div class="emp"><h3>No games scheduled today</h3><p>Fetch schedules using the ↻ button, or check Settings → Live Sports.</p></div>';
     return;
@@ -6375,40 +6342,30 @@ function _renderAllGamesTab(lst) {
   // Pre-build gameKey → channels map once (same pattern as renderSportTab)
   const _allChsAG = getAllSportItems();
   const _chsByGameKeyAG = new Map();
-  // PPV bypass: pre-collect combat game keys
   var _agCombatPaths = new Set(['mma/ufc','boxing/boxing','mma/bellator','mma/pfl']);
   var _agCombatKeys = [];
-  _getAllTodayGames().forEach(function(g) {
+  games.forEach(function(g) {
     if (g._path && _agCombatPaths.has(g._path)) {
-      _agCombatKeys.push({ gKey: (g.shortName || '') + '|' + g.startTime, game: g });
+      _agCombatKeys.push({ gKey: (g.shortName || '') + '|' + g.startTime });
     }
   });
-
   _allChsAG.forEach(function(m) {
     var title = (m.title || '').toLowerCase();
     var matchedGames = _findGamesViaIndex(title);
-    // Detect stream sport from title prefix for multi-path groups
     var _agLgCfg = (settings.sportLeagues || []).find(function(l) {
       return l.groupName === (m._lgGroupName || m.category);
     }) || null;
     var _agGroupPaths = _agLgCfg ? (_agLgCfg.espnPaths || []) : [];
     var _agDetected = (_agGroupPaths.length > 1) ? detectSportPathFromTitle(title) : null;
     var _agPaths = _agDetected ? [_agDetected] : _agGroupPaths;
-
     matchedGames.forEach(function(mg) {
-      // Sport-path check: stream must be from the same sport as the game
       var _agSameSport = _agPaths.length === 0 || !mg._path || _agPaths.includes(mg._path);
       if (!_agSameSport) return;
-
-      // Matchup validation: both sides of the stream title must match game teams
       if (!_streamMatchesGameMatchup(title, mg.teams || [])) return;
-
       var gKey = (mg.shortName || '') + '|' + mg.startTime;
       if (!_chsByGameKeyAG.has(gKey)) _chsByGameKeyAG.set(gKey, []);
       _chsByGameKeyAG.get(gKey).push(m);
     });
-
-    // PPV bypass for All Games tab — same logic as renderSportTab
     if (_agCombatKeys.length > 0 && matchedGames.length === 0) {
       var _agNamePpv = (_agLgCfg && _agLgCfg.groupName) || (m.category || m._lgGroupName || '');
       var _agIsPpv = /\bppv\b|pay.per.view|ufc|boxing|combat|fight/i.test(_agNamePpv)
@@ -7503,16 +7460,19 @@ setTimeout(async () => {
       renderLib(); // update ITV list with freshly loaded channels
     }
   }
-  // Repos loaded — fire EPG in background (don't await — EPG parse takes 60-90s
-  // on Fire TV with 32k channels; splash should hide well before that finishes).
-  // EPG shows its own toast ("Fetching EPG: ITV…") while running in background.
+  // Repos loaded but the app still has post-load rendering to settle
+  // (sport index build, EPG start, renderLib on sport channels, etc.).
+  // Keep nav locked for 10s so cached D-pad presses during that window are dropped.
+  window._setSplashStatus && window._setSplashStatus('Almost ready…');
+  // Fire EPG in background — don't await (EPG parse takes 60-90s on Fire TV)
   if (epgSrc.length) {
     fetchAllEpg().catch(function() {});
   }
-  // Brief settle for post-repo renders (sport index, renderLib), then unlock
+  // Brief settle for post-repo renders, then unlock
   window._setSplashStatus && window._setSplashStatus('Ready');
   await new Promise(function(r) { setTimeout(r, 3000); });
   _navLocked = false;
+  if(window._splashTimerInterval)clearInterval(window._splashTimerInterval);
   window._hideSplash && window._hideSplash('Ready');
   setTimeout(refreshTvFocus, 80);
 }, 800);
