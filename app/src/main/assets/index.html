@@ -291,6 +291,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     <div class="spn" style="width:18px;height:18px;border-width:2px"></div>
     <span id="sv-splash-status" style="font-size:9px;color:var(--t3)">Loading…</span>
   </div>
+  <div id="sv-splash-hint" style="margin-top:20px;font-size:8px;color:var(--t3);opacity:0;transition:opacity .6s ease;max-width:400px;text-align:center;line-height:1.5"></div>
 </div>
 <script>
 (function(){
@@ -334,6 +335,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
   window._splashQuoteTimer=setInterval(_showQ,5000);
   window._hideSplash=function(status){
     clearInterval(window._splashQuoteTimer);
+    if(window._splashHintTimer){clearTimeout(window._splashHintTimer);window._splashHintTimer=null;}
     var el=document.getElementById('sv-splash');
     if(!el)return;
     var st=document.getElementById('sv-splash-status');
@@ -341,6 +343,14 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     el.style.opacity=0;
     setTimeout(function(){el.style.display='none';},550);
   };
+  // After 20s of splash visible, show hint about large configs
+  window._splashHintTimer=setTimeout(function(){
+    var h=document.getElementById('sv-splash-hint');
+    if(h&&document.getElementById('sv-splash')&&document.getElementById('sv-splash').style.display!=='none'){
+      h.textContent='Larger channel lists and sports setups can take 30–60 seconds to fully load.';
+      h.style.opacity=1;
+    }
+  },20000);
   window._setSplashStatus=function(msg){
     var st=document.getElementById('sv-splash-status');
     if(st)st.textContent=msg;
@@ -5446,6 +5456,8 @@ function _normalizeSportGroupLabel(groupName) {
     { re: /\bufc\b|\bmma\b/i,                      abbr: 'UFC'   },
     { re: /\bwnba\b/i,                             abbr: 'WNBA'  },
     { re: /\bpga\b|\bgolf\b/i,                     abbr: 'PGA'   },
+    { re: /\bepl\b|\bpremier\s*league\b/i,          abbr: 'EPL'   },
+    { re: /\bparamount\b/i,                         abbr: 'Paramount+' },
   ];
   for (var i = 0; i < _leagues.length; i++) {
     if (_leagues[i].re.test(g)) return _leagues[i].abbr;
@@ -5875,9 +5887,8 @@ function renderSportTab() {
   // Multi-path groups: show "All | MLB | NHL" etc. for paths that have games today.
   const teamTabs = $('sport-team-tabs');
   if (teamTabs) {
-    if (sportSectionTab === 'allgames' || (sportSectionTab === 'live' && !filterOn)) {
-      // Build sub-league pills from all leagues that have games today
-      // Priority order for sorting
+    if (sportSectionTab === 'allgames' && filterOn) {
+      // Sub-league pills on All Games when My Teams Only is on
       var _subPillPriority = ['baseball/mlb','football/nfl','hockey/nhl','football/college-football','soccer/usa.1','basketball/nba','mma/ufc','boxing/boxing','basketball/wnba','soccer/eng.1'];
       var _subPillPaths = [];
       allGames.forEach(function(g) {
@@ -5895,13 +5906,14 @@ function renderSportTab() {
         teamTabs.innerHTML = subPills.map(function(path) {
           var label = path === '' ? '⚽ All' : ((ESPN_LEAGUE_MAP.find(function(e) { return e.path === path; }) || {}).label || path.split('/').pop().toUpperCase());
           var active = path === sportSubLeague;
-          return '<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" data-team="' + path + '" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;' + (active ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)') + '" onclick="window.setSportSubLeague(' + JSON.stringify(path) + ')">' + esc(label) + '</span>';
+          var escaped = path.replace(/'/g, "\\'");
+          return '<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" data-team="' + path + '" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;' + (active ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)') + "\" onclick=\"window.setSportSubLeague('" + escaped + "')\">" + esc(label) + '</span>';
         }).join('');
       } else {
         teamTabs.innerHTML = '';
         sportSubLeague = '';
       }
-    } else if (sportSectionTab === 'live' && filterOn) {
+    } else if (sportSectionTab === 'allgames' || sportSectionTab === 'live') {
       teamTabs.innerHTML = '';
     } else {
       const lgForPills = settings.sportLeagues && settings.sportLeagues.find(function(l) { return l.groupName === sportSectionTab; });
@@ -5938,7 +5950,8 @@ function renderSportTab() {
         teamTabs.innerHTML = subPills.map(function(path) {
           var label = path === '' ? '⚽ All' : ((ESPN_LEAGUE_MAP.find(function(e) { return e.path === path; }) || {}).label || path.split('/').pop().toUpperCase());
           var active = path === sportSubLeague;
-          return '<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" data-team="' + path + '" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;' + (active ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)') + '" onclick="window.setSportSubLeague(' + JSON.stringify(path) + ')">' + esc(label) + '</span>';
+          var escaped = path.replace(/'/g, "\\'");
+          return '<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" data-team="' + path + '" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;' + (active ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)') + "\" onclick=\"window.setSportSubLeague('" + escaped + "')\">" + esc(label) + '</span>';
         }).join('');
       } else {
         teamTabs.innerHTML = '';
@@ -7450,9 +7463,10 @@ setTimeout(() => fetchAllLeagueSchedules(false), 800);
 
 // ── Startup repo + EPG refresh ────────────────────────────────────────────
 // Refresh all repos with a sourceUrl so channels are always current on launch,
-// then re-fetch EPG so guide channel matching is fresh.
-// Staggered so the UI renders first and fetchAllLeagueSchedules fires first.
-// Nav stays locked the entire time so D-pad presses during loading don't queue.
+// then fetch EPG so guide channel matching is fresh.
+// Splash stays visible and nav stays locked until EVERYTHING finishes.
+// Small configs: repos done in 2s, no EPG → splash gone in ~3s.
+// Large configs: 60k streams + EPG → splash stays 30-60s with hint at 20s.
 setTimeout(async () => {
   const urlRepos = repos.filter(r => r.sourceUrl);
   if (urlRepos.length) {
@@ -7470,15 +7484,20 @@ setTimeout(async () => {
       renderLib(); // update ITV list with freshly loaded channels
     }
   }
-  // b120 original: 10s settle wait, then unlock + hide + EPG
-  window._setSplashStatus && window._setSplashStatus('Almost ready…');
-  await new Promise(function(r) { setTimeout(r, 15000); });
+  // EPG phase: keep splash visible, update status, nav stays locked.
+  // parseXMLTV blocks the main thread so we yield first to let the status paint.
+  if (epgSrc.length) {
+    window._setSplashStatus && window._setSplashStatus('Loading guide data…');
+    // Yield so the status text paints before parseXMLTV blocks the thread
+    await new Promise(function(r) { setTimeout(r, 150); });
+    try {
+      await fetchAllEpg();
+    } catch(e) { console.warn('[SV] startup EPG:', e.message); }
+  }
+  // Everything done — unlock and hide splash
   _navLocked = false;
   window._hideSplash && window._hideSplash('Ready');
   setTimeout(refreshTvFocus, 80);
-  if (epgSrc.length) {
-    fetchAllEpg().catch(function() {});
-  }
 }, 800);
 
 // ── Live score auto-refresh ───────────────────────────────────────────────
