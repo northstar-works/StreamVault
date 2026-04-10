@@ -7484,20 +7484,29 @@ setTimeout(async () => {
       renderLib(); // update ITV list with freshly loaded channels
     }
   }
-  // EPG phase: keep splash visible, update status, nav stays locked.
-  // parseXMLTV blocks the main thread so we yield first to let the status paint.
-  if (epgSrc.length) {
-    window._setSplashStatus && window._setSplashStatus('Loading guide data…');
-    // Yield so the status text paints before parseXMLTV blocks the thread
-    await new Promise(function(r) { setTimeout(r, 150); });
-    try {
-      await fetchAllEpg();
-    } catch(e) { console.warn('[SV] startup EPG:', e.message); }
+  // ── Mobile vs TV splash behavior ──
+  // Mobile: hide splash immediately after repos, EPG loads in background.
+  // TV: keep splash until EPG finishes (parseXMLTV blocks thread, D-pad crashes).
+  if (!isTvDevice) {
+    // Mobile: done — hide splash, unlock nav, fire EPG in background
+    _navLocked = false;
+    window._hideSplash && window._hideSplash('Ready');
+    if (epgSrc.length) {
+      fetchAllEpg().catch(function() {});
+    }
+  } else {
+    // TV: keep splash visible through EPG parse to prevent D-pad crash
+    if (epgSrc.length) {
+      window._setSplashStatus && window._setSplashStatus('Loading guide data…');
+      await new Promise(function(r) { setTimeout(r, 150); });
+      try {
+        await fetchAllEpg();
+      } catch(e) { console.warn('[SV] startup EPG:', e.message); }
+    }
+    _navLocked = false;
+    window._hideSplash && window._hideSplash('Ready');
+    setTimeout(refreshTvFocus, 80);
   }
-  // Everything done — unlock and hide splash
-  _navLocked = false;
-  window._hideSplash && window._hideSplash('Ready');
-  setTimeout(refreshTvFocus, 80);
 }, 800);
 
 // ── Live score auto-refresh ───────────────────────────────────────────────
