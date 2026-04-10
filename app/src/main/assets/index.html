@@ -1735,11 +1735,7 @@ async function fetchEpgSource(src) {
     saveEpg();
     toast('EPG updated: ' + src.chCount + ' channels, ' + Object.keys(filteredChannels).length + ' matched');
     // Defer heavy DOM rebuild so the toast can render first
-    // Skip during splash — startup will render after splash closes
-    var _splashStillUp = document.getElementById('sv-splash') && document.getElementById('sv-splash').style.display !== 'none';
-    if (!_splashStillUp) {
-      setTimeout(function() { renderLib(); renderGuide(); }, 80);
-    }
+    setTimeout(function() { renderLib(); renderGuide(); }, 80);
   } catch(e) {
     toast('EPG error: ' + e.message);
   }
@@ -5255,23 +5251,25 @@ function fetchAllLeagueSchedules(force) {
   if (!settings.sportLeagues || !settings.sportLeagues.length) return;
   const today = new Date().toISOString().slice(0, 10);
   const STALE_MS = 4 * 3600 * 1000; // 4 hours
+  var _pendingRender = null;
   settings.sportLeagues.forEach((lg, i) => {
     const paths = lg.espnPaths || (lg.espnPath ? [lg.espnPath] : []);
     if (!paths.length) return;
     if (force) {
-      // Only clear cacheDate if cache is actually stale (> 4 hours old).
-      // Keeps overnight / off-peak cached game data intact for leagues that
-      // genuinely have no ESPN events right now (ESPN returns [] at 2-5 AM).
       const cacheAge = lg.lastFetchMs ? (Date.now() - lg.lastFetchMs) : Infinity;
       const cacheIsToday = lg.cacheDate === today;
       const cacheIsFresh = cacheIsToday && cacheAge < STALE_MS;
       if (!cacheIsFresh) { lg.cacheDate = ''; }
     }
     fetchLeagueSchedule(i).then(() => {
-      _invalidateSportGameIndex(); // fresh schedule data = stale index
-      renderSportLeagueSettings();
-      renderCats(); renderLib();
-      renderSportTab();
+      _invalidateSportGameIndex();
+      // Debounce: only render once after all leagues resolve, not per-league
+      clearTimeout(_pendingRender);
+      _pendingRender = setTimeout(function() {
+        renderSportLeagueSettings();
+        renderCats(); renderLib();
+        renderSportTab();
+      }, 200);
     });
   });
 }
@@ -7716,18 +7714,17 @@ renderSportTab();
 updateSportNavVisibility();
 refreshTvFocus();
 queueStartupAltCheck();
-// Fetch ESPN schedules — deferred on TV until after splash/EPG to prevent OOM crash.
-// On mobile, fire immediately since there's no blocking parseXMLTV issue.
+// Fetch ESPN schedules on mobile immediately (no blocking EPG issue).
+// TV deferred to after EPG completes inside the startup block above.
 if (!isTvDevice) {
   setTimeout(() => fetchAllLeagueSchedules(false), 800);
 }
 
 // ── Startup repo + EPG refresh ────────────────────────────────────────────
-// Refresh all repos with a sourceUrl so channels are always current on launch,
-// then fetch EPG so guide channel matching is fresh.
-// Splash stays visible and nav stays locked until EVERYTHING finishes.
-// Small configs: repos done in 2s, no EPG → splash gone in ~3s.
-// Large configs: 60k streams + EPG → splash stays 30-60s with hint at 20s.
+// Refresh all repos, then fire EPG in background.
+// Splash closes after repos (~5-10s). Nav stays locked during EPG parse
+// to prevent D-pad burst-fire crash — events queue but get dropped by
+// _navLocked check in __svHandleTvKey. ESPN fetches deferred until after EPG.
 setTimeout(async () => {
   const urlRepos = repos.filter(r => r.sourceUrl);
   if (urlRepos.length) {
@@ -7746,31 +7743,29 @@ setTimeout(async () => {
     }
   }
   // ── Mobile vs TV splash behavior ──
-  // Mobile: hide splash immediately after repos, EPG loads in background.
-  // TV: keep splash until EPG finishes (parseXMLTV blocks thread, D-pad crashes).
-  if (!isTvDevice) {
-    // Mobile: done — hide splash, unlock nav, fire EPG in background
-    _navLocked = false;
-    window._hideSplash && window._hideSplash('Ready');
-    if (epgSrc.length) {
-      fetchAllEpg().catch(function() {});
-    }
+  // Both: hide splash after repos. Nav stays locked during EPG to prevent D-pad crash.
+  // EPG fires fire-and-forget — parseXMLTV blocks the thread but queued key events
+  // are silently dropped by _navLocked check in __svHandleTvKey (line 4406).
+  window._hideSplash && window._hideSplash('Ready');
+  if (isTvDevice) setTimeout(refreshTvFocus, 80);
+
+  if (epgSrc.length) {
+    // Nav stays locked through EPG parse — prevents burst-fire crash on thread unblock
+    fetchAllEpg().then(function() {
+      _navLocked = false;
+      if (isTvDevice) {
+        setTimeout(refreshTvFocus, 80);
+        // ESPN schedules fire AFTER EPG is done — no concurrent heavy work
+        setTimeout(function() { fetchAllLeagueSchedules(false); }, 300);
+      }
+    }).catch(function(e) {
+      console.warn('[SV] startup EPG:', e.message);
+      _navLocked = false;
+      if (isTvDevice) setTimeout(refreshTvFocus, 80);
+    });
   } else {
-    // TV: keep splash visible through EPG parse to prevent D-pad crash
-    if (epgSrc.length) {
-      window._setSplashStatus && window._setSplashStatus('Loading guide data…');
-      await new Promise(function(r) { setTimeout(r, 150); });
-      try {
-        await fetchAllEpg();
-      } catch(e) { console.warn('[SV] startup EPG:', e.message); }
-    }
     _navLocked = false;
-    window._hideSplash && window._hideSplash('Ready');
-    setTimeout(refreshTvFocus, 80);
-    // EPG loaded during splash but renderLib/renderGuide were skipped — run now
-    setTimeout(function() { renderLib(); renderGuide(); }, 150);
-    // Now safe to fetch ESPN schedules — EPG is done, thread is free
-    setTimeout(() => fetchAllLeagueSchedules(false), 500);
+    if (isTvDevice) setTimeout(function() { fetchAllLeagueSchedules(false); }, 300);
   }
 }, 800);
 
