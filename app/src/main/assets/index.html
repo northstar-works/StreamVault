@@ -4961,7 +4961,7 @@ const ESPN_LEAGUE_MAP = [
   { keys:['serie a'],                                      path:'soccer/ita.1',                         label:'Serie A' },
   { keys:['ligue 1','ligue1'],                             path:'soccer/fra.1',                         label:'Ligue 1' },
   { keys:['champions league','ucl'],                       path:'soccer/uefa.champions',                label:'UCL' },
-  { keys:['ncaa football','cfb','college football'],       path:'football/college-football',            label:'CFB' },
+  { keys:['ncaaf','ncaa football','cfb','college football'], path:'football/college-football',            label:'CFB' },
   { keys:['ncaa basketball','ncaab','college basketball'], path:'basketball/mens-college-basketball',   label:'NCAAB' },
   { keys:['liga mx'],                                      path:'soccer/mex.1',                         label:'Liga MX' },
   { keys:['ufc','mma','ultimate fighting'],                path:'mma/ufc',                              label:'UFC/MMA' },
@@ -5815,8 +5815,16 @@ function renderSportTab() {
             var otherPaths = other.espnPaths || [];
             if (otherPaths.length === 1) _coveredPaths.add(otherPaths[0]);
           });
-          var _hasUniquePath = lg.espnPaths.some(function(p) { return !_coveredPaths.has(p); });
-          if (!_hasUniquePath) return; // all paths covered by specific leagues → hide tab
+          // Check if any uncovered path actually has games today
+          var _hasUniquePathWithGames = lg.espnPaths.some(function(p) {
+            if (_coveredPaths.has(p)) return false; // covered by a specific league tab
+            var pg = lg.cachedGamesByPath && lg.cachedGamesByPath[p];
+            if (!Array.isArray(pg)) return false;
+            return pg.some(function(gm) {
+              return gm.startTime >= _tWinStart && gm.startTime <= _tWinEnd && (showPast || gm.state !== 'post');
+            });
+          });
+          if (!_hasUniquePathWithGames) return; // no unique path has games today → hide tab
         }
         // Single-path leagues: hide if ESPN fetched data but today has no games
         if (lg.espnPaths && lg.espnPaths.length === 1) {
@@ -5867,7 +5875,33 @@ function renderSportTab() {
   // Multi-path groups: show "All | MLB | NHL" etc. for paths that have games today.
   const teamTabs = $('sport-team-tabs');
   if (teamTabs) {
-    if (sportSectionTab === 'allgames' || sportSectionTab === 'live') {
+    if (sportSectionTab === 'allgames' || (sportSectionTab === 'live' && !filterOn)) {
+      // Build sub-league pills from all leagues that have games today
+      // Priority order for sorting
+      var _subPillPriority = ['baseball/mlb','football/nfl','hockey/nhl','football/college-football','soccer/usa.1','basketball/nba','mma/ufc','boxing/boxing','basketball/wnba','soccer/eng.1'];
+      var _subPillPaths = [];
+      allGames.forEach(function(g) {
+        if (g._path && _subPillPaths.indexOf(g._path) < 0) {
+          if (showPast || g.state !== 'post') _subPillPaths.push(g._path);
+        }
+      });
+      _subPillPaths.sort(function(a, b) {
+        var ai = _subPillPriority.indexOf(a); if (ai < 0) ai = 999;
+        var bi = _subPillPriority.indexOf(b); if (bi < 0) bi = 999;
+        return ai - bi;
+      });
+      if (_subPillPaths.length >= 2) {
+        var subPills = ['', ..._subPillPaths];
+        teamTabs.innerHTML = subPills.map(function(path) {
+          var label = path === '' ? '⚽ All' : ((ESPN_LEAGUE_MAP.find(function(e) { return e.path === path; }) || {}).label || path.split('/').pop().toUpperCase());
+          var active = path === sportSubLeague;
+          return '<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" data-team="' + path + '" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;' + (active ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)') + '" onclick="window.setSportSubLeague(' + JSON.stringify(path) + ')">' + esc(label) + '</span>';
+        }).join('');
+      } else {
+        teamTabs.innerHTML = '';
+        sportSubLeague = '';
+      }
+    } else if (sportSectionTab === 'live' && filterOn) {
       teamTabs.innerHTML = '';
     } else {
       const lgForPills = settings.sportLeagues && settings.sportLeagues.find(function(l) { return l.groupName === sportSectionTab; });
