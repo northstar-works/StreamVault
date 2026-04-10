@@ -7460,21 +7460,16 @@ setTimeout(async () => {
       renderLib(); // update ITV list with freshly loaded channels
     }
   }
-  // Repos loaded but the app still has post-load rendering to settle
-  // (sport index build, EPG start, renderLib on sport channels, etc.).
-  // Keep nav locked for 10s so cached D-pad presses during that window are dropped.
-  window._setSplashStatus && window._setSplashStatus('Almost ready…');
-  // Fire EPG in background — don't await (EPG parse takes 60-90s on Fire TV)
-  if (epgSrc.length) {
-    fetchAllEpg().catch(function() {});
-  }
-  // Brief settle for post-repo renders, then unlock
-  window._setSplashStatus && window._setSplashStatus('Ready');
-  await new Promise(function(r) { setTimeout(r, 3000); });
-  _navLocked = false;
+  // Repos loaded — hide splash and unlock nav immediately.
+  // EPG fires AFTER splash is gone so parseXMLTV blocking doesn't freeze the splash.
   if(window._splashTimerInterval)clearInterval(window._splashTimerInterval);
+  _navLocked = false;
   window._hideSplash && window._hideSplash('Ready');
   setTimeout(refreshTvFocus, 80);
+  // Fire EPG 1s after splash fades — runs in background with toast messages only
+  if (epgSrc.length) {
+    setTimeout(function() { fetchAllEpg().catch(function() {}); }, 1000);
+  }
 }, 800);
 
 // ── Live score auto-refresh ───────────────────────────────────────────────
