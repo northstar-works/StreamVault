@@ -2481,7 +2481,7 @@ window.openEdit = (id) => {
   $('in-icon').value = m.icon || '';
   $('in-epgl').value = m.epgLink || '';
   fillEpgSourceSelect(m.epgLink || '');
-  populateEpgDropdown(m.epgTitle || '');
+  populateEpgDropdown(m.epgTitle || '', m.title || '');
   $('mo-ed').classList.add('on');
 };
 
@@ -2496,7 +2496,23 @@ $('in-url-pick').onclick = () => {
   else toast('Local file browsing is available in the Android app build');
 };
 
-function populateEpgDropdown(selected) {
+function _extractEpgSearchFromTitle(title) {
+  if (!title) return '';
+  var t = title;
+  // Strip country prefix: "US: PBS KIDS HD" → "PBS KIDS HD"
+  t = t.replace(/^[A-Z]{2,3}:\s*/i, '');
+  // Strip quality suffixes
+  t = t.replace(/\s+(HD|SD|FHD|UHD|4K|720p|1080[pi]?|HEVC|H\.?265)\s*$/gi, '');
+  // Strip trailing numbers/channel numbers: "ESPN 2" keep, but "Channel 045" strip
+  t = t.replace(/\s+\d{3,}$/g, '');
+  t = t.trim();
+  // If still long, take first 2-3 meaningful words
+  var words = t.split(/\s+/).filter(function(w) { return w.length > 1; });
+  if (words.length > 3) words = words.slice(0, 3);
+  return words.join(' ');
+}
+
+function populateEpgDropdown(selected, streamTitle) {
   const searchInput = $('in-epg-search');
   const hiddenVal   = $('in-epg-val');
   const listEl      = $('in-epg-list');
@@ -2512,7 +2528,8 @@ function populateEpgDropdown(selected) {
     searchInput.value = selected;
     searchInput.style.color = 'var(--ac)';
   } else {
-    searchInput.value = '';
+    var _autoSearch = _extractEpgSearchFromTitle(streamTitle || '');
+    searchInput.value = _autoSearch;
     searchInput.style.color = '';
   }
 
@@ -2594,8 +2611,10 @@ function populateEpgDropdown(selected) {
   }
 
   // Mouse/touch: open on focus
-  // On TV, DPad focus must NOT auto-open the list — wait for a keypress
-  searchInput.onfocus = isTvDevice ? () => {} : () => openEpgList();
+  // On TV: auto-open if pre-filtered text exists (from stream title), otherwise wait for keypress
+  searchInput.onfocus = isTvDevice
+    ? () => { if (searchInput.value.trim() && !hiddenVal.value) setTimeout(() => openEpgList(), 100); }
+    : () => openEpgList();
 
   // TV: open list on navigation keys; for printable chars let the value
   // settle first (50ms) so renderEpgOptions sees the updated input text
@@ -6617,7 +6636,7 @@ function _renderAllGamesTab(lst) {
     const name = g.shortName || g.name || (t1.name && t2.name ? t1.name + ' vs ' + t2.name : 'Game');
     const isMyTeam = _agMyTeams.length > 0 && _agMyTeams.some(function(t) { return _teamMatchesGame(t, g); });
     const _agFilterOn = settings.sportLeagueFilterEnabled;
-    const _showStar = isMyTeam && !_agFilterOn;
+    const _showStar = isMyTeam; // always show star on All Games — helps identify your teams
     const _starSuffix = _showStar ? ' ⭐' : '';
     const d = new Date(g.startTime), h = d.getHours() % 12 || 12, mi = d.getMinutes();
     const timeStr = g.state === 'in' ? '🔴 LIVE' : g.state === 'post' ? '✓ Final' : h + (mi ? ':' + String(mi).padStart(2,'0') : '') + (d.getHours()>=12?'PM':'AM');
