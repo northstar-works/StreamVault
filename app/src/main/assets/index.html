@@ -510,6 +510,20 @@ document.addEventListener('keydown', function(e) {
         <p style="font-size:9px;color:var(--ac);font-weight:600;margin-bottom:4px">③ Configure sport channel groups</p>
         <div id="sport-league-lst" style="margin-bottom:4px"></div>
 
+        <hr style="border:none;border-top:1px solid var(--bd);margin:8px 0 12px">
+
+        <p style="font-size:9px;color:var(--ac);font-weight:600;margin-bottom:6px">④ Browse International Leagues (ESPN-covered)</p>
+        <p style="font-size:8px;color:var(--t3);margin-bottom:6px">Search 60+ international soccer, rugby, and other leagues. Select a league to add its ESPN path to a sport group above.</p>
+        <div style="display:flex;gap:4px;align-items:center;margin-bottom:6px">
+          <input id="intl-league-search" tabindex="0" placeholder="Search: Honduras, Argentina, Rugby..."
+            style="flex:1;padding:5px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px"
+            oninput="window.renderIntlLeagueResults && window.renderIntlLeagueResults()">
+          <select id="intl-league-group" tabindex="0" style="padding:5px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:8px">
+            <option value="">— add to group —</option>
+          </select>
+        </div>
+        <div id="intl-league-results" style="max-height:200px;overflow-y:auto;border:1px solid var(--bd);border-radius:var(--rs);display:none"></div>
+
       </div><!-- sport-acc-body -->
     </div><!-- sport-config-details -->
 
@@ -5124,12 +5138,94 @@ const ESPN_LEAGUE_MAP = [
   { keys:['ncaaw','women\'s college basketball'],          path:'basketball/womens-college-basketball', label:'NCAAW',       icon:'🎓🏀' },
 ];
 const ESPN_SPORT_OPTIONS = ESPN_LEAGUE_MAP.map(e => ({ path: e.path, label: e.label }));
+
+// ── Extended international league directory (ESPN-covered but not in default map) ──
+// These are all valid ESPN scoreboard paths. Users can search and add them to sport groups.
+const INTL_LEAGUE_DIR = [
+  // CONCACAF (Central America, Caribbean, North America)
+  { path:'soccer/hon.1',     label:'Liga Nacional Honduras',    region:'CONCACAF', icon:'🇭🇳' },
+  { path:'soccer/crc.1',     label:'Primera División Costa Rica',region:'CONCACAF', icon:'🇨🇷' },
+  { path:'soccer/slv.1',     label:'Primera División El Salvador',region:'CONCACAF',icon:'🇸🇻' },
+  { path:'soccer/gua.1',     label:'Liga Nacional Guatemala',   region:'CONCACAF', icon:'🇬🇹' },
+  { path:'soccer/pan.1',     label:'Liga Panameña',             region:'CONCACAF', icon:'🇵🇦' },
+  { path:'soccer/jam.1',     label:'Jamaica Premier League',    region:'CONCACAF', icon:'🇯🇲' },
+  { path:'soccer/can.1',     label:'Canadian Premier League',   region:'CONCACAF', icon:'🇨🇦' },
+  { path:'soccer/concacaf.champions', label:'CONCACAF Champions Cup', region:'CONCACAF', icon:'🏆' },
+  { path:'soccer/concacaf.league', label:'CONCACAF Nations League', region:'CONCACAF', icon:'🏆' },
+  // CONMEBOL (South America)
+  { path:'soccer/arg.1',     label:'Liga Profesional Argentina',region:'CONMEBOL', icon:'🇦🇷' },
+  { path:'soccer/bra.1',     label:'Brasileirão Série A',       region:'CONMEBOL', icon:'🇧🇷' },
+  { path:'soccer/col.1',     label:'Liga BetPlay Colombia',     region:'CONMEBOL', icon:'🇨🇴' },
+  { path:'soccer/chi.1',     label:'Primera División Chile',    region:'CONMEBOL', icon:'🇨🇱' },
+  { path:'soccer/ecu.1',     label:'Liga Pro Ecuador',          region:'CONMEBOL', icon:'🇪🇨' },
+  { path:'soccer/per.1',     label:'Liga 1 Perú',              region:'CONMEBOL', icon:'🇵🇪' },
+  { path:'soccer/par.1',     label:'División Profesional Paraguay',region:'CONMEBOL',icon:'🇵🇾' },
+  { path:'soccer/uru.1',     label:'Primera División Uruguay',  region:'CONMEBOL', icon:'🇺🇾' },
+  { path:'soccer/ven.1',     label:'Primera División Venezuela',region:'CONMEBOL', icon:'🇻🇪' },
+  { path:'soccer/bol.1',     label:'División Profesional Bolivia',region:'CONMEBOL',icon:'🇧🇴' },
+  { path:'soccer/conmebol.libertadores', label:'Copa Libertadores', region:'CONMEBOL', icon:'🏆' },
+  { path:'soccer/conmebol.sudamericana', label:'Copa Sudamericana', region:'CONMEBOL', icon:'🏆' },
+  // UEFA (Europe)
+  { path:'soccer/ned.1',     label:'Eredivisie',               region:'UEFA',     icon:'🇳🇱' },
+  { path:'soccer/por.1',     label:'Primeira Liga Portugal',    region:'UEFA',     icon:'🇵🇹' },
+  { path:'soccer/bel.1',     label:'Pro League Belgium',        region:'UEFA',     icon:'🇧🇪' },
+  { path:'soccer/tur.1',     label:'Süper Lig Turkey',          region:'UEFA',     icon:'🇹🇷' },
+  { path:'soccer/sco.1',     label:'Scottish Premiership',      region:'UEFA',     icon:'🏴' },
+  { path:'soccer/gre.1',     label:'Super League Greece',       region:'UEFA',     icon:'🇬🇷' },
+  { path:'soccer/aut.1',     label:'Bundesliga Austria',        region:'UEFA',     icon:'🇦🇹' },
+  { path:'soccer/sui.1',     label:'Super League Switzerland',  region:'UEFA',     icon:'🇨🇭' },
+  { path:'soccer/den.1',     label:'Superligaen Denmark',       region:'UEFA',     icon:'🇩🇰' },
+  { path:'soccer/nor.1',     label:'Eliteserien Norway',        region:'UEFA',     icon:'🇳🇴' },
+  { path:'soccer/swe.1',     label:'Allsvenskan Sweden',        region:'UEFA',     icon:'🇸🇪' },
+  { path:'soccer/pol.1',     label:'Ekstraklasa Poland',        region:'UEFA',     icon:'🇵🇱' },
+  { path:'soccer/rou.1',     label:'SuperLiga Romania',         region:'UEFA',     icon:'🇷🇴' },
+  { path:'soccer/ukr.1',     label:'Premier League Ukraine',    region:'UEFA',     icon:'🇺🇦' },
+  { path:'soccer/rus.1',     label:'Premier Liga Russia',       region:'UEFA',     icon:'🇷🇺' },
+  { path:'soccer/cro.1',     label:'HNL Croatia',               region:'UEFA',     icon:'🇭🇷' },
+  { path:'soccer/srb.1',     label:'SuperLiga Serbia',          region:'UEFA',     icon:'🇷🇸' },
+  { path:'soccer/cze.1',     label:'First League Czech Republic',region:'UEFA',    icon:'🇨🇿' },
+  { path:'soccer/hun.1',     label:'NB I Hungary',              region:'UEFA',     icon:'🇭🇺' },
+  { path:'soccer/isr.1',     label:'Ligat Ha\'Al Israel',       region:'UEFA',     icon:'🇮🇱' },
+  { path:'soccer/cyp.1',     label:'First Division Cyprus',     region:'UEFA',     icon:'🇨🇾' },
+  { path:'soccer/uefa.europa',label:'Europa League',            region:'UEFA',     icon:'🏆' },
+  { path:'soccer/uefa.europa.conf',label:'Europa Conference League',region:'UEFA', icon:'🏆' },
+  // AFC (Asia)
+  { path:'soccer/aus.1',     label:'A-League Australia',        region:'AFC',      icon:'🇦🇺' },
+  { path:'soccer/jpn.1',     label:'J1 League Japan',           region:'AFC',      icon:'🇯🇵' },
+  { path:'soccer/kor.1',     label:'K League 1 South Korea',    region:'AFC',      icon:'🇰🇷' },
+  { path:'soccer/chn.1',     label:'Chinese Super League',      region:'AFC',      icon:'🇨🇳' },
+  { path:'soccer/ind.1',     label:'Indian Super League',       region:'AFC',      icon:'🇮🇳' },
+  { path:'soccer/tha.1',     label:'Thai League 1',             region:'AFC',      icon:'🇹🇭' },
+  { path:'soccer/sgp.1',     label:'Singapore Premier League',  region:'AFC',      icon:'🇸🇬' },
+  { path:'soccer/sau.1',     label:'Saudi Pro League',          region:'AFC',      icon:'🇸🇦' },
+  // CAF (Africa)
+  { path:'soccer/rsa.1',     label:'Premier Soccer League South Africa',region:'CAF',icon:'🇿🇦' },
+  { path:'soccer/egy.1',     label:'Egyptian Premier League',   region:'CAF',      icon:'🇪🇬' },
+  { path:'soccer/nga.1',     label:'Nigeria Professional League',region:'CAF',     icon:'🇳🇬' },
+  // International
+  { path:'soccer/fifa.world',        label:'FIFA World Cup',          region:'Intl',icon:'🏆⚽' },
+  { path:'soccer/fifa.world.women',  label:'FIFA Women\'s World Cup', region:'Intl',icon:'🏆⚽' },
+  { path:'soccer/fifa.friendly',     label:'International Friendlies',region:'Intl',icon:'🌍' },
+  { path:'soccer/conmebol.america',  label:'Copa América',           region:'Intl', icon:'🏆' },
+  { path:'soccer/uefa.euro',         label:'UEFA European Championship',region:'Intl',icon:'🏆' },
+  { path:'soccer/concacaf.gold',     label:'CONCACAF Gold Cup',      region:'Intl', icon:'🏆' },
+  // Other sports
+  { path:'rugby/289262',     label:'Major League Rugby',         region:'Rugby',    icon:'🏉' },
+  { path:'rugby/3',          label:'NRL Australia',              region:'Rugby',    icon:'🏉🇦🇺' },
+  { path:'rugby/270559',     label:'Super Rugby Pacific',        region:'Rugby',    icon:'🏉' },
+  { path:'rugby/289234',     label:'International Test Match',   region:'Rugby',    icon:'🏉' },
+  { path:'rugby/180659',     label:'Six Nations',                region:'Rugby',    icon:'🏉' },
+  { path:'football/cfl',     label:'CFL',                        region:'Football', icon:'🇨🇦🏈' },
+  { path:'basketball/womens-college-basketball',label:'NCAAW',   region:'Basketball',icon:'🎓🏀' },
+];
 function _leagueIcon(path) {
-  var e = ESPN_LEAGUE_MAP.find(function(m) { return m.path === path; });
+  var e = ESPN_LEAGUE_MAP.find(function(m) { return m.path === path; })
+       || INTL_LEAGUE_DIR.find(function(m) { return m.path === path; });
   return e && e.icon ? e.icon + ' ' : '';
 }
 function _leagueIconLabel(path) {
-  var e = ESPN_LEAGUE_MAP.find(function(m) { return m.path === path; });
+  var e = ESPN_LEAGUE_MAP.find(function(m) { return m.path === path; })
+       || INTL_LEAGUE_DIR.find(function(m) { return m.path === path; });
   if (!e) return path.split('/').pop().toUpperCase();
   return (e.icon ? e.icon + ' ' : '') + e.label;
 }
@@ -5247,31 +5343,41 @@ async function _fetchOnePath(path) {
   const data = await resp.json();
   const games = [];
   for (const ev of (data.events || [])) {
-    const comp = ev.competitions && ev.competitions[0];
-    if (!comp) continue;
+    // Iterate ALL competitions — for team sports there's always just 1,
+    // but UFC/boxing events have multiple fights as separate competitions.
+    const comps = ev.competitions || [];
+    if (!comps.length) continue;
+    for (const comp of comps) {
     const state = (comp.status && comp.status.type && comp.status.type.state) || 'pre';
     const startTime = new Date(comp.date || ev.date).getTime();
     const endTime = startTime + 3 * 3600000; // estimate 3h if no end
     const teams = new Set();
     const teamObjects = [];
-    // Separate home/away before pushing — ESPN marks each competitor with homeAway
     let homeComp = null, awayComp = null;
     for (const c of (comp.competitors || [])) {
       if (c.homeAway === 'home') homeComp = c;
       else awayComp = c;
-      const t = c.team || {};
+      // UFC uses 'athlete' instead of 'team'
+      const t = c.team || c.athlete || {};
       [t.displayName, t.shortDisplayName, t.name, t.abbreviation, t.location, t.nickname]
         .filter(Boolean).forEach(v => teams.add(v));
     }
-    // Guarantee teamObjects[0]=home, teamObjects[1]=away (ESPN standard)
     const pushCompetitor = (comp, side) => {
       if (!comp) return;
-      const t = comp.team || {};
+      const t = comp.team || comp.athlete || {};
       teamObjects.push({ name: t.displayName || t.name || '', abbr: t.abbreviation || '', score: comp.score || '', homeAway: side });
     };
     pushCompetitor(homeComp || (comp.competitors||[])[0], 'home');
     pushCompetitor(awayComp || (comp.competitors||[])[1], 'away');
-    games.push({ teams: Array.from(teams), teamObjects, startTime, endTime, state, name: ev.name || '', shortName: ev.shortName || '' });
+    // Use competition-specific name if available, fall back to event name
+    const compName = (teamObjects.length >= 2 && teamObjects[0].name && teamObjects[1].name)
+      ? teamObjects[0].name + ' vs ' + teamObjects[1].name
+      : ev.name || '';
+    const compShort = (teamObjects.length >= 2 && teamObjects[0].abbr && teamObjects[1].abbr)
+      ? teamObjects[0].abbr + ' vs ' + teamObjects[1].abbr
+      : ev.shortName || '';
+    games.push({ teams: Array.from(teams), teamObjects, startTime, endTime, state, name: compName || ev.name || '', shortName: compShort || ev.shortName || '' });
+    } // end for comp
   }
   return games;
 }
@@ -7097,7 +7203,107 @@ window.toggleSportAccordion = () => {
   const chevron = $('sport-acc-chevron');
   if (body) body.style.display = sportConfigOpen ? 'block' : 'none';
   if (chevron) chevron.style.transform = sportConfigOpen ? 'rotate(180deg)' : '';
+  if (sportConfigOpen) _populateIntlGroupSelect();
+};
 
+// ── International League Browser ──
+function _populateIntlGroupSelect() {
+  var sel = $('intl-league-group');
+  if (!sel) return;
+  var html = '<option value="">— add to group —</option>';
+  (settings.sportLeagues || []).forEach(function(lg, i) {
+    html += '<option value="' + i + '">' + esc(lg.groupName) + '</option>';
+  });
+  sel.innerHTML = html;
+}
+
+window.renderIntlLeagueResults = function() {
+  var input = $('intl-league-search');
+  var results = $('intl-league-results');
+  if (!input || !results) return;
+  var q = (input.value || '').toLowerCase().trim();
+  if (!q) { results.style.display = 'none'; return; }
+
+  // Search both INTL_LEAGUE_DIR and ESPN_LEAGUE_MAP
+  var allLeagues = INTL_LEAGUE_DIR.concat(ESPN_LEAGUE_MAP.map(function(e) {
+    return { path: e.path, label: e.label, region: '', icon: e.icon || '' };
+  }));
+  // Dedupe by path
+  var seen = new Set();
+  var deduped = [];
+  allLeagues.forEach(function(e) {
+    if (!seen.has(e.path)) { seen.add(e.path); deduped.push(e); }
+  });
+
+  var filtered = deduped.filter(function(e) {
+    return e.label.toLowerCase().includes(q) ||
+           e.path.toLowerCase().includes(q) ||
+           (e.region || '').toLowerCase().includes(q);
+  }).slice(0, 30);
+
+  if (!filtered.length) {
+    results.innerHTML = '<div style="padding:8px;font-size:8px;color:var(--t3);text-align:center">No leagues found for "' + esc(q) + '"</div>';
+    results.style.display = 'block';
+    return;
+  }
+
+  // Check which paths are already added to any group
+  var existingPaths = new Set();
+  (settings.sportLeagues || []).forEach(function(lg) {
+    (lg.espnPaths || []).forEach(function(p) { existingPaths.add(p); });
+  });
+
+  results.innerHTML = filtered.map(function(e) {
+    var added = existingPaths.has(e.path);
+    return '<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--bd);font-size:9px">'
+      + '<span style="flex-shrink:0">' + (e.icon || '') + '</span>'
+      + '<div style="flex:1;min-width:0">'
+      + '<div style="color:var(--t1);font-weight:600">' + esc(e.label) + '</div>'
+      + '<div style="font-size:7px;color:var(--t3)">' + esc(e.path) + (e.region ? ' · ' + esc(e.region) : '') + '</div>'
+      + '</div>'
+      + (added
+        ? '<span style="font-size:7px;color:var(--gn);white-space:nowrap">✓ Added</span>'
+        : '<button tabindex="0" onclick="window.addIntlLeague(\'' + e.path.replace(/'/g, "\\'") + '\')" style="font-size:8px;padding:3px 8px;border-radius:4px;background:var(--ac);color:#fff;border:none;cursor:pointer;white-space:nowrap">+ Add</button>')
+      + '</div>';
+  }).join('');
+  results.style.display = 'block';
+};
+
+window.addIntlLeague = function(path) {
+  var groupSel = $('intl-league-group');
+  var groupIdx = groupSel ? parseInt(groupSel.value) : NaN;
+  if (isNaN(groupIdx) || !settings.sportLeagues[groupIdx]) {
+    toast('Select a sport group first');
+    return;
+  }
+  var lg = settings.sportLeagues[groupIdx];
+  if (!lg.espnPaths) lg.espnPaths = [];
+  if (lg.espnPaths.includes(path)) {
+    toast('Already added to ' + lg.groupName);
+    return;
+  }
+  lg.espnPaths.push(path);
+  saveSettings();
+
+  // Find the label for the toast
+  var entry = INTL_LEAGUE_DIR.find(function(e) { return e.path === path; })
+           || ESPN_LEAGUE_MAP.find(function(e) { return e.path === path; });
+  var label = entry ? entry.label : path;
+  toast('Added ' + label + ' → ' + lg.groupName);
+
+  // Refresh UI
+  renderSportLeagueSettings();
+  window.renderIntlLeagueResults();
+
+  // Auto-fetch schedule for the new path
+  var idx = settings.sportLeagues.indexOf(lg);
+  if (idx >= 0) {
+    lg.cacheDate = ''; // force re-fetch with new path
+    fetchLeagueSchedule(idx).then(function() {
+      _invalidateSportGameIndex();
+      renderSportTab();
+    });
+  }
 };
 
 // ── Excluded Leagues accordion ──
