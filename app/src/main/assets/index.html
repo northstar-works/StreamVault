@@ -6341,9 +6341,10 @@ function renderSportTab() {
   var _combatGameKeys = [];
   allGames.forEach(function(g) {
     if (g._path && _combatPathSet.has(g._path)) {
-      _combatGameKeys.push({ gKey: (g.shortName || '') + '|' + g.startTime });
+      _combatGameKeys.push({ gKey: (g.shortName || '') + '|' + g.startTime, startTime: g.startTime });
     }
   });
+  _combatGameKeys.sort(function(a, b) { return a.startTime - b.startTime; });
   allChs.forEach(function(m) {
     var title = (m.title || '').toLowerCase();
     var matchedGames = _findGamesViaIndex(title);
@@ -6392,7 +6393,21 @@ function renderSportTab() {
       var _isPpv = /\bppv\b|pay.per.view|ufc|boxing|combat|fight/i.test(_mNamePpv)
         || _mPathsPpv.some(function(p) { return _combatPathSet.has(p); });
       if (_isPpv) {
-        _combatGameKeys.forEach(function(cg) {
+        // Smart PPV matching: link channels to specific time slots by title keyword
+        // "early prelim" → earliest card, "prelim" → middle, "main card"/generic → latest
+        var _ppvTitle = (m.title || '').toLowerCase();
+        var _matchedCombatKeys = _combatGameKeys;
+        if (_combatGameKeys.length > 1) {
+          if (/early\s*prelim/i.test(_ppvTitle)) {
+            _matchedCombatKeys = [_combatGameKeys[0]]; // earliest
+          } else if (/prelim/i.test(_ppvTitle) && !/early/i.test(_ppvTitle) && !/main/i.test(_ppvTitle)) {
+            _matchedCombatKeys = _combatGameKeys.length >= 3 ? [_combatGameKeys[1]] : [_combatGameKeys[0]]; // middle or first
+          } else if (/main\s*card/i.test(_ppvTitle)) {
+            _matchedCombatKeys = [_combatGameKeys[_combatGameKeys.length - 1]]; // latest
+          }
+          // else: generic PPV channel → link to all cards
+        }
+        _matchedCombatKeys.forEach(function(cg) {
           if (!_chsByGameKey.has(cg.gKey)) _chsByGameKey.set(cg.gKey, { primary: [], alt: [] });
           _chsByGameKey.get(cg.gKey).primary.push(m);
         });
@@ -6700,9 +6715,10 @@ function _renderAllGamesTab(lst) {
   var _agCombatKeys = [];
   games.forEach(function(g) {
     if (g._path && _agCombatPaths.has(g._path)) {
-      _agCombatKeys.push({ gKey: (g.shortName || '') + '|' + g.startTime });
+      _agCombatKeys.push({ gKey: (g.shortName || '') + '|' + g.startTime, startTime: g.startTime });
     }
   });
+  _agCombatKeys.sort(function(a, b) { return a.startTime - b.startTime; });
   _allChsAG.forEach(function(m) {
     var title = (m.title || '').toLowerCase();
     var matchedGames = _findGamesViaIndex(title);
@@ -6726,7 +6742,18 @@ function _renderAllGamesTab(lst) {
       var _agIsPpv = /\bppv\b|pay.per.view|ufc|boxing|combat|fight/i.test(_agNamePpv)
         || _agGroupPaths.some(function(p) { return _agCombatPaths.has(p); });
       if (_agIsPpv) {
-        _agCombatKeys.forEach(function(cg) {
+        var _ppvTitle = (m.title || '').toLowerCase();
+        var _matchedKeys = _agCombatKeys;
+        if (_agCombatKeys.length > 1) {
+          if (/early\s*prelim/i.test(_ppvTitle)) {
+            _matchedKeys = [_agCombatKeys[0]];
+          } else if (/prelim/i.test(_ppvTitle) && !/early/i.test(_ppvTitle) && !/main/i.test(_ppvTitle)) {
+            _matchedKeys = _agCombatKeys.length >= 3 ? [_agCombatKeys[1]] : [_agCombatKeys[0]];
+          } else if (/main\s*card/i.test(_ppvTitle)) {
+            _matchedKeys = [_agCombatKeys[_agCombatKeys.length - 1]];
+          }
+        }
+        _matchedKeys.forEach(function(cg) {
           if (!_chsByGameKeyAG.has(cg.gKey)) _chsByGameKeyAG.set(cg.gKey, []);
           _chsByGameKeyAG.get(cg.gKey).push(m);
         });
