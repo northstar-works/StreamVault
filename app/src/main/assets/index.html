@@ -7021,21 +7021,6 @@ function renderSportLeagueSettings() {
           <button class="bc" onclick="refreshSportLeague(${i})" style="padding:5px 8px;font-size:9px;border-radius:var(--rs)" title="Fetch schedule">↻</button>
         </div>
       </div>
-      <div style="margin-top:6px;padding:5px 8px;background:rgba(108,92,231,.08);border-radius:var(--rs);border:1px solid rgba(108,92,231,.2)">
-        <div style="font-size:8px;color:var(--ac);font-weight:600;margin-bottom:3px">✨ Teams from global My Teams</div>
-        ${(function(){
-          const _lgPaths = lg.espnPaths || [];
-          const _matched = (settings.myTeams||[]).filter(t => _lgPaths.length > 0 ? (t.espnPath && _lgPaths.includes(t.espnPath)) : true);
-          if (!_matched.length) return '<div style="font-size:8px;color:var(--t3)">No teams match this league — add them in My Teams above.</div>';
-          return _matched.map(t => {
-            const gi = (settings.myTeams||[]).indexOf(t);
-            return '<div style="display:flex;align-items:center;gap:4px;padding:2px 0">'
-              + '<span style="font-size:8px;color:var(--t2);flex:1">' + esc(t.name||'')
-              + (t.leagueLabel ? ' <span style="font-size:7px;color:var(--t3)">(' + esc(t.leagueLabel) + ')</span>' : '')
-              + '</span><button onclick="window.rmMyTeam(' + gi + ')" style="font-size:8px;color:var(--rd);background:none;border:none;cursor:pointer;padding:0 2px" title="Remove">✕</button></div>';
-          }).join('');
-        })()}
-      </div>
     </div>`;
   }).join('');
 
