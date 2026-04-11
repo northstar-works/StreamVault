@@ -367,6 +367,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
     <button class="ib" id="btn-lib-edit" title="Toggle edit controls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
     <button class="ib" id="btn-add-top" title="Add stream"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
     <button class="ib" id="btn-exp" title="Export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
+    <button class="ib" id="btn-home-refresh" title="Refresh repos &amp; EPG"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg></button>
   </div></div>
   <div class="libbar">
     <div class="libmodes" id="lib-modes"></div>
@@ -459,6 +460,10 @@ document.addEventListener('keydown', function(e) {
     <div class="sr" style="margin-bottom:12px">
       <div><div class="sl">Show past games</div><div class="sd">Include completed games in the Sports tab</div></div>
       <div class="tgl" id="s-sport-past" onclick="window.toggleSportPast && window.toggleSportPast()"></div>
+    </div>
+    <div class="sr" style="margin-bottom:12px">
+      <div><div class="sl">Default to My Teams Only</div><div class="sd">When opening the Sports tab, start in My Teams Only → Live Today view</div></div>
+      <div class="tgl" id="s-sport-default-myteams" onclick="window.toggleSportDefaultMyTeams && window.toggleSportDefaultMyTeams()"></div>
     </div>
 
     <hr style="border:none;border-top:1px solid var(--bd);margin:8px 0 12px">
@@ -1014,7 +1019,7 @@ let epgData = { channels: {}, programs: {} };
 let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [], tabOrder: ['itv','plex','icam','local','network'], tvMode: 'auto', plex: { server: '', token: '', section: '', sections: [] }, timeshiftEnabled: true, timeshiftMaxMin: 30, dvrCfg: { remoteEnabled: false, proto: 'ftp', host: '', port: '21', user: '', pass: '', path: '/recordings' }, sportLeagueFilterEnabled: true, sportLeagues: [], sportShowPastGames: true, myTeams: [],
   localEnable: true, localPath: '',
   icamCfg: {},
-  networkCfg: {}, excludedLeagues: [], allGamesExtraEnabled: false };
+  networkCfg: {}, excludedLeagues: [], allGamesExtraEnabled: false, sportDefaultMyTeams: true };
 let plexAddMode = false;
 let _plexView = ''; // '' | 'search' | 'library' — tracks which plex result view is showing
 
@@ -1714,13 +1719,13 @@ async function fetchEpgSource(src) {
       text = await resp.text();
     }
     const parsed = await parseXMLTV(text);
-    // Filter to only channels matching items in the library — prevents 50MB+ heap freeze on Fire TV
+    // Keep ALL channel names in epgData.channels (lightweight — just {name, icon}).
+    // Only filter PROGRAMS to matched library items — that's the heavy data (50MB+).
     const epgIds = new Set(items.map(m => m.epgTitle).filter(Boolean));
-    const filteredChannels = {}, filteredPrograms = {};
+    const filteredPrograms = {};
     Object.keys(parsed.channels).forEach(id => {
-      if (!epgIds.size || epgIds.has(id)) {
-        filteredChannels[id] = parsed.channels[id];
-        if (parsed.programs[id]) filteredPrograms[id] = parsed.programs[id];
+      if (epgIds.has(id) && parsed.programs[id]) {
+        filteredPrograms[id] = parsed.programs[id];
       }
     });
     // Cap programs per channel to prevent OOM on Fire TV with large EPG feeds
@@ -1728,12 +1733,13 @@ async function fetchEpgSource(src) {
       filteredPrograms[k].sort(function(a,b){return a.start-b.start;});
       filteredPrograms[k] = filteredPrograms[k].slice(-96); // keep last 96 slots (~48h)
     });
-    Object.assign(epgData.channels, filteredChannels);
+    // All channels go into epgData.channels (for EPG UID picker search)
+    Object.assign(epgData.channels, parsed.channels);
     Object.keys(filteredPrograms).forEach(k => { epgData.programs[k] = filteredPrograms[k]; });
     src.lastFetch = Date.now();
     src.chCount = Object.keys(parsed.channels).length;
     saveEpg();
-    toast('EPG updated: ' + src.chCount + ' channels, ' + Object.keys(filteredChannels).length + ' matched');
+    toast('EPG updated: ' + src.chCount + ' channels, ' + Object.keys(filteredPrograms).length + ' with guide data');
     // Defer heavy DOM rebuild so the toast can render first
     setTimeout(function() { renderLib(); renderGuide(); }, 80);
   } catch(e) {
@@ -1828,9 +1834,16 @@ function showTab(id) {
     setTimeout(function() { if (typeof renderLibExtra === 'function') renderLibExtra(); }, 0);
   }
   if (id === 'sport-scr') {
+    // Default: open to My Teams Only > Live Today (overridable in settings)
+    if (settings.sportDefaultMyTeams) {
+      settings.sportLeagueFilterEnabled = true;
+      sportSectionTab = 'live';
+    }
     renderSportTab();
     _startSportScoreRefresh(); // begin live score polling
     _startSportClock();
+    // Auto-refresh sport schedules when opening Sports tab (non-blocking, no dpad lock)
+    fetchAllLeagueSchedules(false);
     // D-pad: focus the first section tab so TV remote can navigate immediately
     setTimeout(() => {
       const firstTab = document.querySelector('#sport-section-tabs [tabindex]');
@@ -2807,6 +2820,23 @@ $('imp-ok').onclick = () => {
 $('btn-exp').onclick = () => {
   if (!items.length) { toast('Nothing to export'); return; }
   const choice = confirm('OK = Export as JSON\nCancel = Export as M3U');
+
+$('btn-home-refresh').onclick = async () => {
+  toast('Refreshing repos & EPG…');
+  _navLocked = true;
+  const urlRepos = repos.filter(r => r.sourceUrl);
+  let refreshed = 0;
+  for (const repo of urlRepos) {
+    try { await window.refreshRepo(repo.id); refreshed++; } catch(e) {}
+  }
+  if (refreshed) { _invalidateSportGameIndex(); renderCats(); renderLib(); }
+  if (epgSrc.length) {
+    try { await fetchAllEpg(); } catch(e) {}
+  }
+  _navLocked = false;
+  toast('Refreshed ' + refreshed + ' repo' + (refreshed !== 1 ? 's' : '') + (epgSrc.length ? ' + EPG' : ''));
+  if (isTvDevice) setTimeout(refreshTvFocus, 80);
+};
   if (choice) {
     const json = JSON.stringify(items.map(m => ({
       name: m.title, url: m.url, category: m.category || undefined,
@@ -3419,7 +3449,16 @@ $('epg-add').onclick = async () => {
   await fetchEpgSource(src);
 };
 
-$('btn-eref').onclick = () => fetchAllEpg();
+$('btn-eref').onclick = async () => {
+  _navLocked = true;
+  try {
+    await fetchAllEpg();
+  } catch(e) {
+    toast('EPG error: ' + e.message);
+  }
+  _navLocked = false;
+  if (isTvDevice) setTimeout(refreshTvFocus, 80);
+};
 $('btn-gsync').onclick = () => refreshGuideOnly('Guide refreshed from current library and cached EPG');
 
 function renderEpgList() {
@@ -5868,7 +5907,7 @@ function renderSportTab() {
         ${filterOn ? '● My Teams Only' : '○ All Sport Channels'}
       </span>
       <span style="font-size:8px;color:var(--t3)">${allGames.length} games today</span>
-      <span id="sport-clock" style="font-size:8px;color:var(--t3);margin-left:auto;font-variant-numeric:tabular-nums"></span>`;
+      <span id="sport-clock" style="font-size:10px;color:var(--t2);margin-left:auto;font-variant-numeric:tabular-nums"></span>`;
   }
 
   // ── Section tabs ──
@@ -5986,7 +6025,7 @@ function renderSportTab() {
 
   if (secTabs) {
     secTabs.innerHTML = tabs.map(t =>
-      `<span tabindex="0" role="button" data-tv-zone="sport-section-tabs" data-sid="${t.id}" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;${t.id === sportSectionTab ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportSectionTab('${t.id.replace(/'/g,"\\'")}')">
+      `<span tabindex="0" role="button" data-tv-zone="sport-section-tabs" data-sid="${t.id}" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;text-align:center;${t.id === sportSectionTab ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.setSportSectionTab('${t.id.replace(/'/g,"\\'")}')">
         ${esc(t.label)}${t.badge ? ' <span style="font-size:8px;opacity:.85">('+t.badge+')</span>' : ''}
       </span>`
     ).join('');
@@ -6017,7 +6056,7 @@ function renderSportTab() {
           var label = path === '' ? '⚽ All' : _leagueIconLabel(path);
           var active = path === sportSubLeague;
           var escaped = path.replace(/'/g, "\\'");
-          return '<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" data-team="' + path + '" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;' + (active ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)') + "\" onclick=\"window.setSportSubLeague('" + escaped + "')\">" + esc(label) + '</span>';
+          return '<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" data-team="' + path + '" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;text-align:center;' + (active ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)') + "\" onclick=\"window.setSportSubLeague('" + escaped + "')\">" + esc(label) + '</span>';
         }).join('');
       } else {
         teamTabs.innerHTML = '';
@@ -6044,7 +6083,7 @@ function renderSportTab() {
           var label = path === '' ? '⚽ All' : _leagueIconLabel(path);
           var active = path === sportSubLeague;
           var escaped = path.replace(/'/g, "\\'");
-          return '<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" data-team="' + path + '" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;' + (active ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)') + "\" onclick=\"window.setSportSubLeague('" + escaped + "')\">" + esc(label) + '</span>';
+          return '<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" data-team="' + path + '" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;text-align:center;' + (active ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)') + "\" onclick=\"window.setSportSubLeague('" + escaped + "')\">" + esc(label) + '</span>';
         }).join('');
       } else {
         teamTabs.innerHTML = '';
@@ -6088,7 +6127,7 @@ function renderSportTab() {
           var label = path === '' ? '⚽ All' : _leagueIconLabel(path);
           var active = path === sportSubLeague;
           var escaped = path.replace(/'/g, "\\'");
-          return '<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" data-team="' + path + '" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;' + (active ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)') + "\" onclick=\"window.setSportSubLeague('" + escaped + "')\">" + esc(label) + '</span>';
+          return '<span tabindex="0" role="button" data-tv-zone="sport-team-tabs" data-team="' + path + '" style="font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;flex-shrink:0;text-align:center;' + (active ? 'background:var(--ac);color:#fff;font-weight:700' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)') + "\" onclick=\"window.setSportSubLeague('" + escaped + "')\">" + esc(label) + '</span>';
         }).join('');
       } else {
         teamTabs.innerHTML = '';
@@ -6349,15 +6388,16 @@ function renderSportTab() {
     const hasChannel = allFailover.length > 0;
     const cardClick = hasChannel ? `onclick="window._svPlaySport(${cardSi})"` : '';
     const _isMyTeamCard = (_allMyTeamsForStar || []).length > 0 && _allMyTeamsForStar.some(function(t) { return _teamMatchesGame(t, g); });
-    const _starFlag = _isMyTeamCard ? '⭐ ' : '';
+    const _showStar = _isMyTeamCard && !filterOn;
+    const _starSuffix = _showStar ? ' ⭐' : '';
     const _lgIcon = _leagueIcon(g._path);
     return `<div tabindex="0" role="listitem" data-tv-zone="sport-game-card" class="sport-gc"
-      style="border:1px solid ${_isMyTeamCard ? 'var(--ac)' : 'var(--bd)'};border-radius:var(--rs);margin:4px 12px;padding:10px;outline:none;cursor:${hasChannel?'pointer':'default'}${_isMyTeamCard ? ';background:rgba(108,92,231,.06)' : ''}"
+      style="border:1px solid ${_showStar ? 'var(--ac)' : 'var(--bd)'};border-radius:var(--rs);margin:4px 12px;padding:10px;outline:none;cursor:${hasChannel?'pointer':'default'}${_showStar ? ';background:rgba(108,92,231,.06)' : ''}"
       ${cardClick}>
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div style="flex:1;min-width:0">
-          <div style="font-size:10px;font-weight:700;color:var(--t1)">${_starFlag}${esc(name)}</div>
-          ${!isLiveTab && lgName ? '' : `<div style="font-size:8px;color:var(--t3)">${_lgIcon}${esc(leagueLabel)}</div>`}
+          <div style="font-size:10px;font-weight:700;color:var(--t1)">${esc(name)}${_starSuffix}</div>
+          ${isLiveTab ? `<div style="font-size:8px;color:var(--t2)">${_lgIcon}${esc(leagueLabel)}</div>` : (lgName ? '' : `<div style="font-size:8px;color:var(--t2)">${_lgIcon}${esc(leagueLabel)}</div>`)}
           ${hasChannel
             ? `<div style="font-size:8px;color:var(--ac);margin-top:3px">▶ ${esc((allFailover[0].title||'').slice(0,40)||'Watch')}</div>`
             : '<div style="font-size:8px;color:var(--t3);margin-top:3px">No channels in your groups</div>'}
@@ -6576,7 +6616,9 @@ function _renderAllGamesTab(lst) {
     const t1 = g.teamObjects[0] || {}, t2 = g.teamObjects[1] || {};
     const name = g.shortName || g.name || (t1.name && t2.name ? t1.name + ' vs ' + t2.name : 'Game');
     const isMyTeam = _agMyTeams.length > 0 && _agMyTeams.some(function(t) { return _teamMatchesGame(t, g); });
-    const starFlag = isMyTeam ? '⭐ ' : '';
+    const _agFilterOn = settings.sportLeagueFilterEnabled;
+    const _showStar = isMyTeam && !_agFilterOn;
+    const _starSuffix = _showStar ? ' ⭐' : '';
     const d = new Date(g.startTime), h = d.getHours() % 12 || 12, mi = d.getMinutes();
     const timeStr = g.state === 'in' ? '🔴 LIVE' : g.state === 'post' ? '✓ Final' : h + (mi ? ':' + String(mi).padStart(2,'0') : '') + (d.getHours()>=12?'PM':'AM');
     const scoreStr = (g.state === 'in' || g.state === 'post') && t1.score && t2.score ? t1.score + ' – ' + t2.score : '';
@@ -6592,12 +6634,12 @@ function _renderAllGamesTab(lst) {
     const leagueIcon = _leagueIcon(g._path);
     const leagueLabel = leagueIcon + ((ESPN_SPORT_OPTIONS.find(o => o.path === g._path) || {}).label || _normalizeSportGroupLabel(g._lgName));
     return `<div tabindex="0" role="listitem" data-tv-zone="sport-game-card" class="sport-gc"
-      style="border:1px solid ${isMyTeam ? 'var(--ac)' : 'var(--bd)'};border-radius:var(--rs);margin:4px 12px;padding:10px;outline:none;cursor:${hasChannel2?'pointer':'default'}${isMyTeam ? ';background:rgba(108,92,231,.06)' : ''}"
+      style="border:1px solid ${_showStar ? 'var(--ac)' : 'var(--bd)'};border-radius:var(--rs);margin:4px 12px;padding:10px;outline:none;cursor:${hasChannel2?'pointer':'default'}${_showStar ? ';background:rgba(108,92,231,.06)' : ''}"
       ${cardClick2}>
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div style="flex:1;min-width:0">
-          <div style="font-size:10px;font-weight:700;color:var(--t1)">${starFlag}${esc(name)}</div>
-          <div style="font-size:8px;color:var(--t3)">${esc(leagueLabel)}</div>
+          <div style="font-size:10px;font-weight:700;color:var(--t1)">${esc(name)}${_starSuffix}</div>
+          <div style="font-size:8px;color:var(--t2)">${esc(leagueLabel)}</div>
           ${hasChannel2
             ? `<div style="font-size:8px;color:var(--ac);margin-top:3px">▶ ${esc((allEntries[0].title||'').replace(/\s*\(home\)|\s*\(away\)/i,'').trim().slice(0,40)||'Watch')}</div>`
             : '<div style="font-size:8px;color:var(--t3);margin-top:3px">No channels in your groups</div>'}
@@ -6808,6 +6850,8 @@ function renderSportLeagueSettings() {
   if (pastTgl) pastTgl.className = 'tgl' + (settings.sportShowPastGames !== false ? ' on' : '');
   const extraTgl = $('s-allgames-extra');
   if (extraTgl) extraTgl.className = 'tgl' + (settings.allGamesExtraEnabled ? ' on' : '');
+  const defMyTgl = $('s-sport-default-myteams');
+  if (defMyTgl) defMyTgl.className = 'tgl' + (settings.sportDefaultMyTeams !== false ? ' on' : '');
   // Restore accordion open/close state after re-render
   const accBody = $('sport-acc-body');
   const accChevron = $('sport-acc-chevron');
@@ -7144,6 +7188,13 @@ window.toggleSportPast = () => {
   saveSettings();
   if ($('lib-scr') && $('lib-scr').classList.contains('on')) { renderCats(); renderLib(); }
   renderSportTab();
+};
+
+window.toggleSportDefaultMyTeams = () => {
+  settings.sportDefaultMyTeams = !settings.sportDefaultMyTeams;
+  const tgl = $('s-sport-default-myteams');
+  if (tgl) tgl.className = 'tgl' + (settings.sportDefaultMyTeams ? ' on' : '');
+  saveSettings();
 };
 
 window.toggleAllGamesExtra = () => {
