@@ -1719,8 +1719,8 @@ async function importLocalEpgFile(file, nameOverride) {
   fillEpgSourceSelect(getDefaultEpgSourceUrl());
   refreshGuideOnly('Imported XMLTV: ' + src.chCount + ' channels');
 }
-async function fetchEpgSource(src) {
-  toast('Fetching EPG: ' + (src.name || 'EPG') + '…');
+async function fetchEpgSource(src, silent) {
+  if (!silent) toast('Fetching EPG: ' + (src.name || 'EPG') + '…');
   try {
     const resp = await fetch(src.url);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -1761,13 +1761,13 @@ async function fetchEpgSource(src) {
   }
 }
 
-async function fetchAllEpg() {
+async function fetchAllEpg(silent) {
   for (let i = 0; i < epgSrc.length; i++) {
     const s = epgSrc[i];
     if (window._setSplashStatus && document.getElementById('sv-splash') && document.getElementById('sv-splash').style.display !== 'none') {
       window._setSplashStatus('Guide ' + (i + 1) + '/' + epgSrc.length + ': ' + (s.name || 'EPG') + '…');
     }
-    await fetchEpgSource(s);
+    await fetchEpgSource(s, silent);
   }
 }
 
@@ -6163,11 +6163,19 @@ function renderSportTab() {
   if (teamTabs) {
     if (sportSectionTab === 'allgames' && filterOn) {
       // Sub-league pills on All Games when My Teams Only is on
+      // Only show pills for leagues where a pinned team has a game
+      var _subPillMyTeams = settings.myTeams || [];
       var _subPillPriority = ['baseball/mlb','football/nfl','hockey/nhl','football/college-football','soccer/usa.1','basketball/nba','mma/ufc','boxing/boxing','basketball/wnba','soccer/eng.1'];
       var _subPillPaths = [];
       allGames.forEach(function(g) {
         if (g._path && _subPillPaths.indexOf(g._path) < 0) {
-          if (showPast || g.state !== 'post') _subPillPaths.push(g._path);
+          if (showPast || g.state !== 'post') {
+            // When My Teams is on, only add path if a pinned team plays in this game
+            if (_subPillMyTeams.length > 0) {
+              if (!_subPillMyTeams.some(function(t) { return _teamMatchesGame(t, g); })) return;
+            }
+            _subPillPaths.push(g._path);
+          }
         }
       });
       _subPillPaths.sort(function(a, b) {
@@ -6176,6 +6184,8 @@ function renderSportTab() {
         return ai - bi;
       });
       if (_subPillPaths.length >= 2) {
+        // Reset if active sub-league pill was filtered out (e.g. no My Team game in that league)
+        if (sportSubLeague && _subPillPaths.indexOf(sportSubLeague) < 0) sportSubLeague = '';
         var subPills = ['', ..._subPillPaths];
         teamTabs.innerHTML = subPills.map(function(path) {
           var label = path === '' ? '⚽ All' : _leagueIconLabel(path);
@@ -6696,6 +6706,14 @@ function _renderAllGamesTab(lst) {
     _fetchExtraLeagues().then(function() { renderSportTab(); });
   }
   var games = _getAllTodayGames(_includeExtras).filter(function(g) { return showPast || g.state !== 'post'; });
+  // My Teams Only filter — hide games not involving a pinned team
+  var _agFilterOn = settings.sportLeagueFilterEnabled;
+  var _agMyTeamsFilter = settings.myTeams || [];
+  if (_agFilterOn && _agMyTeamsFilter.length > 0) {
+    games = games.filter(function(g) {
+      return _agMyTeamsFilter.some(function(t) { return _teamMatchesGame(t, g); });
+    });
+  }
   if (sportSubLeague) {
     games = games.filter(function(g) { return g._path === sportSubLeague; });
   }
@@ -8031,16 +8049,16 @@ setTimeout(async () => {
     }
   }
   // ── Mobile vs TV splash behavior ──
-  // Both: hide splash after repos. Nav stays locked during EPG to prevent D-pad crash.
-  // EPG fires fire-and-forget — parseXMLTV blocks the thread but queued key events
-  // are silently dropped by _navLocked check in __svHandleTvKey (line 4406).
+  // Both: hide splash after repos. Nav unlocks immediately so D-pad is responsive.
+  // EPG fires in background — parseXMLTV yields every 100 programmes so input
+  // events are processed between chunks. DOMParser may briefly freeze but that's
+  // acceptable vs. locking nav for the entire EPG duration (10+ seconds on large feeds).
   window._hideSplash && window._hideSplash('Ready');
+  _navLocked = false;
   if (isTvDevice) setTimeout(refreshTvFocus, 80);
 
   if (epgSrc.length) {
-    // Nav stays locked through EPG parse — prevents burst-fire crash on thread unblock
-    fetchAllEpg().then(function() {
-      _navLocked = false;
+    fetchAllEpg(true).then(function() {
       if (isTvDevice) {
         setTimeout(refreshTvFocus, 80);
         // ESPN schedules fire AFTER EPG is done — no concurrent heavy work
@@ -8048,11 +8066,9 @@ setTimeout(async () => {
       }
     }).catch(function(e) {
       console.warn('[SV] startup EPG:', e.message);
-      _navLocked = false;
       if (isTvDevice) setTimeout(refreshTvFocus, 80);
     });
   } else {
-    _navLocked = false;
     if (isTvDevice) setTimeout(function() { fetchAllLeagueSchedules(false); }, 300);
   }
 }, 800);
