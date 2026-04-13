@@ -6072,6 +6072,9 @@ function renderSportTab() {
       var _guessedPaths = guessEspnPaths(lg.groupName);
       if (_guessedPaths.length > 0) {
         if (!allGames.some(function(g) { return _guessedPaths.indexOf(g._path) >= 0; })) return;
+      } else {
+        // No ESPN paths and can't guess → no way to show game cards, skip tab
+        return;
       }
     }
     if (hasPaths) {
@@ -6098,8 +6101,8 @@ function renderSportTab() {
           var _coveredPaths = new Set();
           (settings.sportLeagues || []).forEach(function(other) {
             if (other.groupName === lg.groupName) return;
-            var otherPaths = other.espnPaths || [];
-            if (otherPaths.length === 1) _coveredPaths.add(otherPaths[0]);
+            // Any path in ANY other league tab is considered "covered"
+            (other.espnPaths || []).forEach(function(p) { _coveredPaths.add(p); });
           });
           // Check if any uncovered path actually has games today
           var _hasUniquePathWithGames = lg.espnPaths.some(function(p) {
@@ -6141,11 +6144,45 @@ function renderSportTab() {
 
     tabs.push({ id: lg.groupName, label: _normalizeSportGroupLabel(lg.groupName), badge: null });
   });
-  tabs.push({ id: 'allgames', label: '📅 All Games', badge: null });
+
+  // All Games tab:
+  // My Teams Only mode → always show (it reveals all league games, not just My Teams)
+  // All Sport Channels mode → show only if there are extra/discovery games from unconfigured leagues
+  if (filterOn) {
+    tabs.push({ id: 'allgames', label: '📅 All Games', badge: null });
+  } else {
+    // Check for extra league games not in any configured sportLeague
+    var _configuredPaths = new Set();
+    (settings.sportLeagues || []).forEach(function(l) {
+      (l.espnPaths || []).forEach(function(p) { _configuredPaths.add(p); });
+    });
+    var _hasExtras = false;
+    if (_extraLeagueCache) {
+      Object.keys(_extraLeagueCache).forEach(function(path) {
+        if (_configuredPaths.has(path)) return;
+        if ((settings.excludedLeagues || []).indexOf(path) >= 0) return;
+        var cached = _extraLeagueCache[path];
+        if (!cached || !Array.isArray(cached.games) || !cached.games.length) return;
+        var hasTodayGame = cached.games.some(function(gm) {
+          return gm.startTime >= _tWinStart && gm.startTime <= _tWinEnd && (showPast || gm.state !== 'post');
+        });
+        if (hasTodayGame) _hasExtras = true;
+      });
+    }
+    // If extras exist OR cache not yet populated (will re-render after fetch), show tab
+    var _cachePopulated = _extraLeagueCache && Object.keys(_extraLeagueCache).length > 0;
+    if (_hasExtras) {
+      tabs.push({ id: 'allgames', label: '📅 All Games', badge: null });
+    } else if (!_cachePopulated) {
+      // Trigger lazy fetch — re-render will decide visibility once data arrives
+      _fetchExtraLeagues(true).then(function() { renderSportTab(); });
+    }
+    // If cache is populated but no extras → don't add the tab (redundant with Today)
+  }
 
   // Ensure active tab is valid
   if (!tabs.find(t => t.id === sportSectionTab)) {
-    sportSectionTab = tabs[0] ? tabs[0].id : 'allgames';
+    sportSectionTab = tabs[0] ? tabs[0].id : 'live';
   }
 
   if (secTabs) {
@@ -6163,19 +6200,12 @@ function renderSportTab() {
   if (teamTabs) {
     if (sportSectionTab === 'allgames' && filterOn) {
       // Sub-league pills on All Games when My Teams Only is on
-      // Only show pills for leagues where a pinned team has a game
-      var _subPillMyTeams = settings.myTeams || [];
+      // Show all configured league paths (All Games shows all league games, not filtered by My Teams)
       var _subPillPriority = ['baseball/mlb','football/nfl','hockey/nhl','football/college-football','soccer/usa.1','basketball/nba','mma/ufc','boxing/boxing','basketball/wnba','soccer/eng.1'];
       var _subPillPaths = [];
       allGames.forEach(function(g) {
         if (g._path && _subPillPaths.indexOf(g._path) < 0) {
-          if (showPast || g.state !== 'post') {
-            // When My Teams is on, only add path if a pinned team plays in this game
-            if (_subPillMyTeams.length > 0) {
-              if (!_subPillMyTeams.some(function(t) { return _teamMatchesGame(t, g); })) return;
-            }
-            _subPillPaths.push(g._path);
-          }
+          if (showPast || g.state !== 'post') _subPillPaths.push(g._path);
         }
       });
       _subPillPaths.sort(function(a, b) {
@@ -6198,8 +6228,8 @@ function renderSportTab() {
         sportSubLeague = '';
       }
     } else if (sportSectionTab === 'allgames' && !filterOn) {
-      // All Sport Channels + All Games: show sub-pills from expanded game set (includes extra leagues)
-      var _expandedGames = _getAllTodayGames(settings.allGamesExtraEnabled);
+      // All Sport Channels + All Games: always include extra leagues (tab only shows when extras exist)
+      var _expandedGames = _getAllTodayGames(true);
       var _subPillPriority2 = ['baseball/mlb','football/nfl','hockey/nhl','football/college-football','soccer/usa.1','basketball/nba','mma/ufc','boxing/boxing','basketball/wnba','soccer/eng.1'];
       var _subPillPaths2 = [];
       _expandedGames.forEach(function(g) {
@@ -6229,12 +6259,12 @@ function renderSportTab() {
     } else {
       const lgForPills = settings.sportLeagues && settings.sportLeagues.find(function(l) { return l.groupName === sportSectionTab; });
       const allPaths = lgForPills ? (lgForPills.espnPaths || []) : [];
-      // Also exclude paths exclusively owned by single-path leagues (same logic as tabGames above)
+      // Also exclude paths covered by any other league (prevents duplicate pills)
       var _pillExclusivePaths = new Set();
       if (lgForPills && allPaths.length > 1) {
         (settings.sportLeagues || []).forEach(function(other) {
           if (other.groupName === sportSectionTab) return;
-          if ((other.espnPaths || []).length === 1) _pillExclusivePaths.add(other.espnPaths[0]);
+          (other.espnPaths || []).forEach(function(p) { _pillExclusivePaths.add(p); });
         });
       }
       // Find paths that have games today matching My Teams (or any game if filter is off).
@@ -6587,17 +6617,15 @@ function renderSportTab() {
     return true;
   });
 
-  // Multi-path groups (US Sports, Paramount+, etc.) must NOT duplicate games that are
-  // exclusively owned by a single-path specific league tab (e.g. MLB owns baseball/mlb alone).
-  // Those games already appear correctly in the specific league tab, and their streams from
-  // ALL groups are already merged into the specific league card via _altMatchingChs /
-  // cross-league fallback. Showing them again here creates duplicate cards.
+  // Multi-path groups (US Sports, Paramount+, ESPN Plus, Honduras, etc.) must NOT
+  // duplicate games that are covered by other league tabs. A path is "covered" if
+  // any other league also has that path in its espnPaths. Only show games from paths
+  // unique to this group.
   if (lgConfig && lgEspnPaths.length > 1) {
     var _exclusivePaths = new Set();
     (settings.sportLeagues || []).forEach(function(other) {
       if (other.groupName === lgConfig.groupName) return;
-      var otherPaths = other.espnPaths || [];
-      if (otherPaths.length === 1) _exclusivePaths.add(otherPaths[0]);
+      (other.espnPaths || []).forEach(function(p) { _exclusivePaths.add(p); });
     });
     if (_exclusivePaths.size > 0) {
       tabGames = tabGames.filter(function(g) { return !_exclusivePaths.has(g._path); });
@@ -6699,21 +6727,14 @@ function _getAllTodayGames(includeExtras) {
 
 function _renderAllGamesTab(lst) {
   const showPast = settings.sportShowPastGames !== false;
-  // When filter is off (All Sport Channels) and extra leagues enabled, include extra games
-  var _includeExtras = settings.allGamesExtraEnabled && !settings.sportLeagueFilterEnabled;
-  // Lazy fetch: if extras are enabled but cache is empty, trigger fetch in background
+  // When filter is off (All Sport Channels), always include extra league games —
+  // the All Games tab only appears when extras exist, so always show them.
+  var _includeExtras = !settings.sportLeagueFilterEnabled;
+  // Lazy fetch: if cache is empty, trigger fetch in background
   if (_includeExtras && Object.keys(_extraLeagueCache).length === 0) {
-    _fetchExtraLeagues().then(function() { renderSportTab(); });
+    _fetchExtraLeagues(true).then(function() { renderSportTab(); });
   }
   var games = _getAllTodayGames(_includeExtras).filter(function(g) { return showPast || g.state !== 'post'; });
-  // My Teams Only filter — hide games not involving a pinned team
-  var _agFilterOn = settings.sportLeagueFilterEnabled;
-  var _agMyTeamsFilter = settings.myTeams || [];
-  if (_agFilterOn && _agMyTeamsFilter.length > 0) {
-    games = games.filter(function(g) {
-      return _agMyTeamsFilter.some(function(t) { return _teamMatchesGame(t, g); });
-    });
-  }
   if (sportSubLeague) {
     games = games.filter(function(g) { return g._path === sportSubLeague; });
   }
@@ -7391,8 +7412,8 @@ window.toggleExclLeague = function(path) {
 // ── Fetch extra leagues for All Games tab ──
 // Fetches ESPN data for leagues NOT in user's sportLeagues config (minus excluded).
 // Stores in _extraLeagueCache so All Games can show everything.
-async function _fetchExtraLeagues() {
-  if (!settings.allGamesExtraEnabled) return; // disabled — skip all fetches
+async function _fetchExtraLeagues(force) {
+  if (!force && !settings.allGamesExtraEnabled) return; // disabled — skip all fetches
   var configuredPaths = new Set();
   (settings.sportLeagues || []).forEach(function(lg) {
     (lg.espnPaths || []).forEach(function(p) { configuredPaths.add(p); });
