@@ -2695,9 +2695,9 @@ function populateEpgDropdown(selected, streamTitle) {
   }
 
   // Mouse/touch: open on focus
-  // On TV: always auto-open with pre-filtered results from stream title
+  // On TV: always auto-open with pre-filtered results from stream title (unless keyboard mode)
   searchInput.onfocus = isTvDevice
-    ? () => { setTimeout(() => openEpgList(), 100); }
+    ? () => { if (searchInput._skipAutoOpen) return; setTimeout(() => openEpgList(), 100); }
     : () => openEpgList();
 
   // TV: open list on navigation keys; for printable chars let the value
@@ -2738,7 +2738,7 @@ function populateEpgDropdown(selected, streamTitle) {
 
 window.selectEpg = (el) => {
   const id = el.dataset.id || '';
-  // Keyboard search option: close list, focus input to trigger Fire TV soft keyboard
+  // Keyboard search option: close list, focus input for typing
   if (id === '__keyboard__') {
     $('in-epg-list').style.display = 'none';
     _epgDropdownOpen = false;
@@ -2746,13 +2746,12 @@ window.selectEpg = (el) => {
     _epgInput.value = '';
     _epgInput.style.color = '';
     $('in-epg-val').value = '';
+    // Set flag to prevent onfocus from immediately reopening the list
+    _epgInput._skipAutoOpen = true;
     setTimeout(function() {
       _epgInput.focus();
-      // On Fire TV, focusing an empty input should trigger the soft keyboard
-      // If NativePlayer has a method, use it; otherwise the focus itself triggers IME
-      if (window.NativePlayer && typeof window.NativePlayer.showKeyboard === 'function') {
-        window.NativePlayer.showKeyboard();
-      }
+      // Clear the skip flag after a delay so future focus events work normally
+      setTimeout(function() { _epgInput._skipAutoOpen = false; }, 500);
     }, 100);
     return;
   }
@@ -4336,12 +4335,39 @@ function moveTvFocusSpatial(dirCode) {
   }
   // ── Sport section/team tabs → DPad down to first game card ─────────────
   if (currentZone === 'sport-section-tabs' || currentZone === 'sport-team-tabs') {
-    if (dirCode === 20) { // DOWN → first game card
+    if (dirCode === 20) { // DOWN
+      var secPillsD = Array.from(document.querySelectorAll('#sport-section-tabs [tabindex]'));
+      var teamPillsD = Array.from(document.querySelectorAll('#sport-team-tabs [tabindex]'));
+      var inSecD = secPillsD.includes(current);
+      // From section tabs: go to team tabs if they exist, otherwise game card
+      if (inSecD && teamPillsD.length > 0) {
+        var tp0 = teamPillsD[0];
+        tp0.scrollIntoView({block:'nearest', inline:'nearest'});
+        var tpi0 = els.indexOf(tp0); if (tpi0 >= 0) return focusElementAtIndex(tpi0);
+        tp0.focus(); return true;
+      }
+      // From team tabs or no team tabs: go to first game card
       const firstCard = document.querySelector('.sport-gc');
       if (firstCard) {
         firstCard.scrollIntoView({block:'nearest'});
         const i = els.indexOf(firstCard); if (i >= 0) return focusElementAtIndex(i);
       }
+    }
+    if (dirCode === 19) { // UP
+      var secPillsU = Array.from(document.querySelectorAll('#sport-section-tabs [tabindex]'));
+      var teamPillsU = Array.from(document.querySelectorAll('#sport-team-tabs [tabindex]'));
+      var inTeamU = teamPillsU.includes(current);
+      // From team tabs: go up to section tabs
+      if (inTeamU && secPillsU.length > 0) {
+        var sp0 = secPillsU[0];
+        sp0.scrollIntoView({block:'nearest', inline:'nearest'});
+        var spi0 = els.indexOf(sp0); if (spi0 >= 0) return focusElementAtIndex(spi0);
+        sp0.focus(); return true;
+      }
+      // From section tabs: go to header buttons
+      var _hb=['btn-sport-filter-tog','btn-sport-refresh'].map(function(id){return $(id);}).filter(Boolean);
+      if (_hb.length){var _hl=_hb[_hb.length-1];var _hli=els.indexOf(_hl);if(_hli>=0)return focusElementAtIndex(_hli);_hl.focus();return true;}
+      return true;
     }
     if (dirCode === 22 || dirCode === 21) { // RIGHT / LEFT → stay in pill row
       // Collect all pills from section-tabs ONLY for section navigation.
@@ -4377,11 +4403,6 @@ function moveTvFocusSpatial(dirCode) {
         }
       }
       return true; // swallow at all edges — never fall through to spatial nav
-    }
-    if (dirCode === 19) { // UP from pills → header buttons
-      var _hb=['btn-sport-filter-tog','btn-sport-refresh'].map(function(id){return $(id);}).filter(Boolean);
-      if (_hb.length){var _hl=_hb[_hb.length-1];var _hli=els.indexOf(_hl);if(_hli>=0)return focusElementAtIndex(_hli);_hl.focus();return true;}
-      return true;
     }
   }
 
@@ -5627,18 +5648,31 @@ function _streamMatchesGameMatchup(titleLower, gameTeams) {
   var sepIdx = titleLower.indexOf(' @ ');
   if (sepIdx === -1) sepIdx = titleLower.indexOf(' vs ');
   if (sepIdx === -1) sepIdx = titleLower.indexOf(' v ');
-  if (sepIdx === -1) return true; // no matchup separator → broadcast channel → pass
-  var side1 = titleLower.substring(0, sepIdx);
-  var side2 = titleLower.substring(sepIdx + (titleLower.charAt(sepIdx+1)==='@' ? 3 : (titleLower.charAt(sepIdx+1)==='v'&&titleLower.charAt(sepIdx+2)==='s' ? 4 : 3)));
-  var s1hit = false, s2hit = false;
-  for (var i = 0; i < gameTeams.length; i++) {
-    var t = (gameTeams[i] || '').toLowerCase();
-    if (t.length < 3) continue;
-    if (!s1hit && side1.indexOf(t) >= 0) s1hit = true;
-    if (!s2hit && side2.indexOf(t) >= 0) s2hit = true;
-    if (s1hit && s2hit) return true;
+  if (sepIdx >= 0) {
+    // Stream has matchup separator — both sides must match a team in the game
+    var side1 = titleLower.substring(0, sepIdx);
+    var side2 = titleLower.substring(sepIdx + (titleLower.charAt(sepIdx+1)==='@' ? 3 : (titleLower.charAt(sepIdx+1)==='v'&&titleLower.charAt(sepIdx+2)==='s' ? 4 : 3)));
+    var s1hit = false, s2hit = false;
+    for (var i = 0; i < gameTeams.length; i++) {
+      var t = (gameTeams[i] || '').toLowerCase();
+      if (t.length < 3) continue;
+      if (!s1hit && side1.indexOf(t) >= 0) s1hit = true;
+      if (!s2hit && side2.indexOf(t) >= 0) s2hit = true;
+      if (s1hit && s2hit) return true;
+    }
+    return s1hit && s2hit;
   }
-  return s1hit && s2hit;
+  // No matchup separator — generic/broadcast/single-team stream.
+  // Require at least one team name from the game to appear in the title.
+  // This prevents "Champions League 01" or generic event streams from matching
+  // every game in that league, and prevents "LA LIGA Barcelona" from matching
+  // UCL games just because _findGamesViaIndex found a team name token.
+  for (var j = 0; j < gameTeams.length; j++) {
+    var tn = (gameTeams[j] || '').toLowerCase();
+    if (tn.length < 3) continue;
+    if (titleLower.indexOf(tn) >= 0) return true;
+  }
+  return false;
 }
 
 // Fast O(1) channel→game lookup via pre-built index.
