@@ -2615,6 +2615,15 @@ function populateEpgDropdown(selected, streamTitle) {
       const name = ch ? ch.name.toLowerCase() : '';
       return name.includes(q) || id.toLowerCase().includes(q);
     }).sort((a, b) => {
+      // Prioritize exact/starts-with matches when searching
+      if (q) {
+        const an = ((epgData.channels[a] && epgData.channels[a].name) || a).toLowerCase();
+        const bn = ((epgData.channels[b] && epgData.channels[b].name) || b).toLowerCase();
+        const aStarts = an.startsWith(q) || a.toLowerCase().startsWith(q);
+        const bStarts = bn.startsWith(q) || b.toLowerCase().startsWith(q);
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+      }
       const la = getEpgLocalityScore(a), lb = getEpgLocalityScore(b);
       if (la !== lb) return lb - la;
       const an = ((epgData.channels[a] && epgData.channels[a].name) || a).toLowerCase();
@@ -2629,6 +2638,8 @@ function populateEpgDropdown(selected, streamTitle) {
       html += '<div style="padding:6px 9px;font-size:8px;color:var(--t3);border-bottom:1px solid var(--bd);position:sticky;top:0;background:var(--c1);z-index:1">';
       html += q ? 'Showing ' + filtered.length + ' of ' + ids.length + ' channels' : ids.length + ' EPG channels available';
       html += '</div>';
+      // Keyboard search option (TV: opens soft keyboard)
+      html += '<div class="epg-opt" tabindex="0" role="option" data-id="__keyboard__" style="border-bottom:2px solid var(--bd)"><div class="eo-name" style="color:var(--ac)">🔍 Type to search' + (q ? ' (current: "' + esc(q) + '")' : '') + '</div><div class="eo-id">Opens keyboard for manual EPG search</div></div>';
       html += '<div class="epg-opt" tabindex="0" role="option" data-id=""><div class="eo-name" style="color:var(--t3)">✕ None — Clear EPG</div></div>';
       if (filtered.length === 0 && q) {
         html += '<div style="padding:12px;font-size:9px;color:var(--t3);text-align:center">No matches for "' + esc(q) + '"</div>';
@@ -2684,9 +2695,9 @@ function populateEpgDropdown(selected, streamTitle) {
   }
 
   // Mouse/touch: open on focus
-  // On TV: auto-open if pre-filtered text exists (from stream title), otherwise wait for keypress
+  // On TV: always auto-open with pre-filtered results from stream title
   searchInput.onfocus = isTvDevice
-    ? () => { if (searchInput.value.trim() && !hiddenVal.value) setTimeout(() => openEpgList(), 100); }
+    ? () => { setTimeout(() => openEpgList(), 100); }
     : () => openEpgList();
 
   // TV: open list on navigation keys; for printable chars let the value
@@ -2727,6 +2738,24 @@ function populateEpgDropdown(selected, streamTitle) {
 
 window.selectEpg = (el) => {
   const id = el.dataset.id || '';
+  // Keyboard search option: close list, focus input to trigger Fire TV soft keyboard
+  if (id === '__keyboard__') {
+    $('in-epg-list').style.display = 'none';
+    _epgDropdownOpen = false;
+    var _epgInput = $('in-epg-search');
+    _epgInput.value = '';
+    _epgInput.style.color = '';
+    $('in-epg-val').value = '';
+    setTimeout(function() {
+      _epgInput.focus();
+      // On Fire TV, focusing an empty input should trigger the soft keyboard
+      // If NativePlayer has a method, use it; otherwise the focus itself triggers IME
+      if (window.NativePlayer && typeof window.NativePlayer.showKeyboard === 'function') {
+        window.NativePlayer.showKeyboard();
+      }
+    }, 100);
+    return;
+  }
   $('in-epg-val').value = id;
   const searchInput = $('in-epg-search');
   if (id && epgData.channels && epgData.channels[id]) {
@@ -2737,7 +2766,8 @@ window.selectEpg = (el) => {
     searchInput.style.color = '';
   }
   $('in-epg-list').style.display = 'none';
-  // After selection, move focus back to search input or save button
+  _epgDropdownOpen = false;
+  // After selection, move focus back to save button
   setTimeout(() => {
     const saveBtn = $('ed-ok');
     if (isTvDevice && saveBtn) { const els = getTvFocusableElements(); const idx = els.indexOf(saveBtn); if (idx >= 0) focusElementAtIndex(idx); }
@@ -7291,6 +7321,7 @@ window.toggleSportLeague = (i) => {
   settings.sportLeagues[i].enabled = !settings.sportLeagues[i].enabled;
   _invalidateSportTabCache();
   saveSettings(); renderSportLeagueSettings(); renderCats(); renderLib(); renderSportTab();
+  setTimeout(function() { var el = $('sport-tgl-' + i); if (el) el.focus(); }, 60);
 };
 
 function updateSportNavVisibility() {
@@ -7573,6 +7604,11 @@ window.rmSportLeague = (i) => {
   settings.sportLeagues.splice(i, 1);
   _invalidateSportCache();
   saveSettings(); renderSportLeagueSettings(); renderCats(); renderLib(); renderSportTab(); updateSportNavVisibility();
+  // Restore focus to nearest league or the detect button
+  setTimeout(function() {
+    var next = $('sport-path-add-' + i) || $('sport-path-add-' + (i - 1)) || $('sport-grp-detect');
+    if (next) next.focus();
+  }, 60);
 };
 
 window.addSportPath = (i) => {
@@ -7580,7 +7616,6 @@ window.addSportPath = (i) => {
   if (!sel || !sel.value) { toast('Pick an ESPN league first'); return; }
   if (!settings.sportLeagues[i].espnPaths) settings.sportLeagues[i].espnPaths = [];
   if (sel.value === '__all__') {
-    // Add all paths from myTeams + all configured single-path leagues
     var _allPaths = new Set();
     (settings.myTeams || []).forEach(function(t) { if (t.espnPath) _allPaths.add(t.espnPath); });
     (settings.sportLeagues || []).forEach(function(lg) {
@@ -7597,8 +7632,9 @@ window.addSportPath = (i) => {
     if (!added) { toast('All leagues already added'); return; }
     settings.sportLeagues[i].cacheDate = '';
     saveSettings();
-    fetchLeagueSchedule(i).then(() => { renderSportLeagueSettings(); renderSportTab(); });
+    fetchLeagueSchedule(i).then(() => { renderSportLeagueSettings(); renderSportTab(); setTimeout(function() { var el = $('sport-path-add-' + i); if (el) el.focus(); }, 60); });
     renderSportLeagueSettings();
+    setTimeout(function() { var el = $('sport-path-add-' + i); if (el) el.focus(); }, 60);
     toast(added + ' league path(s) added');
     return;
   }
@@ -7606,8 +7642,9 @@ window.addSportPath = (i) => {
   settings.sportLeagues[i].espnPaths.push(sel.value);
   settings.sportLeagues[i].cacheDate = '';
   saveSettings();
-  fetchLeagueSchedule(i).then(() => { renderSportLeagueSettings(); renderSportTab(); });
+  fetchLeagueSchedule(i).then(() => { renderSportLeagueSettings(); renderSportTab(); setTimeout(function() { var el = $('sport-path-add-' + i); if (el) el.focus(); }, 60); });
   renderSportLeagueSettings();
+  setTimeout(function() { var el = $('sport-path-add-' + i); if (el) el.focus(); }, 60);
 };
 
 window.rmSportPath = (i, pi) => {
@@ -7615,6 +7652,8 @@ window.rmSportPath = (i, pi) => {
   const removed = settings.sportLeagues[i].espnPaths.splice(pi, 1)[0];
   if (removed && settings.sportLeagues[i].cachedGamesByPath) delete settings.sportLeagues[i].cachedGamesByPath[removed];
   saveSettings(); renderSportLeagueSettings();
+  // Restore focus to the ESPN dropdown for this league group
+  setTimeout(function() { var el = $('sport-path-add-' + i); if (el) el.focus(); }, 60);
 };
 
 
