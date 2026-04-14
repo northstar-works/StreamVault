@@ -489,40 +489,60 @@ document.addEventListener('keydown', function(e) {
           <button class="bc" id="sport-grp-detect" tabindex="0" style="padding:6px 12px;font-size:9px;border-radius:var(--rs);width:100%">Auto-detect from current library</button>
         </div>
 
-        <hr style="border:none;border-top:1px solid var(--bd);margin:4px 0 12px">
+        <hr style="border:none;border-top:1px solid var(--bd);margin:4px 0 8px">
 
-        <p style="font-size:9px;color:var(--ac);font-weight:600;margin-bottom:6px">② My Teams &mdash; universal across all sport groups</p>
-        <div id="my-teams-section" style="margin-bottom:8px"></div>
-        <div class="tv-row" data-tv-group="my-team-add-row" style="position:relative;margin-bottom:12px">
-          <div style="display:flex;gap:4px;align-items:center">
-            <input id="my-team-input" tabindex="0" placeholder="Search ESPN: Rangers, Cowboys..." autocomplete="off"
-              style="flex:1;padding:5px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px"
-              oninput="window.onMyTeamInput && window.onMyTeamInput(this.value)"
-              onkeydown="if(event.key==='Enter'){event.preventDefault();window.addMyTeamFromInput&&window.addMyTeamFromInput();}"
-            >
-            <button class="bs" tabindex="0" onclick="window.addMyTeamFromInput && window.addMyTeamFromInput()" style="padding:5px 8px;font-size:9px;border-radius:var(--rs)">Add</button>
+        <!-- My Teams sub-accordion -->
+        <div class="acc" id="acc-myteams">
+          <button class="acc-hdr" tabindex="0" onclick="window._toggleSubAcc('acc-myteams')">
+            My Teams — Universal Across All Sport Groups
+            <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;margin-left:auto;flex-shrink:0"><polyline points="9 6 15 12 9 18"/></svg>
+          </button>
+          <div class="acc-body" style="display:none;padding:6px 0 12px">
+            <div id="my-teams-section" style="margin-bottom:8px"></div>
+            <div class="tv-row" data-tv-group="my-team-add-row" style="position:relative;margin-bottom:4px">
+              <div style="display:flex;gap:4px;align-items:center">
+                <input id="my-team-input" tabindex="0" placeholder="Search ESPN: Rangers, Cowboys..." autocomplete="off"
+                  style="flex:1;padding:5px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px"
+                  oninput="window.onMyTeamInput && window.onMyTeamInput(this.value)"
+                  onkeydown="if(event.key==='Enter'){event.preventDefault();window.addMyTeamFromInput&&window.addMyTeamFromInput();}"
+                >
+                <button class="bs" tabindex="0" onclick="window.addMyTeamFromInput && window.addMyTeamFromInput()" style="padding:5px 8px;font-size:9px;border-radius:var(--rs)">Add</button>
+              </div>
+              <div id="my-team-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:500;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);max-height:160px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.4);margin-top:2px"></div>
+            </div>
           </div>
-          <div id="my-team-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:500;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);max-height:160px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.4);margin-top:2px"></div>
         </div>
 
-        <hr style="border:none;border-top:1px solid var(--bd);margin:4px 0 12px">
-
-        <p style="font-size:9px;color:var(--ac);font-weight:600;margin-bottom:4px">③ Configure sport channel groups</p>
-        <div id="sport-league-lst" style="margin-bottom:4px"></div>
-
-        <hr style="border:none;border-top:1px solid var(--bd);margin:8px 0 12px">
-
-        <p style="font-size:9px;color:var(--ac);font-weight:600;margin-bottom:6px">④ Browse International Leagues (ESPN-covered)</p>
-        <p style="font-size:8px;color:var(--t3);margin-bottom:6px">Search 60+ international soccer, rugby, and other leagues. Select a league to add its ESPN path to a sport group above.</p>
-        <div style="display:flex;gap:4px;align-items:center;margin-bottom:6px">
-          <input id="intl-league-search" tabindex="0" placeholder="Search: Honduras, Argentina, Rugby..."
-            style="flex:1;padding:5px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px"
-            oninput="window.renderIntlLeagueResults && window.renderIntlLeagueResults()">
-          <select id="intl-league-group" tabindex="0" style="padding:5px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:8px">
-            <option value="">— add to group —</option>
-          </select>
+        <!-- Configure sport channel groups sub-accordion -->
+        <div class="acc" id="acc-sportgroups">
+          <button class="acc-hdr" tabindex="0" onclick="window._toggleSubAcc('acc-sportgroups')">
+            Configure Sport Channel Groups
+            <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;margin-left:auto;flex-shrink:0"><polyline points="9 6 15 12 9 18"/></svg>
+          </button>
+          <div class="acc-body" style="display:none;padding:6px 0 12px">
+            <div id="sport-league-lst" style="margin-bottom:4px"></div>
+          </div>
         </div>
-        <div id="intl-league-results" style="max-height:200px;overflow-y:auto;border:1px solid var(--bd);border-radius:var(--rs);display:none"></div>
+
+        <!-- Browse International Leagues sub-accordion -->
+        <div class="acc" id="acc-intlleagues">
+          <button class="acc-hdr" tabindex="0" onclick="window._toggleSubAcc('acc-intlleagues')">
+            Browse International Leagues
+            <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;margin-left:auto;flex-shrink:0"><polyline points="9 6 15 12 9 18"/></svg>
+          </button>
+          <div class="acc-body" style="display:none;padding:6px 0 12px">
+            <p style="font-size:8px;color:var(--t3);margin-bottom:6px">Search 60+ international soccer, rugby, and other leagues. Select a league to add its ESPN path to a sport group above.</p>
+            <div style="display:flex;gap:4px;align-items:center;margin-bottom:6px">
+              <input id="intl-league-search" tabindex="0" placeholder="Search: Honduras, Argentina, Rugby..."
+                style="flex:1;padding:5px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px"
+                oninput="window.renderIntlLeagueResults && window.renderIntlLeagueResults()">
+              <select id="intl-league-group" tabindex="0" style="padding:5px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:8px">
+                <option value="">— add to group —</option>
+              </select>
+            </div>
+            <div id="intl-league-results" style="max-height:200px;overflow-y:auto;border:1px solid var(--bd);border-radius:var(--rs);display:none"></div>
+          </div>
+        </div>
 
       </div><!-- sport-acc-body -->
     </div><!-- sport-config-details -->
@@ -617,28 +637,59 @@ document.addEventListener('keydown', function(e) {
       </div>
     </div>
   </div>
+  <!-- External Storage Location accordion -->
   <div class="ss">
-    <h3>Local Videos</h3>
-    <p style="font-size:9px;color:var(--t2);margin-bottom:8px">Add on-device video files to your Local tab.</p>
-    <div class="tv-row" data-tv-group="local-cfg">
-      <button class="bc" id="s-local-pick" style="padding:9px 16px;font-size:10px;border-radius:var(--rs)">⚙ Configure Local</button>
-    </div>
-  </div>
+    <div class="acc" id="acc-external-storage">
+      <button class="acc-hdr" tabindex="0" onclick="window._toggleSubAcc('acc-external-storage')" style="font-size:11px">
+        External Storage Location
+        <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;margin-left:auto;flex-shrink:0"><polyline points="9 6 15 12 9 18"/></svg>
+      </button>
+      <div class="acc-body" style="display:none;padding:6px 0 4px">
 
-  <div class="ss">
-    <h3>Network Sources</h3>
-    <p style="font-size:9px;color:var(--t2);margin-bottom:8px">Add Samba/SMB or FTP network sources to your Network tab.</p>
-    <div class="tv-row" data-tv-group="net-cfg">
-      <button class="bc" id="s-smb-open" style="padding:9px 16px;font-size:10px;border-radius:var(--rs)">⚙ Configure SMB</button>
-      <button class="bc" id="s-ftp-open" style="padding:9px 16px;font-size:10px;border-radius:var(--rs)">⚙ Configure FTP</button>
-    </div>
-  </div>
+        <!-- Local Videos sub-accordion -->
+        <div class="acc" id="acc-local-videos" style="margin-bottom:8px">
+          <button class="acc-hdr" tabindex="0" onclick="window._toggleSubAcc('acc-local-videos')">
+            Local Videos
+            <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;margin-left:auto;flex-shrink:0"><polyline points="9 6 15 12 9 18"/></svg>
+          </button>
+          <div class="acc-body" style="display:none;padding:6px 0 8px">
+            <p style="font-size:9px;color:var(--t2);margin-bottom:8px">Add on-device video files to your Local tab.</p>
+            <div class="tv-row" data-tv-group="local-cfg">
+              <button class="bc" id="s-local-pick" style="padding:9px 16px;font-size:10px;border-radius:var(--rs)">⚙ Configure Local</button>
+            </div>
+          </div>
+        </div>
 
-  <div class="ss">
-    <h3>iCam — IP Cameras</h3>
-    <p style="font-size:9px;color:var(--t2);margin-bottom:8px">Add RTSP, ONVIF, RTMP, or SRT cameras to your iCam tab.</p>
-    <div class="tv-row" data-tv-group="icam-cfg">
-      <button class="bc" id="s-icam-open" style="padding:9px 16px;font-size:10px;border-radius:var(--rs)">⚙ Configure iCam</button>
+        <!-- Network Resources sub-accordion -->
+        <div class="acc" id="acc-network-resources" style="margin-bottom:8px">
+          <button class="acc-hdr" tabindex="0" onclick="window._toggleSubAcc('acc-network-resources')">
+            Network Resources
+            <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;margin-left:auto;flex-shrink:0"><polyline points="9 6 15 12 9 18"/></svg>
+          </button>
+          <div class="acc-body" style="display:none;padding:6px 0 8px">
+            <p style="font-size:9px;color:var(--t2);margin-bottom:8px">Add Samba/SMB or FTP network sources to your Network tab.</p>
+            <div class="tv-row" data-tv-group="net-cfg">
+              <button class="bc" id="s-smb-open" style="padding:9px 16px;font-size:10px;border-radius:var(--rs)">⚙ Configure SMB</button>
+              <button class="bc" id="s-ftp-open" style="padding:9px 16px;font-size:10px;border-radius:var(--rs)">⚙ Configure FTP</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- iCam sub-accordion -->
+        <div class="acc" id="acc-icam" style="margin-bottom:4px">
+          <button class="acc-hdr" tabindex="0" onclick="window._toggleSubAcc('acc-icam')">
+            ICam — IP Cameras
+            <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;margin-left:auto;flex-shrink:0"><polyline points="9 6 15 12 9 18"/></svg>
+          </button>
+          <div class="acc-body" style="display:none;padding:6px 0 8px">
+            <p style="font-size:9px;color:var(--t2);margin-bottom:8px">Add RTSP, ONVIF, RTMP, or SRT cameras to your iCam tab.</p>
+            <div class="tv-row" data-tv-group="icam-cfg">
+              <button class="bc" id="s-icam-open" style="padding:9px 16px;font-size:10px;border-radius:var(--rs)">⚙ Configure iCam</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
     </div>
   </div>
 
@@ -663,18 +714,26 @@ document.addEventListener('keydown', function(e) {
       </div>
     </div>
   </div>
-  <div class="ss"><h3>Plex / PlexStr</h3>
-    <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Step 1: connect to your Plex server here. After a successful test, use Add Plex Stream to open the PlexStr add page with library and title pickers.</p>
-    <div style="display:grid;gap:6px" data-tv-group="plex-credentials">
-      <input id="s-plex-server" placeholder="Plex server URL · http://192.168.1.10:32400" style="padding:7px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px">
-      <input id="s-plex-token" placeholder="Plex token" style="padding:7px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px">
+  <div class="ss">
+    <div class="acc" id="acc-plex">
+      <button class="acc-hdr" tabindex="0" onclick="window._toggleSubAcc('acc-plex')" style="font-size:11px">
+        Plex / PlexStr
+        <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;margin-left:auto;flex-shrink:0"><polyline points="9 6 15 12 9 18"/></svg>
+      </button>
+      <div class="acc-body" style="display:none;padding:6px 0 4px">
+        <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Step 1: connect to your Plex server here. After a successful test, use Add Plex Stream to open the PlexStr add page with library and title pickers.</p>
+        <div style="display:grid;gap:6px" data-tv-group="plex-credentials">
+          <input id="s-plex-server" placeholder="Plex server URL · http://192.168.1.10:32400" style="padding:7px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px">
+          <input id="s-plex-token" placeholder="Plex token" style="padding:7px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px">
+        </div>
+        <div class="tv-row" data-tv-group="plex-actions">
+          <button class="bc" id="s-plex-test" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Connect / Test</button>
+          <button class="bs" id="s-plex-open" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Add Plex Stream</button>
+          <button class="bc" id="s-plex-clear" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Clear Plex</button>
+        </div>
+        <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
+      </div>
     </div>
-    <div class="tv-row" data-tv-group="plex-actions">
-      <button class="bc" id="s-plex-test" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Connect / Test</button>
-      <button class="bs" id="s-plex-open" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Add Plex Stream</button>
-      <button class="bc" id="s-plex-clear" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Clear Plex</button>
-    </div>
-    <div id="s-plex-status" style="font-size:9px;color:var(--t2);margin-top:6px">Not connected yet</div>
   </div>
   <div class="ss"><h3>About</h3>
     <p style="font-size:9px;color:var(--t2)">StreamVault v@@VERSION_NAME@@ (Build @@VERSION_CODE@@)<br>ITV · Plex · iCam · Local · Network · EPG Guide · DPad TV Navigation · HLS Recording · Failover · Scheduled Recording.</p>
@@ -2995,10 +3054,10 @@ $('rp-ok').onclick = async () => {
 };
 
 // Refresh a repo from its source URL
-window.refreshRepo = async (id) => {
+window.refreshRepo = async (id, silent) => {
   const repo = repos.find(r => r.id === id);
   if (!repo || !repo.sourceUrl) { toast('No source URL saved for this repo'); return; }
-  toast('Refreshing ' + repo.name + '…');
+  if (!silent) toast('Refreshing ' + repo.name + '…');
   const wasLocked = _navLocked;
   _navLocked = true; // block D-pad during async M3U parse to prevent ghost keypresses
   try {
@@ -3012,7 +3071,8 @@ window.refreshRepo = async (id) => {
     saveRepos();
     refreshAltCache(true);
     renderRepos();
-    refreshGuideOnly(repo.name + ': ' + streams.length + ' channels loaded');
+    if (!silent) refreshGuideOnly(repo.name + ': ' + streams.length + ' channels loaded');
+    else { renderLib(); renderGuide(); }
   } catch(e) {
     toast('Refresh failed: ' + e.message);
   } finally {
@@ -3053,7 +3113,7 @@ window.openRepo = async (id) => {
   if (!r) return;
   brRepo = r;
   brSel = new Set();
-  brReg = loadBrowseRegionDefault(r);
+  brReg = 'All';
   brGen = 'All';
   brShowAdded = false;
   brFilteredCache = { key: '', items: [] };
@@ -5411,8 +5471,43 @@ async function fetchLeagueSchedule(idx) {
 }
 
 // Fetch all leagues regardless of filter toggle state
+// Auto-inject myTeam league paths into multi-sport repo groups so games are always found
+function _autoInjectMyTeamPaths() {
+  if (!settings.sportLeagues || !settings.myTeams || !settings.myTeams.length) return;
+  // Collect all espnPaths from myTeams
+  var myPaths = new Set();
+  settings.myTeams.forEach(function(t) { if (t.espnPath) myPaths.add(t.espnPath); });
+  if (!myPaths.size) return;
+  // Identify single-path leagues (these ARE the specific leagues)
+  var singlePathLeagues = new Set();
+  settings.sportLeagues.forEach(function(lg) {
+    var p = lg.espnPaths || [];
+    if (p.length === 1) singlePathLeagues.add(p[0]);
+  });
+  var changed = false;
+  settings.sportLeagues.forEach(function(lg) {
+    var paths = lg.espnPaths || [];
+    // Only inject into multi-path groups (>=2 paths) or guessed multi-sport groups
+    var isMulti = paths.length >= 2;
+    if (!isMulti && paths.length === 0) {
+      var guessed = guessEspnPaths(lg.groupName);
+      isMulti = guessed.length >= 2;
+    }
+    if (!isMulti) return;
+    if (!lg.espnPaths) lg.espnPaths = [];
+    myPaths.forEach(function(p) {
+      if (!lg.espnPaths.includes(p)) {
+        lg.espnPaths.push(p);
+        changed = true;
+      }
+    });
+  });
+  if (changed) saveSettings();
+}
+
 function fetchAllLeagueSchedules(force) {
   if (!settings.sportLeagues || !settings.sportLeagues.length) return;
+  _autoInjectMyTeamPaths(); // ensure multi-sport groups have all myTeam paths
   const today = new Date().toISOString().slice(0, 10);
   const STALE_MS = 4 * 3600 * 1000; // 4 hours
   var _pendingRender = null;
@@ -6053,7 +6148,14 @@ function renderSportTab() {
 
   // Always show the Live·Today tab when there are any games (live or upcoming)
   if (allGames.length > 0) {
-    const liveCount = liveGames.length;
+    // Live dot: only show when games visible on Today tab are live
+    // In My Teams mode, only count live games involving pinned teams
+    const _filteredLiveGames = filterOn && (settings.myTeams || []).length > 0
+      ? liveGames.filter(function(g) {
+          return (settings.myTeams || []).some(function(t) { return _teamMatchesGame(t, g); });
+        })
+      : liveGames;
+    const liveCount = _filteredLiveGames.length;
     const tabLabel = liveCount > 0 ? '🔴 Live · Today' : '📅 Today';
     tabs.push({ id: 'live', label: tabLabel, badge: todayCountForBadge });
   } else if (sportSectionTab === 'live') {
@@ -7151,6 +7253,7 @@ function renderSportLeagueSettings() {
   }
 
   const espnOpts = '<option value="">— no ESPN link —</option>' +
+    '<option value="__all__">All (add all my team leagues)</option>' +
     ESPN_SPORT_OPTIONS.map(o => `<option value="${esc(o.path)}">${esc(o.label)} (${esc(o.path)})</option>`).join('');
 
   lst.innerHTML = settings.sportLeagues.map((lg, i) => {
@@ -7456,6 +7559,17 @@ window.toggleLocalityAcc = () => {
   if (chevron) chevron.style.transform = _localityAccOpen ? 'rotate(180deg)' : '';
 };
 
+// Generic sub-accordion toggle — uses .acc CSS class with .open toggle
+window._toggleSubAcc = function(accId) {
+  var acc = document.getElementById(accId);
+  if (!acc) return;
+  var isOpen = acc.classList.toggle('open');
+  var body = acc.querySelector('.acc-body');
+  var chev = acc.querySelector('.acc-chev');
+  if (body) body.style.display = isOpen ? 'block' : 'none';
+  if (chev) chev.style.transform = isOpen ? 'rotate(90deg)' : '';
+};
+
 window.toggleSportPast = () => {
   settings.sportShowPastGames = !(settings.sportShowPastGames !== false);
   _invalidateSportTabCache();
@@ -7500,6 +7614,29 @@ window.addSportPath = (i) => {
   const sel = $('sport-path-add-' + i);
   if (!sel || !sel.value) { toast('Pick an ESPN league first'); return; }
   if (!settings.sportLeagues[i].espnPaths) settings.sportLeagues[i].espnPaths = [];
+  if (sel.value === '__all__') {
+    // Add all paths from myTeams + all configured single-path leagues
+    var _allPaths = new Set();
+    (settings.myTeams || []).forEach(function(t) { if (t.espnPath) _allPaths.add(t.espnPath); });
+    (settings.sportLeagues || []).forEach(function(lg) {
+      var p = lg.espnPaths || [];
+      if (p.length === 1) _allPaths.add(p[0]);
+    });
+    var added = 0;
+    _allPaths.forEach(function(p) {
+      if (!settings.sportLeagues[i].espnPaths.includes(p)) {
+        settings.sportLeagues[i].espnPaths.push(p);
+        added++;
+      }
+    });
+    if (!added) { toast('All leagues already added'); return; }
+    settings.sportLeagues[i].cacheDate = '';
+    saveSettings();
+    fetchLeagueSchedule(i).then(() => { renderSportLeagueSettings(); renderSportTab(); });
+    renderSportLeagueSettings();
+    toast(added + ' league path(s) added');
+    return;
+  }
   if (settings.sportLeagues[i].espnPaths.includes(sel.value)) { toast('Already added'); return; }
   settings.sportLeagues[i].espnPaths.push(sel.value);
   settings.sportLeagues[i].cacheDate = '';
@@ -8048,19 +8185,31 @@ if (!isTvDevice) {
 }
 
 // ── Startup repo + EPG refresh ────────────────────────────────────────────
-// Refresh all repos, then fire EPG in background.
-// Splash closes after repos (~5-10s). Nav stays locked during EPG parse
-// to prevent D-pad burst-fire crash — events queue but get dropped by
-// _navLocked check in __svHandleTvKey. ESPN fetches deferred until after EPG.
+// Refresh all repos, then fire EPG. Splash stays visible through the entire
+// sequence. Nav stays locked until splash hides to prevent D-pad crash.
 setTimeout(async () => {
+  var _splashVisible = true;
+  var _splashStatus = function(msg) {
+    if (_splashVisible) window._setSplashStatus && window._setSplashStatus(msg);
+  };
+  var _finishStartup = function() {
+    _splashVisible = false;
+    window._hideSplash && window._hideSplash('Ready');
+    _navLocked = false;
+    if (isTvDevice) setTimeout(refreshTvFocus, 80);
+  };
+
   const urlRepos = repos.filter(r => r.sourceUrl);
   if (urlRepos.length) {
-    window._setSplashStatus && window._setSplashStatus('Refreshing ' + urlRepos.length + ' repo' + (urlRepos.length > 1 ? 's' : '') + '…');
+    _splashStatus('Refreshing ' + urlRepos.length + ' repo' + (urlRepos.length > 1 ? 's' : '') + '…');
     let refreshed = 0;
     for (const repo of urlRepos) {
       try {
-        window._setSplashStatus && window._setSplashStatus('Loading ' + (repo.name || 'repo') + '…');
-        await window.refreshRepo(repo.id);
+        _splashStatus('Loading ' + (repo.name || 'repo') + '…');
+        await window.refreshRepo(repo.id, true);
+        // Show stream count in splash instead of toast
+        var _stCount = (repo.streams || []).length;
+        if (_stCount > 0) _splashStatus((repo.name || 'repo') + ': ' + _stCount + ' streams loaded');
         refreshed++;
       } catch(e) { console.warn('[SV] startup repo refresh:', repo.name, e.message); }
     }
@@ -8069,27 +8218,20 @@ setTimeout(async () => {
       renderLib(); // update ITV list with freshly loaded channels
     }
   }
-  // ── Mobile vs TV splash behavior ──
-  // Both: hide splash after repos. Nav unlocks immediately so D-pad is responsive.
-  // EPG fires in background — parseXMLTV yields every 100 programmes so input
-  // events are processed between chunks. DOMParser may briefly freeze but that's
-  // acceptable vs. locking nav for the entire EPG duration (10+ seconds on large feeds).
-  window._hideSplash && window._hideSplash('Ready');
-  _navLocked = false;
-  if (isTvDevice) setTimeout(refreshTvFocus, 80);
 
   if (epgSrc.length) {
-    fetchAllEpg(true).then(function() {
-      if (isTvDevice) {
-        setTimeout(refreshTvFocus, 80);
-        // ESPN schedules fire AFTER EPG is done — no concurrent heavy work
-        setTimeout(function() { fetchAllLeagueSchedules(false); }, 300);
-      }
-    }).catch(function(e) {
-      console.warn('[SV] startup EPG:', e.message);
-      if (isTvDevice) setTimeout(refreshTvFocus, 80);
-    });
+    // Show EPG progress in splash
+    for (var _ei = 0; _ei < epgSrc.length; _ei++) {
+      var _es = epgSrc[_ei];
+      _splashStatus('Guide ' + (_ei + 1) + '/' + epgSrc.length + ': ' + (_es.name || 'EPG') + '…');
+      try { await fetchEpgSource(_es, true); } catch(e) { console.warn('[SV] startup EPG:', e.message); }
+    }
+    _finishStartup();
+    if (isTvDevice) {
+      setTimeout(function() { fetchAllLeagueSchedules(false); }, 300);
+    }
   } else {
+    _finishStartup();
     if (isTvDevice) setTimeout(function() { fetchAllLeagueSchedules(false); }, 300);
   }
 }, 800);
