@@ -5471,43 +5471,8 @@ async function fetchLeagueSchedule(idx) {
 }
 
 // Fetch all leagues regardless of filter toggle state
-// Auto-inject myTeam league paths into multi-sport repo groups so games are always found
-function _autoInjectMyTeamPaths() {
-  if (!settings.sportLeagues || !settings.myTeams || !settings.myTeams.length) return;
-  // Collect all espnPaths from myTeams
-  var myPaths = new Set();
-  settings.myTeams.forEach(function(t) { if (t.espnPath) myPaths.add(t.espnPath); });
-  if (!myPaths.size) return;
-  // Identify single-path leagues (these ARE the specific leagues)
-  var singlePathLeagues = new Set();
-  settings.sportLeagues.forEach(function(lg) {
-    var p = lg.espnPaths || [];
-    if (p.length === 1) singlePathLeagues.add(p[0]);
-  });
-  var changed = false;
-  settings.sportLeagues.forEach(function(lg) {
-    var paths = lg.espnPaths || [];
-    // Only inject into multi-path groups (>=2 paths) or guessed multi-sport groups
-    var isMulti = paths.length >= 2;
-    if (!isMulti && paths.length === 0) {
-      var guessed = guessEspnPaths(lg.groupName);
-      isMulti = guessed.length >= 2;
-    }
-    if (!isMulti) return;
-    if (!lg.espnPaths) lg.espnPaths = [];
-    myPaths.forEach(function(p) {
-      if (!lg.espnPaths.includes(p)) {
-        lg.espnPaths.push(p);
-        changed = true;
-      }
-    });
-  });
-  if (changed) saveSettings();
-}
-
 function fetchAllLeagueSchedules(force) {
   if (!settings.sportLeagues || !settings.sportLeagues.length) return;
-  _autoInjectMyTeamPaths(); // ensure multi-sport groups have all myTeam paths
   const today = new Date().toISOString().slice(0, 10);
   const STALE_MS = 4 * 3600 * 1000; // 4 hours
   var _pendingRender = null;
@@ -8188,15 +8153,9 @@ if (!isTvDevice) {
 // Refresh all repos, then fire EPG. Splash stays visible through the entire
 // sequence. Nav stays locked until splash hides to prevent D-pad crash.
 setTimeout(async () => {
-  var _splashVisible = true;
   var _splashStatus = function(msg) {
-    if (_splashVisible) window._setSplashStatus && window._setSplashStatus(msg);
-  };
-  var _finishStartup = function() {
-    _splashVisible = false;
-    window._hideSplash && window._hideSplash('Ready');
-    _navLocked = false;
-    if (isTvDevice) setTimeout(refreshTvFocus, 80);
+    var sp = document.getElementById('sv-splash');
+    if (sp && sp.style.display !== 'none') window._setSplashStatus && window._setSplashStatus(msg);
   };
 
   const urlRepos = repos.filter(r => r.sourceUrl);
@@ -8207,7 +8166,6 @@ setTimeout(async () => {
       try {
         _splashStatus('Loading ' + (repo.name || 'repo') + '…');
         await window.refreshRepo(repo.id, true);
-        // Show stream count in splash instead of toast
         var _stCount = (repo.streams || []).length;
         if (_stCount > 0) _splashStatus((repo.name || 'repo') + ': ' + _stCount + ' streams loaded');
         refreshed++;
@@ -8215,24 +8173,44 @@ setTimeout(async () => {
     }
     if (refreshed) {
       _invalidateSportGameIndex();
-      renderLib(); // update ITV list with freshly loaded channels
+      renderLib();
     }
   }
 
-  if (epgSrc.length) {
-    // Show EPG progress in splash
-    for (var _ei = 0; _ei < epgSrc.length; _ei++) {
-      var _es = epgSrc[_ei];
-      _splashStatus('Guide ' + (_ei + 1) + '/' + epgSrc.length + ': ' + (_es.name || 'EPG') + '…');
-      try { await fetchEpgSource(_es, true); } catch(e) { console.warn('[SV] startup EPG:', e.message); }
-    }
-    _finishStartup();
-    if (isTvDevice) {
+  // ── Hide splash after repos. EPG runs in background. ──
+  // TV: hold splash 10s extra so EPG can finish before D-pad is active.
+  if (isTvDevice && epgSrc.length) {
+    _splashStatus('Loading guide data…');
+    // Fire EPG in background, hide splash after EPG OR 10s timeout (whichever first)
+    var _splashDone = false;
+    var _hideSplashOnce = function() {
+      if (_splashDone) return;
+      _splashDone = true;
+      window._hideSplash && window._hideSplash('Ready');
+      _navLocked = false;
+      setTimeout(refreshTvFocus, 80);
       setTimeout(function() { fetchAllLeagueSchedules(false); }, 300);
-    }
+    };
+    var _tvTimeout = setTimeout(_hideSplashOnce, 10000);
+    fetchAllEpg(true).then(function() {
+      clearTimeout(_tvTimeout);
+      _hideSplashOnce();
+    }).catch(function() {
+      clearTimeout(_tvTimeout);
+      _hideSplashOnce();
+    });
   } else {
-    _finishStartup();
-    if (isTvDevice) setTimeout(function() { fetchAllLeagueSchedules(false); }, 300);
+    // Mobile or no EPG: hide splash immediately after repos
+    window._hideSplash && window._hideSplash('Ready');
+    _navLocked = false;
+    if (isTvDevice) setTimeout(refreshTvFocus, 80);
+    if (epgSrc.length) {
+      fetchAllEpg(true).then(function() {
+        if (isTvDevice) setTimeout(function() { fetchAllLeagueSchedules(false); }, 300);
+      }).catch(function() {});
+    } else {
+      if (isTvDevice) setTimeout(function() { fetchAllLeagueSchedules(false); }, 300);
+    }
   }
 }, 800);
 
