@@ -656,7 +656,7 @@ document.addEventListener('keydown', function(e) {
           <div class="acc-body" style="display:none;padding:6px 0 8px">
             <p style="font-size:9px;color:var(--t2);margin-bottom:8px">Add on-device video files to your Local tab.</p>
             <div class="tv-row" data-tv-group="local-cfg">
-              <button class="bc" id="s-local-pick" style="padding:9px 16px;font-size:10px;border-radius:var(--rs)">⚙ Configure Local</button>
+              <button class="bc" id="s-local-open" style="padding:9px 16px;font-size:10px;border-radius:var(--rs)">⚙ Configure Local</button>
             </div>
           </div>
         </div>
@@ -1125,6 +1125,9 @@ let libSearchOpen = false;
 let isTvDevice = false;
 let tvFocusIndex = 0;
 let _navLocked = true; // locked until startup completes — prevents ghost keypresses during load
+let _sportLandingFocusTimer = null;
+let _sportLandingGuardUntil = 0;
+
 let _navLastMs = 0;   // debounce timestamp
 
 // Browse state
@@ -1903,9 +1906,35 @@ function fmtTime(ts) {
 }
 
 // ─── Navigation ───
+function _clearSportLandingFocusGuard() {
+  if (_sportLandingFocusTimer) { try { clearTimeout(_sportLandingFocusTimer); } catch(e) {} }
+  _sportLandingFocusTimer = null;
+  _sportLandingGuardUntil = 0;
+  if (_navLocked) _navLocked = false;
+}
+function _queueSportLandingFocus(attempt) {
+  if (!isTvDevice) return;
+  attempt = attempt || 0;
+  if (!($('sport-scr') && $('sport-scr').classList.contains('on'))) { _clearSportLandingFocusGuard(); return; }
+  const firstTab = document.querySelector('#sport-section-tabs [data-sid="' + (sportSectionTab || '') + '"]') || document.querySelector('#sport-section-tabs [tabindex]');
+  if (firstTab && firstTab.getClientRects && firstTab.getClientRects().length) {
+    const els = getTvFocusableElements();
+    const idx = els.indexOf(firstTab);
+    if (idx >= 0) focusElementAtIndex(idx);
+    else if (firstTab.focus) { firstTab.focus(); setTvFocusClass(firstTab); }
+    _clearSportLandingFocusGuard();
+    return;
+  }
+  if (attempt >= 24) {
+    _clearSportLandingFocusGuard();
+    setTimeout(refreshTvFocus, 40);
+    return;
+  }
+  _sportLandingFocusTimer = setTimeout(function(){ _queueSportLandingFocus(attempt + 1); }, 120);
+}
 function showTab(id) {
   // Stop live score refresh when leaving sport tab
-  if (id !== 'sport-scr') { _stopSportScoreRefresh(); _stopSportClock(); }
+  if (id !== 'sport-scr') { _stopSportScoreRefresh(); _stopSportClock(); _clearSportLandingFocusGuard(); }
   document.querySelectorAll('.scr').forEach(s => s.classList.remove('on'));
   $(id).classList.add('on');
   document.querySelectorAll('.ni').forEach(n => n.classList.toggle('on', n.dataset.t === id));
@@ -1931,18 +1960,12 @@ function showTab(id) {
     _startSportClock();
     // Auto-refresh sport schedules when opening Sports tab (non-blocking, no dpad lock)
     fetchAllLeagueSchedules(false);
-    // Keep Sports opening on the section pill row instead of bouncing through header/nav
-    setTimeout(() => {
-      const firstTab = document.querySelector('#sport-section-tabs [tabindex]');
-      if (firstTab) {
-        const els = getTvFocusableElements();
-        const idx = els.indexOf(firstTab);
-        if (idx >= 0) focusElementAtIndex(idx);
-        else { firstTab.focus(); setTvFocusClass(firstTab); }
-      } else {
-        refreshTvFocus();
-      }
-    }, 40);
+    // Keep Sports opening on the section pill row instead of bouncing through header/nav.
+    // While the sport DOM/pills finish rendering, temporarily swallow D-pad so queued
+    // remote presses cannot move focus back onto the Sports bottom-nav button.
+    _sportLandingGuardUntil = Date.now() + 3200;
+    _navLocked = true;
+    _queueSportLandingFocus(0);
     return;
   }
   setTimeout(refreshTvFocus, 40);
@@ -2633,6 +2656,10 @@ function populateEpgDropdown(selected, streamTitle) {
   hiddenVal.value = selected || '';
   _epgDropdownOpen = false;
 
+  var _autoSearch = '';
+  searchInput._epgStreamTitle = streamTitle || '';
+  searchInput._manualTyping = false;
+
   // Show current selection in the input
   if (selected && epgData.channels && epgData.channels[selected]) {
     searchInput.value = epgData.channels[selected].name + ' (' + selected + ')';
@@ -2641,14 +2668,16 @@ function populateEpgDropdown(selected, streamTitle) {
     searchInput.value = selected;
     searchInput.style.color = 'var(--ac)';
   } else {
-    var _autoSearch = _extractEpgSearchFromTitle(streamTitle || '');
+    _autoSearch = _extractEpgSearchFromTitle(streamTitle || '');
     searchInput.value = _autoSearch;
     searchInput.style.color = '';
   }
+  searchInput._autoSearchQuery = _autoSearch;
 
   function renderEpgOptions(query) {
     const ids = getAllEpgIds();
     const q   = (query || '').toLowerCase().trim();
+    const manualTyping = !!searchInput._manualTyping;
     const filtered = ids.filter(id => {
       if (!q) return true;
       const ch   = epgData.channels[id];
@@ -2678,8 +2707,10 @@ function populateEpgDropdown(selected, streamTitle) {
       html += '<div style="padding:6px 9px;font-size:8px;color:var(--t3);border-bottom:1px solid var(--bd);position:sticky;top:0;background:var(--c1);z-index:1">';
       html += q ? 'Showing ' + filtered.length + ' of ' + ids.length + ' channels' : ids.length + ' EPG channels available';
       html += '</div>';
-      // Keyboard search option (TV: opens soft keyboard)
-      html += '<div class="epg-opt" tabindex="0" role="option" data-id="__keyboard__" style="border-bottom:2px solid var(--bd)"><div class="eo-name" style="color:var(--ac)">🔍 Type to search' + (q ? ' (current: "' + esc(q) + '")' : '') + '</div><div class="eo-id">Opens keyboard for manual EPG search</div></div>';
+      // Keyboard search option (TV: opens soft keyboard) — hide while already in manual typing mode
+      if (!manualTyping) {
+        html += '<div class="epg-opt" tabindex="0" role="option" data-id="__keyboard__" style="border-bottom:2px solid var(--bd)"><div class="eo-name" style="color:var(--ac)">🔍 Type to search' + (q ? ' (current: "' + esc(q) + '")' : '') + '</div><div class="eo-id">Opens keyboard for manual EPG search</div></div>';
+      }
       html += '<div class="epg-opt" tabindex="0" role="option" data-id=""><div class="eo-name" style="color:var(--t3)">✕ None — Clear EPG</div></div>';
       if (filtered.length === 0 && q) {
         html += '<div style="padding:12px;font-size:9px;color:var(--t3);text-align:center">No matches for "' + esc(q) + '"</div>';
@@ -2715,7 +2746,7 @@ function populateEpgDropdown(selected, streamTitle) {
     });
   }
 
-  function openEpgList() {
+  function openEpgList(preferResults) {
     positionDropdown();
     renderEpgOptions(searchInput.value);
     listEl.style.display = 'block';
@@ -2723,7 +2754,14 @@ function populateEpgDropdown(selected, streamTitle) {
     // On TV: immediately focus first option so DPad can navigate it
     if (isTvDevice) {
       setTimeout(() => {
-        const first = listEl.querySelector('.epg-opt');
+        let first = null;
+        if (preferResults || (searchInput._manualTyping && (searchInput.value || '').trim())) {
+          first = Array.from(listEl.querySelectorAll('.epg-opt')).find(function(opt) {
+            const id = opt && opt.dataset ? (opt.dataset.id || '') : '';
+            return id && id !== '__keyboard__';
+          }) || null;
+        }
+        if (!first) first = listEl.querySelector('.epg-opt');
         if (first) { first.focus(); setTvFocusClass(first); }
       }, 50);
     }
@@ -2758,11 +2796,18 @@ function populateEpgDropdown(selected, streamTitle) {
   searchInput.oninput = () => {
     searchInput.style.color = '';
     hiddenVal.value = '';
+    searchInput._manualTyping = true;
     positionDropdown();
     renderEpgOptions(searchInput.value);
     listEl.style.display = 'block';
     _epgDropdownOpen = true;
   };
+
+  // Prepare title-based results immediately for TV edit flow so EPG matches are ready
+  if (isTvDevice && !selected && searchInput._autoSearchQuery) {
+    positionDropdown();
+    renderEpgOptions(searchInput._autoSearchQuery);
+  }
 
   // Only hide on blur if focus didn't move INTO the list
   searchInput.onblur = (e) => {
@@ -2785,13 +2830,22 @@ window.selectEpg = (el) => {
     var _epgInput = $('in-epg-search');
     _epgInput.value = '';
     _epgInput.style.color = '';
+    _epgInput._manualTyping = true;
     $('in-epg-val').value = '';
     // Set flag to prevent onfocus from immediately reopening the list
     _epgInput._skipAutoOpen = true;
     setTimeout(function() {
-      _epgInput.focus();
-      // Clear the skip flag after a delay so future focus events work normally
-      setTimeout(function() { _epgInput._skipAutoOpen = false; }, 500);
+      try { _epgInput.blur(); } catch(e) {}
+      setTimeout(function() {
+        _epgInput.focus();
+        try { _epgInput.click(); } catch(e) {}
+        try {
+          const len = (_epgInput.value || '').length;
+          if (typeof _epgInput.setSelectionRange === 'function') _epgInput.setSelectionRange(len, len);
+        } catch(e) {}
+        // Clear the skip flag after a delay so future focus events work normally
+        setTimeout(function() { _epgInput._skipAutoOpen = false; }, 700);
+      }, 40);
     }, 100);
     return;
   }
@@ -2806,6 +2860,7 @@ window.selectEpg = (el) => {
   }
   $('in-epg-list').style.display = 'none';
   _epgDropdownOpen = false;
+  searchInput._manualTyping = false;
   // After selection, move focus back to save button
   setTimeout(() => {
     const saveBtn = $('ed-ok');
@@ -3945,8 +4000,13 @@ function refreshTvFocus() {
   const els = getTvFocusableElements();
   if (!els.length) return;
 
+  let idx = -1;
+  if ($('sport-scr') && $('sport-scr').classList.contains('on') && Date.now() < (_sportLandingGuardUntil || 0)) {
+    const sportTab = document.querySelector('#sport-section-tabs [data-sid="' + (sportSectionTab || '') + '"]') || document.querySelector('#sport-section-tabs [tabindex]') || document.querySelector('.sport-gc');
+    idx = sportTab ? els.indexOf(sportTab) : -1;
+  }
   const active = document.activeElement;
-  let idx = active ? els.indexOf(active) : -1;
+  if (idx < 0) idx = active ? els.indexOf(active) : -1;
   if (idx < 0) {
     const currentTv = document.querySelector('.tv-f');
     idx = currentTv ? els.indexOf(currentTv) : -1;
@@ -4279,7 +4339,14 @@ function moveTvFocusSpatial(dirCode) {
   if (current.id === 'in-epg-search' && dirCode === 20 && _epgDropdownOpen) {
     const listEl = $('in-epg-list');
     if (listEl) {
-      const first = listEl.querySelector('.epg-opt');
+      let first = null;
+      if ((current.value || '').trim()) {
+        first = Array.from(listEl.querySelectorAll('.epg-opt')).find(function(opt) {
+          const id = opt && opt.dataset ? (opt.dataset.id || '') : '';
+          return id && id !== '__keyboard__';
+        }) || null;
+      }
+      if (!first) first = listEl.querySelector('.epg-opt');
       if (first) { first.focus(); setTvFocusClass(first); return true; }
     }
   }
@@ -4447,7 +4514,7 @@ function moveTvFocusSpatial(dirCode) {
         sp0.focus(); return true;
       }
       // From section tabs: go to header buttons
-      var _hb=['btn-sport-filter-tog','btn-sport-refresh'].map(function(id){return $(id);}).filter(Boolean);
+      var _hb=['btn-sport-filter-tog','btn-sport-edit','btn-sport-refresh'].map(function(id){return $(id);}).filter(Boolean);
       if (_hb.length){var _hl=_hb[_hb.length-1];var _hli=els.indexOf(_hl);if(_hli>=0)return focusElementAtIndex(_hli);_hl.focus();return true;}
       return true;
     }
@@ -4660,6 +4727,7 @@ function moveTvFocusSpatial(dirCode) {
 }
 window.__svHandleTvKey = function(code) {
   if (!isTvDevice) return false;
+  if (_sportLandingGuardUntil && Date.now() >= _sportLandingGuardUntil) _clearSportLandingFocusGuard();
   // ── Nav guard: drop ALL input while the app is loading or mid-render ─────
   // This prevents ghost keypresses queuing during async parseM3U/repo refresh
   // (which yield the event loop) from all firing in a burst when the thread
@@ -4723,6 +4791,7 @@ window.__svHandleTvKey = function(code) {
       const type = (el.type || '').toLowerCase();
       // EPG search: Enter opens the dropdown
       if (el.id === 'in-epg-search') {
+        try { el._skipAutoOpen = false; } catch(e) {}
         el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
         return true;
       }
@@ -5106,8 +5175,7 @@ function renderSettings() {
       const lsb = $('s-local-scan'); if (lsb) lsb.onclick = () => toast('Video scan initiated — results appear in Local tab');
       $('mo-local-cfg').classList.add('on'); setTimeout(refreshTvFocus, 30);
     };
-    if ($('s-local-pick')) $('s-local-pick').onclick = openLocal; // button in settings page
-    const lbtn = document.getElementById('s-local-pick'); // already handled above
+    if ($('s-local-open')) $('s-local-open').onclick = openLocal; // button in settings page
 
     // SMB modal
     const openSmb = () => {
@@ -5167,7 +5235,7 @@ function renderSettings() {
     const so = $('s-smb-open'); if(so) so.onclick = openSmb;
     const fo = $('s-ftp-open'); if(fo) fo.onclick = openFtp;
     const io = $('s-icam-open'); if(io) io.onclick = openIcam;
-    const lo = $('s-local-pick'); if(lo) lo.onclick = openLocal;
+    const lo = $('s-local-open'); if(lo) lo.onclick = openLocal;
   }
   wireConfigModals();
 
