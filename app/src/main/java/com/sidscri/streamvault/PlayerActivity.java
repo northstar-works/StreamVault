@@ -484,16 +484,16 @@ public class PlayerActivity extends Activity {
         if (idx>0) showMsg("Trying: "+display);
 
         DataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
-            .setUserAgent("StreamVault/4.6 ExoPlayer")
-            .setConnectTimeoutMs(12000).setReadTimeoutMs(12000)
+            .setUserAgent("StreamVault/5.6 ExoPlayer")
+            .setConnectTimeoutMs(15000).setReadTimeoutMs(15000)
             .setAllowCrossProtocolRedirects(true);
         // Wake lock keeps CPU alive during HLS segment downloads
         long tsBufferMs = (long) timeshiftMaxMin * 60 * 1000L;
         if (tsBufferMs <= 0) tsBufferMs = 30 * 60 * 1000L;
         androidx.media3.exoplayer.DefaultLoadControl loadControl =
             new androidx.media3.exoplayer.DefaultLoadControl.Builder()
-                .setBufferDurationsMs(15_000, (int) Math.min(tsBufferMs, 3_600_000),
-                    2_500, 5_000)
+                .setBufferDurationsMs(30_000, (int) Math.min(tsBufferMs, 3_600_000),
+                    5_000, 7_500)
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build();
         player = new ExoPlayer.Builder(this).setLoadControl(loadControl).build();
