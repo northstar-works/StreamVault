@@ -19,6 +19,7 @@ import android.provider.MediaStore;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
@@ -273,6 +274,20 @@ public class MainActivity extends Activity {
             });
         }
 
+
+        @JavascriptInterface
+        public void showKeyboard() {
+            runOnUiThread(() -> {
+                try {
+                    webView.requestFocus();
+                    InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                    if (imm != null) {
+                        imm.showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT);
+                        imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
+                    }
+                } catch (Exception ignored) {}
+            });
+        }
 
         @JavascriptInterface
         public void pickLocalStreamFile() {
