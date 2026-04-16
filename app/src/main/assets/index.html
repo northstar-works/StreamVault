@@ -268,9 +268,9 @@ body.tv-mode .acc-hdr{min-height:44px}
 .ld2{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:5}
 .spn{width:32px;height:32px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--ac);border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
-body.tv-mode .bnav .ni,body.tv-mode button,body.tv-mode .acc-hdr,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode .epg-opt,body.tv-mode .lmb,body.tv-mode .pl,body.tv-mode .tgl,body.tv-mode .ib,body.tv-mode .gch,body.tv-mode .gpr,[role="button"]{outline:none;transition:border-color .1s ease}
-body.tv-mode .tv-f,body.tv-mode .ni:focus,body.tv-mode button:focus,body.tv-mode .acc-hdr:focus,body.tv-mode input:focus,body.tv-mode textarea:focus,body.tv-mode select:focus,body.tv-mode .itm:focus,body.tv-mode .rc:focus,body.tv-mode .ri:focus,body.tv-mode .epg-opt:focus,body.tv-mode .lmb:focus,body.tv-mode .pl:focus,body.tv-mode .tgl:focus,body.tv-mode .ib:focus,body.tv-mode .gch:focus,body.tv-mode .gpr:focus,[role="button"]:focus{box-shadow:0 0 0 2px rgba(108,92,231,.95)!important;border-color:rgba(108,92,231,.98)!important}
-body.tv-mode .bs.tv-f,body.tv-mode .bs:focus{box-shadow:0 0 0 2px #fff,0 0 0 4px rgba(108,92,231,.9)!important;border-color:#fff!important}
+body.tv-mode .bnav .ni,body.tv-mode button,body.tv-mode .acc-hdr,body.tv-mode input,body.tv-mode textarea,body.tv-mode select,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode .epg-opt,body.tv-mode .lmb,body.tv-mode .pl,body.tv-mode .tgl,body.tv-mode .ib,body.tv-mode .gch,body.tv-mode .gpr,[role="button"]{outline:none;transition:box-shadow .12s ease,transform .12s ease,background .12s ease,border-color .12s ease}
+body.tv-mode .tv-f,body.tv-mode .ni:focus,body.tv-mode button:focus,body.tv-mode .acc-hdr:focus,body.tv-mode input:focus,body.tv-mode textarea:focus,body.tv-mode select:focus,body.tv-mode .itm:focus,body.tv-mode .rc:focus,body.tv-mode .ri:focus,body.tv-mode .epg-opt:focus,body.tv-mode .lmb:focus,body.tv-mode .pl:focus,body.tv-mode .tgl:focus,body.tv-mode .ib:focus,body.tv-mode .gch:focus,body.tv-mode .gpr:focus,[role="button"]:focus{box-shadow:0 0 0 2px rgba(108,92,231,.98),0 0 0 4px rgba(108,92,231,.28),0 0 12px rgba(108,92,231,.22)!important;transform:scale(1.008);background-image:linear-gradient(0deg,rgba(108,92,231,.10),rgba(108,92,231,.10));border-color:rgba(108,92,231,.98)!important}
+body.tv-mode .bs.tv-f,body.tv-mode .bs:focus{box-shadow:0 0 0 2px #fff,0 0 0 4px rgba(108,92,231,.9),0 0 14px rgba(108,92,231,.5)!important;border-color:#fff!important}
 body.tv-mode .bnav .ni,body.tv-mode .lmb,body.tv-mode .pl,body.tv-mode .itm,body.tv-mode .rc,body.tv-mode .ri,body.tv-mode button,body.tv-mode input:not([readonly]),body.tv-mode textarea,body.tv-mode select,body.tv-mode .ib,[role="button"]{min-height:44px;position:relative}
 body.tv-mode .gch,body.tv-mode .gpr{min-height:0}
 body.tv-mode .slb,body.tv-mode .fbar,body.tv-mode .sb,body.tv-mode .px-actions,.tv-mode .px-grid{scroll-margin-top:70px}
@@ -2502,7 +2502,7 @@ function renderLib() {
     const gameTimeLabel = getGameTimeLabel(m);
     const gameTimeBadge = gameTimeLabel ? `<span class="tg2" style="background:rgba(46,213,115,.15);color:var(--gn);font-weight:600">${esc(gameTimeLabel)}</span>` : '';
 
-    return `<div class="itm" data-tv-zone="channel-list" data-tv-col="1" onclick="playItem('${m.id}')">
+    return `<div class="itm" data-tv-zone="channel-list" data-tv-col="1" style="animation-delay:${i * 0.01}s" onclick="playItem('${m.id}')">
       <div class="th">${thumb}</div>
       <div class="nf">
         <div class="nm">${esc(m.title)}</div>
