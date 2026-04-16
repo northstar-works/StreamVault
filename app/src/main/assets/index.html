@@ -383,6 +383,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
 <div id="sport-scr" class="scr">
   <div class="hd"><h1>Live Sports</h1><div class="hd-r">
     <button class="ib" id="btn-sport-filter-tog" title="Toggle team filter" onclick="window.toggleSportFilter && window.toggleSportFilter()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
+    <button class="ib" id="btn-sport-edit" title="Show manual link controls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
     <button class="ib" id="btn-sport-refresh" title="Refresh schedules" onclick="window.refreshAllSportData && window.refreshAllSportData()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg></button>
   </div></div>
   <div id="sport-filter-bar" style="padding:4px 12px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap"></div>
@@ -1109,6 +1110,7 @@ let plexAddMode = false;
 let _plexView = ''; // '' | 'search' | 'library' — tracks which plex result view is showing
 
 let editId = null;
+let sportEditMode = false;
 let _epgDropdownOpen = false;  // true while EPG options list is visible
 let libEditMode = false;
 let delId = null;
@@ -1929,11 +1931,19 @@ function showTab(id) {
     _startSportClock();
     // Auto-refresh sport schedules when opening Sports tab (non-blocking, no dpad lock)
     fetchAllLeagueSchedules(false);
-    // D-pad: focus the first section tab so TV remote can navigate immediately
+    // Keep Sports opening on the section pill row instead of bouncing through header/nav
     setTimeout(() => {
       const firstTab = document.querySelector('#sport-section-tabs [tabindex]');
-      if (firstTab) firstTab.focus();
-    }, 60);
+      if (firstTab) {
+        const els = getTvFocusableElements();
+        const idx = els.indexOf(firstTab);
+        if (idx >= 0) focusElementAtIndex(idx);
+        else { firstTab.focus(); setTvFocusClass(firstTab); }
+      } else {
+        refreshTvFocus();
+      }
+    }, 40);
+    return;
   }
   setTimeout(refreshTvFocus, 40);
 }
@@ -2525,6 +2535,24 @@ $('btn-lib-edit').onclick = () => {
   $('btn-lib-edit').title = libEditMode ? 'Hide edit controls' : 'Show edit controls';
   renderLib();
   setTimeout(refreshTvFocus, 30);
+};
+$('btn-sport-edit').onclick = () => {
+  sportEditMode = !sportEditMode;
+  $('btn-sport-edit').classList.toggle('on', sportEditMode);
+  $('btn-sport-edit').title = sportEditMode ? 'Hide manual link controls' : 'Show manual link controls';
+  renderSportTab();
+  setTimeout(() => {
+    if (!isTvDevice || !$('sport-scr') || !$('sport-scr').classList.contains('on')) return;
+    const target = document.querySelector('.sport-gc');
+    if (target) {
+      const els = getTvFocusableElements();
+      const idx = els.indexOf(target);
+      if (idx >= 0) focusElementAtIndex(idx);
+      else { target.focus(); setTvFocusClass(target); }
+    } else {
+      refreshTvFocus();
+    }
+  }, 40);
 };
 document.body.classList.toggle('lib-edit-on', libEditMode);
 
@@ -3923,6 +3951,10 @@ function refreshTvFocus() {
     const currentTv = document.querySelector('.tv-f');
     idx = currentTv ? els.indexOf(currentTv) : -1;
   }
+  if (idx < 0 && $('sport-scr') && $('sport-scr').classList.contains('on')) {
+    const sportTab = document.querySelector('#sport-section-tabs [data-sid="' + (sportSectionTab || '') + '"]') || document.querySelector('#sport-section-tabs [tabindex]') || document.querySelector('.sport-gc');
+    idx = sportTab ? els.indexOf(sportTab) : -1;
+  }
   if (idx < 0) {
     const activeNav = document.querySelector('#bnav .ni.on') || document.querySelector('#bnav .ni');
     idx = activeNav ? els.indexOf(activeNav) : -1;
@@ -4274,6 +4306,38 @@ function moveTvFocusSpatial(dirCode) {
 
   if ((dirCode === 21 || dirCode === 22) && focusWithinGroupRow(current, dirCode)) return true;
 
+  // ── Sport game-card actions (manual link button in edit mode) ───────────
+  if (current && current.closest && current.closest('.sport-ab')) {
+    const actWrap = current.closest('.sport-ab');
+    const card = current.closest('.sport-gc');
+    const buttons = Array.from(actWrap.querySelectorAll('button')).filter(b => getComputedStyle(b).display !== 'none');
+    const bi = buttons.indexOf(current);
+    const allCards = Array.from(document.querySelectorAll('.sport-gc'));
+    const ci = allCards.indexOf(card);
+    if (dirCode === 21) {
+      if (bi > 0) { const i = els.indexOf(buttons[bi - 1]); if (i >= 0) return focusElementAtIndex(i); }
+      if (card) { const i = els.indexOf(card); if (i >= 0) return focusElementAtIndex(i); }
+      return false;
+    }
+    if (dirCode === 22) {
+      if (bi >= 0 && bi < buttons.length - 1) { const i = els.indexOf(buttons[bi + 1]); if (i >= 0) return focusElementAtIndex(i); }
+      return false;
+    }
+    if (dirCode === 20 || dirCode === 19) {
+      const nextCard = allCards[ci + (dirCode === 20 ? 1 : -1)];
+      if (nextCard) {
+        nextCard.scrollIntoView({block:'nearest'});
+        const nextBtn = nextCard.querySelector('.sport-ab button');
+        if (nextBtn) { const i = els.indexOf(nextBtn); if (i >= 0) return focusElementAtIndex(i); }
+        const i2 = els.indexOf(nextCard); if (i2 >= 0) return focusElementAtIndex(i2);
+      }
+      if (dirCode === 19) {
+        return focusNearestInSelector('#sport-section-tabs [tabindex], #sport-team-tabs [tabindex]', card || current, false) || moveTvFocusLinear(-1);
+      }
+      return pickClosestNav();
+    }
+  }
+
   // ── Sport game cards: DPad down enters buttons inside card ──────────────
   if (currentZone === 'sport-game-card' || (current.classList && current.classList.contains('sport-gc'))) {
     const allCards = Array.from(document.querySelectorAll('.sport-gc'));
@@ -4295,10 +4359,16 @@ function moveTvFocusSpatial(dirCode) {
       return focusNearestInSelector('#sport-section-tabs [tabindex], #sport-team-tabs [tabindex]', current, false) ||
              moveTvFocusLinear(-1);
     }
-    if (dirCode === 22 && ci >= 0 && ci < allCards.length - 1) {
-      const nx = allCards[ci + 1];
-      nx.scrollIntoView({block:'nearest'});
-      const i = els.indexOf(nx); if (i >= 0) return focusElementAtIndex(i);
+    if (dirCode === 22) {
+      const firstAction = current.querySelector('.sport-ab button');
+      if (sportEditMode && firstAction) {
+        const ai = els.indexOf(firstAction); if (ai >= 0) return focusElementAtIndex(ai);
+      }
+      if (ci >= 0 && ci < allCards.length - 1) {
+        const nx = allCards[ci + 1];
+        nx.scrollIntoView({block:'nearest'});
+        const i = els.indexOf(nx); if (i >= 0) return focusElementAtIndex(i);
+      }
     }
     if (dirCode === 21 && ci > 0) {
       const pv = allCards[ci - 1];
@@ -4338,7 +4408,7 @@ function moveTvFocusSpatial(dirCode) {
   }
   // ── Channel list (home grid): index-based navigation ──────────────────────
   // ── Sport header buttons ─────────────────────────────────────────────
-  var _sH=['btn-sport-filter-tog','btn-sport-refresh'];
+  var _sH=['btn-sport-filter-tog','btn-sport-edit','btn-sport-refresh'];
   if(_sH.indexOf(current.id)>=0&&$('sport-scr')&&$('sport-scr').classList.contains('on')){
     if(dirCode===19)return true;
     if(dirCode===20){var _fp=document.querySelector('#sport-section-tabs [tabindex]');if(_fp){var _fpi=els.indexOf(_fp);if(_fpi>=0)return focusElementAtIndex(_fpi);}}
@@ -6164,10 +6234,8 @@ function renderSportTab() {
   const filterBar = $('sport-filter-bar');
   if (filterBar) {
     filterBar.innerHTML =
-      `<span style="font-size:8px;padding:2px 10px;border-radius:10px;cursor:pointer;${filterOn ? 'background:var(--ac);color:#fff' : 'background:var(--c1);color:var(--t2);border:1px solid var(--bd)'}" onclick="window.toggleSportFilter && window.toggleSportFilter()">
-        ${filterOn ? '● My Teams Only' : '○ All Sport Channels'}
-      </span>
-      <span style="font-size:8px;color:var(--t3)">${allGames.length} games today</span>
+      `<span style="font-size:8px;color:var(--t3)">${allGames.length} games today</span>
+      <span style="font-size:8px;color:var(--t3)">${filterOn ? 'My Teams filter on' : 'All sport channels'}</span>
       <span id="sport-clock" style="font-size:10px;color:var(--t2);margin-left:auto;font-variant-numeric:tabular-nums"></span>`;
   }
 
@@ -6712,7 +6780,6 @@ function renderSportTab() {
       // Broadcast button: only show if no my team streams at all
       const bcBest = (!myBest && !opBest && broadcastStreams[0]) ? broadcastStreams[0] : null;
 
-      chButtons += makeBtn('📺 My Team', myBest, allFailover, 'var(--ac)');
       chButtons += makeBtn('🆚 Opponent', opBest, allFailover, '#555');
       chButtons += makeBtn('📡 Broadcast', bcBest, allFailover, '#666');
     }
@@ -6721,9 +6788,9 @@ function renderSportTab() {
     const _smShort = esc((g.shortName || '').replace(/'/g, "\\'"));
     const _smPath = esc((g._path || '').replace(/'/g, "\\'"));
     const _smLg = esc((g._lgName || lgName || '').replace(/'/g, "\\'"));
-    chButtons += ` <button tabindex="0" onclick="event.stopPropagation();window._openStreamMatcher('${_smShort}','${_smPath}','${_smLg}')" style="font-size:7px;padding:2px 8px;border-radius:6px;background:none;color:var(--t3);border:1px solid var(--bd);cursor:pointer;white-space:nowrap" title="Manually link a stream">🔗</button>`;
 
     const leagueLabel = (ESPN_SPORT_OPTIONS.find(o => o.path === g._path) || {}).label || _normalizeSportGroupLabel(g._lgName) || '';
+    const sportActionButtons = sportEditMode ? `<div class="sport-ab" data-tv-zone="sport-game-actions" style="display:flex;align-items:center;gap:6px;margin-left:8px"><button tabindex="0" onclick="event.stopPropagation();window._openStreamMatcher('${_smShort}','${_smPath}','${_smLg}')" title="Manually link a stream" style="width:30px;height:30px;border-radius:8px;border:1px solid var(--bd);background:var(--c1);color:var(--t1);display:flex;align-items:center;justify-content:center;cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.07 0l3.54-3.54a5 5 0 00-7.07-7.07L11 4"/><path d="M14 11a5 5 0 01-7.07 0L3.39 7.46a5 5 0 117.07-7.07L13 3"/></svg></button></div>` : '';
     // Register full failover on the card — Enter/Select plays top stream directly
     const cardSi = window._svSportItems.length;
     if (allFailover.length > 0) window._svSportItems.push(allFailover);
@@ -6734,7 +6801,7 @@ function renderSportTab() {
     const _starSuffix = _showStar ? ' ⭐' : '';
     const _lgIcon = _leagueIcon(g._path);
     return `<div tabindex="0" role="listitem" data-tv-zone="sport-game-card" class="sport-gc"
-      style="border:1px solid ${_showStar ? 'var(--ac)' : 'var(--bd)'};border-radius:var(--rs);margin:4px 12px;padding:10px;outline:none;cursor:${hasChannel?'pointer':'default'}${_showStar ? ';background:rgba(108,92,231,.06)' : ''}"
+      style="border:1px solid ${_showStar ? 'var(--ac)' : 'var(--bd)'};border-radius:var(--rs);margin:4px 12px;padding:10px;outline:none;cursor:${hasChannel?'pointer':'default'}"
       ${cardClick}>
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div style="flex:1;min-width:0">
@@ -6745,6 +6812,7 @@ function renderSportTab() {
             : '<div style="font-size:8px;color:var(--t3);margin-top:3px">No channels in your groups</div>'}
           ${chButtons ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${chButtons}</div>` : ''}
         </div>
+        ${sportActionButtons}
         <div style="text-align:right;flex-shrink:0;margin-left:8px">
           <div style="font-size:10px;font-weight:700;color:${g.state==='in'?'var(--rd)':g.state==='post'?'var(--t3)':'var(--gn)'}">${timeStr}</div>
           ${scoreStr ? `<div style="font-size:11px;font-weight:700;color:var(--t1)">${scoreStr}</div>` : ''}
@@ -7003,9 +7071,9 @@ function _renderAllGamesTab(lst) {
     const _agSmShort = esc((g.shortName || '').replace(/'/g, "\\'"));
     const _agSmPath = esc((g._path || '').replace(/'/g, "\\'"));
     const _agSmLg = esc((g._lgName || '').replace(/'/g, "\\'"));
-    const _agLinkBtn = `<button tabindex="0" onclick="event.stopPropagation();window._openStreamMatcher('${_agSmShort}','${_agSmPath}','${_agSmLg}')" style="font-size:7px;padding:2px 8px;border-radius:6px;background:none;color:var(--t3);border:1px solid var(--bd);cursor:pointer;white-space:nowrap" title="Manually link a stream">🔗</button>`;
+    const _agSportActionButtons = sportEditMode ? `<div class="sport-ab" data-tv-zone="sport-game-actions" style="display:flex;align-items:center;gap:6px;margin-left:8px"><button tabindex="0" onclick="event.stopPropagation();window._openStreamMatcher('${_agSmShort}','${_agSmPath}','${_agSmLg}')" title="Manually link a stream" style="width:30px;height:30px;border-radius:8px;border:1px solid var(--bd);background:var(--c1);color:var(--t1);display:flex;align-items:center;justify-content:center;cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.07 0l3.54-3.54a5 5 0 00-7.07-7.07L11 4"/><path d="M14 11a5 5 0 01-7.07 0L3.39 7.46a5 5 0 117.07-7.07L13 3"/></svg></button></div>` : '';
     return `<div tabindex="0" role="listitem" data-tv-zone="sport-game-card" class="sport-gc"
-      style="border:1px solid ${_showStar ? 'var(--ac)' : 'var(--bd)'};border-radius:var(--rs);margin:4px 12px;padding:10px;outline:none;cursor:${hasChannel2?'pointer':'default'}${_showStar ? ';background:rgba(108,92,231,.06)' : ''}"
+      style="border:1px solid ${_showStar ? 'var(--ac)' : 'var(--bd)'};border-radius:var(--rs);margin:4px 12px;padding:10px;outline:none;cursor:${hasChannel2?'pointer':'default'}"
       ${cardClick2}>
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div style="flex:1;min-width:0">
@@ -7014,8 +7082,8 @@ function _renderAllGamesTab(lst) {
           ${hasChannel2
             ? `<div style="font-size:8px;color:var(--ac);margin-top:3px">▶ ${esc((allEntries[0].title||'').replace(/\s*\(home\)|\s*\(away\)/i,'').trim().slice(0,40)||'Watch')}</div>`
             : '<div style="font-size:8px;color:var(--t3);margin-top:3px">No channels in your groups</div>'}
-          <div style="display:flex;gap:4px;margin-top:3px">${_agLinkBtn}</div>
         </div>
+        ${_agSportActionButtons}
         <div style="text-align:right;flex-shrink:0;margin-left:8px">
           <div style="font-size:10px;font-weight:700;color:${g.state==='in'?'var(--rd)':g.state==='post'?'var(--t3)':'var(--gn)'}">${timeStr}</div>
           ${scoreStr ? `<div style="font-size:11px;font-weight:700;color:var(--t1)">${scoreStr}</div>` : ''}
