@@ -237,3 +237,9 @@ Edit CSS variables at the top of `app/src/main/assets/index.html`:
 ## License
 
 GNU General Public License v3.0 — see [LICENSE](LICENSE)
+
+
+## Recent UI fixes
+
+- 5.6.25-b154: fixed EPG picker Back behavior on Fire TV so the search window can close cleanly without leaving the keyboard stuck onscreen.
+- 5.6.25-b154: improved Home edit-mode D-pad navigation so moving right from the left item action buttons can continue into the right-side item in landscape grid mode.

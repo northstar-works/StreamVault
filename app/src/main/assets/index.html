@@ -2681,6 +2681,15 @@ function _openTvKeyboardForInput(inputEl) {
   setTimeout(function() { try { inputEl._skipAutoOpen = false; } catch(e) {} }, 900);
 }
 
+
+function _hideTvKeyboard() {
+  if (window.NativePlayer && typeof window.NativePlayer.hideKeyboard === 'function') {
+    try { window.NativePlayer.hideKeyboard(); } catch(e) {}
+    setTimeout(function() { try { window.NativePlayer.hideKeyboard(); } catch(e) {} }, 60);
+    setTimeout(function() { try { window.NativePlayer.hideKeyboard(); } catch(e) {} }, 180);
+  }
+}
+
 function populateEpgDropdown(selected, streamTitle) {
   const searchInput = $('in-epg-search');
   const hiddenVal   = $('in-epg-val');
@@ -2815,6 +2824,7 @@ function populateEpgDropdown(selected, streamTitle) {
   function closeEpgList() {
     listEl.style.display = 'none';
     _epgDropdownOpen = false;
+    _hideTvKeyboard();
   }
 
   // Mouse/touch: open on focus
@@ -2898,6 +2908,7 @@ window.selectEpg = (el) => {
   }
   $('in-epg-list').style.display = 'none';
   _epgDropdownOpen = false;
+  _hideTvKeyboard();
   searchInput._manualTyping = false;
   // After selection, move focus back to save button
   setTimeout(() => {
@@ -4608,8 +4619,18 @@ function moveTvFocusSpatial(dirCode) {
           const ab   = current.closest('.ab');
           const btns = Array.from(ab.querySelectorAll('button')).filter(b => getComputedStyle(b).display !== 'none');
           const bIdx = btns.indexOf(current);
-          if (dirCode === 22) { // right within buttons — stop at end
+          if (dirCode === 22) { // right within buttons — move across row when possible
             if (bIdx >= 0 && bIdx < btns.length - 1) { const i = els.indexOf(btns[bIdx+1]); if (i >= 0) return focusElementAtIndex(i); }
+            if (cols === 2 && col === 0 && curIdx2 + 1 < allItems.length) {
+              const adjacent = allItems[curIdx2 + 1];
+              if (adjacent) {
+                adjacent.scrollIntoView({block:'nearest', inline:'nearest'});
+                const i = els.indexOf(adjacent);
+                if (i >= 0) return focusElementAtIndex(i);
+                try { adjacent.focus(); } catch(e) {}
+                return true;
+              }
+            }
             return false;
           }
           if (dirCode === 21) { // left — back to item or prev button
@@ -4887,11 +4908,13 @@ window.__svHandleTvKey = function(code) {
     if (_epgDropdownOpen || (_epgListEl && _epgListEl.style.display === 'block')) {
       if (_epgListEl) _epgListEl.style.display = 'none';
       _epgDropdownOpen = false;
+      _hideTvKeyboard();
       const si = $('in-epg-search'); if (si) { const els2 = getTvFocusableElements(); const i2 = els2.indexOf(si); if (i2 >= 0) focusElementAtIndex(i2); else { si.focus(); setTvFocusClass(si); } }
       return true;
     }
     if (openModal) {
-      if (openModal.id === 'mo-stream-match' && window._closeStreamMatcher) { window._closeStreamMatcher(); return true; }
+      if (openModal.id === 'mo-stream-match' && window._closeStreamMatcher) { _hideTvKeyboard(); window._closeStreamMatcher(); return true; }
+      _hideTvKeyboard();
       openModal.classList.remove('on'); refreshTvFocus(); return true;
     }
     // Fix 7/8: BACK on any main screen → bottom nav bar.

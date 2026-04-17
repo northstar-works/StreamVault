@@ -289,6 +289,25 @@ public class MainActivity extends Activity {
             });
         }
 
+
+        @JavascriptInterface
+        public void hideKeyboard() {
+            runOnUiThread(() -> {
+                try {
+                    InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                    if (imm != null) {
+                        imm.hideSoftInputFromWindow(webView.getWindowToken(), 0);
+                        View current = getCurrentFocus();
+                        if (current != null) {
+                            imm.hideSoftInputFromWindow(current.getWindowToken(), 0);
+                        }
+                    }
+                    webView.clearFocus();
+                    webView.requestFocus();
+                } catch (Exception ignored) {}
+            });
+        }
+
         @JavascriptInterface
         public void pickLocalStreamFile() {
             runOnUiThread(() -> openLocalFilePicker());
