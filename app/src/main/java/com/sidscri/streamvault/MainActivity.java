@@ -926,7 +926,7 @@ public class MainActivity extends Activity {
                     if (!(addr instanceof Inet4Address) || addr.isLoopbackAddress()) continue;
                     String host = addr.getHostAddress();
                     if (host == null) continue;
-                    if (!(host.startsWith("192.168.") || host.startsWith("10.") || host.matches("172\.(1[6-9]|2\d|3[0-1])\..*"))) continue;
+                    if (!(host.startsWith("192.168.") || host.startsWith("10.") || host.matches("172\\.(1[6-9]|2\\d|3[0-1])\\..*"))) continue;
                     int lastDot = host.lastIndexOf('.');
                     if (lastDot > 0) {
                         String base = host.substring(0, lastDot + 1);
