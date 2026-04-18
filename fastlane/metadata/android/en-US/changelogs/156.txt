@@ -1,0 +1,7 @@
+5.7.1-b156
+
+- Added HDHomeRun repo-style channel loading
+- Added HDHR channel chooser so only selected tuner channels appear on the HDHR tab
+- Added optional HDHR XMLTV guide URL support with automatic guide ID matching
+- Added Tailscale / VPN remote mode for HDHR saved LAN tuner addresses
+- Kept HDHR playback path unchanged for this build
