@@ -243,3 +243,6 @@ GNU General Public License v3.0 — see [LICENSE](LICENSE)
 
 - 5.6.25-b154: fixed EPG picker Back behavior on Fire TV so the search window can close cleanly without leaving the keyboard stuck onscreen.
 - 5.6.25-b154: improved Home edit-mode D-pad navigation so moving right from the left item action buttons can continue into the right-side item in landscape grid mode.
+
+- 5.7.0-b155: added HDHomeRun discovery in Settings with a dedicated HDHR Home tab, device scan, channel import, and optional remote playback base URL support.
+- 5.7.0-b155: hardened manual Home refresh to prevent overlapping repo/EPG refresh runs that could destabilize large EPG updates on Fire TV devices.

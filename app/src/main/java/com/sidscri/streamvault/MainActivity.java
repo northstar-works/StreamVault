@@ -43,6 +43,19 @@ import org.json.JSONObject;
 import java.nio.charset.StandardCharsets;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.HttpURLConnection;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 public class MainActivity extends Activity {
 
@@ -306,6 +319,15 @@ public class MainActivity extends Activity {
                     webView.requestFocus();
                 } catch (Exception ignored) {}
             });
+        }
+
+        @JavascriptInterface
+        public void scanHdhrDevices() {
+            runOnUiThread(() -> toastNative("Scanning network for HDHomeRun devices…"));
+            new Thread(() -> {
+                String json = scanHdhrDevicesJson();
+                runOnUiThread(() -> notifyJsHdhrScanResults(json));
+            }).start();
         }
 
         @JavascriptInterface
@@ -855,6 +877,100 @@ public class MainActivity extends Activity {
     private void notifyJsBackupFilePicked(String jsonText, String label) {
         String js = "window.onNativeBackupFilePicked && window.onNativeBackupFilePicked(" + quoteJs(jsonText) + "," + quoteJs(label) + ");";
         webView.evaluateJavascript(js, null);
+    }
+
+    private void notifyJsHdhrScanResults(String jsonText) {
+        String js = "window.onNativeHdhrScanResults && window.onNativeHdhrScanResults(" + quoteJs(jsonText) + ");";
+        webView.evaluateJavascript(js, null);
+    }
+
+    private String scanHdhrDevicesJson() {
+        org.json.JSONArray arr = new org.json.JSONArray();
+        try {
+            List<String> bases = getPrivateIpv4Bases();
+            ExecutorService pool = Executors.newFixedThreadPool(24);
+            List<Callable<org.json.JSONObject>> tasks = new ArrayList<>();
+            for (String base : bases) {
+                for (int i = 1; i <= 254; i++) {
+                    final String ip = base + i;
+                    tasks.add(() -> probeHdhr(ip));
+                }
+            }
+            List<Future<org.json.JSONObject>> futures = pool.invokeAll(tasks);
+            pool.shutdownNow();
+            java.util.HashSet<String> seen = new java.util.HashSet<>();
+            for (Future<org.json.JSONObject> f : futures) {
+                try {
+                    org.json.JSONObject o = f.get();
+                    if (o == null) continue;
+                    String key = o.optString("DeviceID", o.optString("ip", ""));
+                    if (seen.contains(key)) continue;
+                    seen.add(key);
+                    arr.put(o);
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception ignored) {}
+        return arr.toString();
+    }
+
+    private List<String> getPrivateIpv4Bases() {
+        List<String> bases = new ArrayList<>();
+        try {
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface ni = interfaces.nextElement();
+                if (!ni.isUp() || ni.isLoopback()) continue;
+                Enumeration<InetAddress> addrs = ni.getInetAddresses();
+                while (addrs.hasMoreElements()) {
+                    InetAddress addr = addrs.nextElement();
+                    if (!(addr instanceof Inet4Address) || addr.isLoopbackAddress()) continue;
+                    String host = addr.getHostAddress();
+                    if (host == null) continue;
+                    if (!(host.startsWith("192.168.") || host.startsWith("10.") || host.matches("172\.(1[6-9]|2\d|3[0-1])\..*"))) continue;
+                    int lastDot = host.lastIndexOf('.');
+                    if (lastDot > 0) {
+                        String base = host.substring(0, lastDot + 1);
+                        if (!bases.contains(base)) bases.add(base);
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        if (bases.isEmpty()) bases.add("192.168.1.");
+        return bases;
+    }
+
+    private org.json.JSONObject probeHdhr(String ip) {
+        HttpURLConnection conn = null;
+        try {
+            URL url = new URL("http://" + ip + "/discover.json");
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(220);
+            conn.setReadTimeout(420);
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Accept", "application/json");
+            int code = conn.getResponseCode();
+            if (code < 200 || code >= 300) return null;
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            try (InputStream is = conn.getInputStream()) {
+                byte[] buf = new byte[2048];
+                int len;
+                while ((len = is.read(buf)) != -1) bos.write(buf, 0, len);
+            }
+            String body = bos.toString(StandardCharsets.UTF_8.name());
+            org.json.JSONObject o = new org.json.JSONObject(body);
+            if (!o.has("LineupURL") && o.has("BaseURL")) {
+                o.put("LineupURL", o.optString("BaseURL") + "/lineup.json");
+            }
+            if (!o.has("BaseURL")) {
+                o.put("BaseURL", "http://" + ip);
+            }
+            o.put("ip", ip);
+            return o;
+        } catch (Exception ignored) {
+            return null;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
     }
 
     private String quoteJs(String value) {

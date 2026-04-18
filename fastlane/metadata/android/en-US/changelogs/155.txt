@@ -1,0 +1,2 @@
+Added HDHomeRun discovery, import, and remote playback settings.
+Improved Home refresh stability for repo + EPG reloads.
