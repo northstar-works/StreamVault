@@ -623,7 +623,7 @@ public class PlayerActivity extends Activity {
                 Log.d(TAG, "firstVideoFrameRendered url=" + v.url);
             }
             @Override public void onPlayerError(PlaybackException error) {
-                Log.e(TAG, "playerError code=" + error.errorCodeName + " msg=" + error.getMessage(), error);
+                Log.e(TAG, "playerError code=" + PlaybackException.getErrorCodeName(error.errorCode) + " msg=" + error.getMessage(), error);
                 cancelFailoverTimeout();
                 if (!primaryFailed[0]&&preferHls) {
                     primaryFailed[0]=true;
