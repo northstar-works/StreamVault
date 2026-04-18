@@ -1,0 +1,7 @@
+5.7.2-b157
+
+- Added a stricter HDHomeRun MPEG-TS playback path with explicit transport-stream MIME hints
+- Added TS extractor tuning for HDHR live streams to improve audio-only / black-screen cases
+- Enabled decoder fallback for native playback
+- Added HDHR playback diagnostics to log detected tracks, video size, first rendered frame, and player errors
+- Kept the existing player UI and playback flow intact

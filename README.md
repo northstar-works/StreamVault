@@ -4,6 +4,8 @@ Personal media streaming organizer with an integrated video player. Save streami
 
 **F-Droid ready** — includes fastlane metadata, fdroiddata build recipe, and a GitHub Actions workflow that publishes a self-hosted F-Droid repo via GitHub Pages.
 
+Latest update highlights: HDHomeRun repo-style channel loading and selection, optional XMLTV guide matching for HDHR, Tailscale/VPN-friendly remote mode for saved LAN tuner addresses, and a stricter HDHR MPEG-TS playback path with added diagnostics.
+
 ---
 
 ## Features

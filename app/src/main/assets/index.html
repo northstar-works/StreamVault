@@ -722,18 +722,30 @@ document.addEventListener('keydown', function(e) {
         <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;margin-left:auto;flex-shrink:0"><polyline points="9 6 15 12 9 18"/></svg>
       </button>
       <div class="acc-body" style="display:none;padding:6px 0 4px">
-        <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Scan your local network for HDHomeRun tuners, then add their channels into the Home screen under a dedicated HDHR tab.</p>
+        <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Scan your local network for HDHomeRun tuners, load their channels into a managed HDHR repo, then choose which ones should appear on the Home screen under the dedicated HDHR tab.</p>
         <div class="tv-row" data-tv-group="hdhr-actions">
           <button class="bs" id="s-hdhr-scan" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Scan HDHR Devices</button>
           <button class="bc" id="s-hdhr-open" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Open HDHR Tab</button>
+          <button class="bc" id="s-hdhr-manage" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Choose Channels</button>
         </div>
-        <div class="sr" style="margin-top:8px"><div><div class="sl">Prefer remote HDHR playback</div><div class="sd">When enabled, HDHR items use the remote base URL below instead of the local tuner IP.</div></div><div class="tgl" id="s-hdhr-remote-toggle"></div></div>
+        <div class="sr" style="margin-top:8px"><div><div class="sl">Tailscale / VPN remote mode</div><div class="sd">Keep using the tuner's saved LAN IPs remotely over Tailscale or another VPN. This is the best fit when your phone can reach your home subnet.</div></div><div class="tgl" id="s-hdhr-ts-toggle"></div></div>
+        <div class="sr" style="margin-top:8px"><div><div class="sl">Prefer remote HDHR relay URL</div><div class="sd">When enabled, HDHR items use the remote base URL below instead of the local tuner IP. Leave this off when using Tailscale/VPN subnet access.</div></div><div class="tgl" id="s-hdhr-remote-toggle"></div></div>
         <div style="margin-top:8px">
           <label>Remote HDHR base URL</label>
           <input id="s-hdhr-remote-base" placeholder="https://tv.yourdomain.com">
-          <div style="font-size:8px;color:var(--t3);margin-top:4px">Use a reverse proxy, VPN endpoint, or WAN-accessible relay that exposes the tuner stream paths.</div>
+          <div style="font-size:8px;color:var(--t3);margin-top:4px">Use only when you have a reverse proxy or relay for HDHR stream paths. For Tailscale/VPN, keep this blank and use saved LAN tuner IPs.</div>
+        </div>
+        <div style="margin-top:8px">
+          <label>HDHR XMLTV guide URL</label>
+          <input id="s-hdhr-xmltv" placeholder="https://provider.com/guide.xml or .xml.gz">
+          <div style="font-size:8px;color:var(--t3);margin-top:4px">Optional. StreamVault can use this XMLTV source to auto-match guide IDs for HDHR channels, similar to the guide data approach used by DVR apps.</div>
+        </div>
+        <div class="tv-row" data-tv-group="hdhr-guide-actions" style="margin-top:8px">
+          <button class="bc" id="s-hdhr-fetch-guide" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Fetch / Refresh HDHR Guide</button>
+          <button class="bc" id="s-hdhr-open-epg" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Open EPG Sources</button>
         </div>
         <div id="s-hdhr-status" style="font-size:9px;color:var(--t2);margin-top:8px">No HDHomeRun devices scanned yet</div>
+        <div id="s-hdhr-summary" style="font-size:8px;color:var(--t3);margin-top:4px">Repo not loaded yet</div>
         <div id="s-hdhr-devices" style="margin-top:8px"></div>
       </div>
     </div>
@@ -977,6 +989,26 @@ http://stream.example.com/cnn
   <div id="sm-list" style="max-height:50vh;overflow-y:auto"></div>
   <div class="mab" style="margin-top:10px">
     <button class="bc" tabindex="0" onclick="window._closeStreamMatcher()">Cancel</button>
+  </div>
+</div>
+</div>
+
+<!-- HDHR Channel Picker -->
+<div class="mo" id="mo-hdhr-picker">
+<div class="mc" style="max-height:85vh">
+  <h2 id="hdhr-pick-title" style="font-size:12px">Choose HDHR Channels</h2>
+  <div id="hdhr-pick-sub" style="font-size:9px;color:var(--t2);margin-bottom:8px"></div>
+  <input id="hdhr-pick-search" placeholder="Search HDHR channels…" autocomplete="off"
+    style="width:100%;padding:7px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:10px;margin-bottom:6px;box-sizing:border-box">
+  <div class="tv-row" style="margin-bottom:6px">
+    <button class="bc" id="hdhr-pick-all">Select All</button>
+    <button class="bc" id="hdhr-pick-none">Select None</button>
+    <button class="bc" id="hdhr-pick-refresh">Reload Device</button>
+  </div>
+  <div id="hdhr-pick-list" style="max-height:50vh;overflow-y:auto"></div>
+  <div class="mab" style="margin-top:10px">
+    <button class="bc" tabindex="0" id="hdhr-pick-cancel">Cancel</button>
+    <button class="bs" tabindex="0" id="hdhr-pick-save">Save Selection</button>
   </div>
 </div>
 </div>
@@ -2043,9 +2075,16 @@ function isIptvItem(item) {
 function isHdhrItem(item) {
   return !!(item && (item.sourceKind === 'hdhr' || item.hdhrMeta));
 }
+
 function getHdhrCfg() {
-  if (!settings.hdhr) settings.hdhr = { devices: [], remoteBaseUrl: '', preferRemote: false };
-  if (!Array.isArray(settings.hdhr.devices)) settings.hdhr.devices = [];
+  if (!settings.hdhr) settings.hdhr = {};
+  settings.hdhr.devices = Array.isArray(settings.hdhr.devices) ? settings.hdhr.devices : [];
+  settings.hdhr.repoChannels = Array.isArray(settings.hdhr.repoChannels) ? settings.hdhr.repoChannels : [];
+  settings.hdhr.selectedChannelKeys = Array.isArray(settings.hdhr.selectedChannelKeys) ? settings.hdhr.selectedChannelKeys : [];
+  settings.hdhr.remoteBaseUrl = String(settings.hdhr.remoteBaseUrl || '').trim();
+  settings.hdhr.preferRemote = !!settings.hdhr.preferRemote;
+  settings.hdhr.tailscaleMode = settings.hdhr.tailscaleMode !== false;
+  settings.hdhr.xmltvUrl = String(settings.hdhr.xmltvUrl || '').trim();
   return settings.hdhr;
 }
 function normalizeHdhrBase(url) {
@@ -2069,75 +2108,274 @@ function getHdhrDeviceById(deviceId) {
   const cfg = getHdhrCfg();
   return (cfg.devices || []).find(d => String(d.deviceId) === String(deviceId)) || null;
 }
+function hdhrChannelKey(deviceId, streamPath) {
+  return String(deviceId || '') + '::' + String(streamPath || '');
+}
+function getHdhrRepoChannels(deviceId) {
+  const cfg = getHdhrCfg();
+  return (cfg.repoChannels || []).filter(ch => !deviceId || String(ch.deviceId) === String(deviceId));
+}
+function normalizeChannelNameLoose(v) {
+  return String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\b(hd|uhd|dt|tv)\b/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function autoMatchHdhrEpgId(row, dev) {
+  const ids = getAllEpgIds();
+  if (!ids.length) return '';
+  const guideNumber = String(row.GuideNumber || row.guideNumber || '').trim();
+  const guideName = String(row.GuideName || row.guideName || row.name || '').trim();
+  if (guideNumber) {
+    const exactByNumber = ids.find(id => String(id).trim() === guideNumber);
+    if (exactByNumber) return exactByNumber;
+  }
+  const target = normalizeChannelNameLoose(guideName);
+  if (!target) return '';
+  let best = '';
+  for (const id of ids) {
+    const meta = epgData.channels && epgData.channels[id] || {};
+    const names = [id, meta.name || ''].filter(Boolean).map(normalizeChannelNameLoose);
+    if (names.some(n => n === target)) return id;
+    if (!best && names.some(n => n && (n.includes(target) || target.includes(n)))) best = id;
+  }
+  return best;
+}
+async function ensureHdhrXmltvLoaded(force) {
+  const cfg = getHdhrCfg();
+  const url = normalizeEpgUrl(cfg.xmltvUrl || '');
+  if (!url) return false;
+  const exists = epgSrc.find(s => normalizeEpgUrl(s.url) === url);
+  if (exists && !force) return true;
+  const src = exists || { id: gid(), name: 'HDHR XMLTV', url: url, lastFetch: 0, chCount: 0, hdhrGuide: true };
+  if (!exists) epgSrc.push(src);
+  await fetchEpgSource(src, false);
+  renderEpgList();
+  fillEpgSourceSelect(getDefaultEpgSourceUrl());
+  return true;
+}
 function resolveHdhrPlayableUrl(item, url) {
   if (!isHdhrItem(item)) return extractUrl(url || item.url || '');
   const cfg = getHdhrCfg();
   const hd = item.hdhrMeta || {};
   const remoteBase = normalizeHdhrBase(cfg.remoteBaseUrl || '');
+  if (cfg.tailscaleMode) return extractUrl(url || item.url || '');
   if (cfg.preferRemote && remoteBase) {
     const path = hd.streamPath || (() => { try { return new URL(extractUrl(url || item.url || ''), location.href).pathname; } catch (e) { return ''; } })();
     if (path) return remoteBase + path;
   }
   return extractUrl(url || item.url || '');
 }
-async function addHdhrChannelsFromDevice(deviceId) {
+async function loadHdhrChannelsFromDevice(deviceId, options) {
   const dev = getHdhrDeviceById(deviceId);
-  if (!dev || !dev.lineupUrl) { toast('HDHR lineup URL not available'); return; }
-  toast('Loading HDHR channels…');
+  if (!dev || !dev.lineupUrl) throw new Error('HDHR lineup URL not available');
   const resp = await fetch(dev.lineupUrl);
   if (!resp.ok) throw new Error('HTTP ' + resp.status);
   const lineup = await resp.json();
   const rows = Array.isArray(lineup) ? lineup : [];
-  let added = 0, updated = 0;
-  rows.forEach((row, idx) => {
+  const cfg = getHdhrCfg();
+  const selectedSet = new Set(cfg.selectedChannelKeys || []);
+  const loaded = rows.map((row, idx) => {
     const streamPath = row.URL || row.url || '';
-    if (!streamPath) return;
-    const path = streamPath.startsWith('http') ? (new URL(streamPath)).pathname : streamPath;
+    if (!streamPath) return null;
+    let path = streamPath;
+    try { path = streamPath.startsWith('http') ? (new URL(streamPath)).pathname : streamPath; } catch (e) {}
     const localUrl = streamPath.startsWith('http') ? streamPath : (normalizeHdhrBase(dev.baseUrl) + path);
-    const title = (row.GuideName || row.GuideNumber || row.name || ('HDHR ' + (idx + 1))).trim();
-    const existing = items.find(m => isHdhrItem(m) && m.hdhrMeta && String(m.hdhrMeta.deviceId) === String(dev.deviceId) && String(m.hdhrMeta.streamPath||'') === String(path));
+    const title = String((row.GuideName || row.GuideNumber || row.name || ('HDHR ' + (idx + 1))) || '').trim();
+    const key = hdhrChannelKey(dev.deviceId, path);
+    return {
+      key,
+      deviceId: dev.deviceId,
+      deviceName: dev.friendlyName || 'HDHomeRun',
+      title,
+      guideNumber: String(row.GuideNumber || row.guideNumber || '').trim(),
+      guideName: String(row.GuideName || row.guideName || title).trim(),
+      streamPath: path,
+      localUrl,
+      baseUrl: normalizeHdhrBase(dev.baseUrl),
+      lineupUrl: dev.lineupUrl,
+      epgTitle: autoMatchHdhrEpgId(row, dev),
+      selected: selectedSet.has(key),
+      icon: ''
+    };
+  }).filter(Boolean);
+  cfg.repoChannels = (cfg.repoChannels || []).filter(ch => String(ch.deviceId) !== String(dev.deviceId)).concat(loaded);
+  if (!cfg.selectedChannelKeys.length) cfg.selectedChannelKeys = loaded.slice(0, Math.min(loaded.length, 10)).map(ch => ch.key);
+  saveSettings();
+  if (!(options && options.silent)) toast('HDHR repo loaded: ' + loaded.length + ' channel' + (loaded.length !== 1 ? 's' : ''));
+  return loaded;
+}
+function syncHdhrSelectionToLibrary() {
+  const cfg = getHdhrCfg();
+  const selected = new Set(cfg.selectedChannelKeys || []);
+  const repo = cfg.repoChannels || [];
+  const selectedChannels = repo.filter(ch => selected.has(ch.key));
+  let added = 0, updated = 0;
+  selectedChannels.forEach(ch => {
+    const existing = items.find(m => isHdhrItem(m) && m.hdhrMeta && hdhrChannelKey(m.hdhrMeta.deviceId, m.hdhrMeta.streamPath) === ch.key);
     const payload = {
-      title: title,
-      url: localUrl,
+      title: ch.title,
+      url: ch.localUrl,
       category: 'HDHR',
-      region: dev.friendlyName || 'HDHomeRun',
-      icon: '',
+      region: ch.deviceName || 'HDHomeRun',
+      icon: ch.icon || '',
+      epgTitle: ch.epgTitle || '',
       sourceKind: 'hdhr',
-      baseName: extractBase(title),
+      baseName: extractBase(ch.title),
       hdhrMeta: {
-        deviceId: dev.deviceId,
-        friendlyName: dev.friendlyName,
-        modelNumber: dev.modelNumber,
-        guideNumber: String(row.GuideNumber || row.guideNumber || ''),
-        guideName: String(row.GuideName || row.guideName || title),
-        streamPath: path,
-        baseUrl: normalizeHdhrBase(dev.baseUrl),
-        lineupUrl: dev.lineupUrl
+        deviceId: ch.deviceId,
+        friendlyName: ch.deviceName || 'HDHomeRun',
+        guideNumber: ch.guideNumber || '',
+        guideName: ch.guideName || ch.title,
+        streamPath: ch.streamPath,
+        baseUrl: ch.baseUrl,
+        lineupUrl: ch.lineupUrl
       }
     };
     if (existing) { Object.assign(existing, payload); updated++; }
     else { items.push({ id: gid(), added: Date.now(), ...payload }); added++; }
   });
+  const selectedKeys = new Set(selectedChannels.map(ch => ch.key));
+  const before = items.length;
+  items = items.filter(m => !(isHdhrItem(m) && m.hdhrMeta && !selectedKeys.has(hdhrChannelKey(m.hdhrMeta.deviceId, m.hdhrMeta.streamPath))));
   saveItems();
   renderCats(); renderLibModes(); renderLibExtra(); renderLib();
-  toast('HDHR added ' + added + ' channel' + (added!==1?'s':'') + (updated ? (' · updated ' + updated) : ''));
+  return { added, updated, removed: before - items.length };
+}
+function renderHdhrSummary() {
+  const cfg = getHdhrCfg();
+  const summary = $('s-hdhr-summary');
+  if (!summary) return;
+  const repoCount = (cfg.repoChannels || []).length;
+  const selCount = (cfg.selectedChannelKeys || []).length;
+  const guideCount = (cfg.repoChannels || []).filter(ch => ch.epgTitle).length;
+  summary.textContent = repoCount
+    ? ('Repo loaded: ' + repoCount + ' channels · selected ' + selCount + ' · guide matched ' + guideCount)
+    : 'Repo not loaded yet';
+}
+function openHdhrPicker(deviceId) {
+  const cfg = getHdhrCfg();
+  const modal = $('mo-hdhr-picker');
+  if (!modal) return;
+  const input = $('hdhr-pick-search');
+  const list = $('hdhr-pick-list');
+  const titleEl = $('hdhr-pick-title');
+  const subEl = $('hdhr-pick-sub');
+  const dev = deviceId ? getHdhrDeviceById(deviceId) : null;
+  let rows = getHdhrRepoChannels(deviceId);
+  titleEl.textContent = dev ? ('Choose HDHR Channels · ' + (dev.friendlyName || 'HDHomeRun')) : 'Choose HDHR Channels';
+  subEl.textContent = rows.length ? 'Pick the tuner channels that should appear on the HDHR tab.' : 'Load a device first, then choose which channels should be added to Home → HDHR.';
+  function draw() {
+    const q = normalizeChannelNameLoose(input.value || '');
+    rows = getHdhrRepoChannels(deviceId);
+    const filtered = rows.filter(ch => !q || normalizeChannelNameLoose((ch.guideNumber ? ch.guideNumber + ' ' : '') + ch.title).includes(q));
+    const selected = new Set(cfg.selectedChannelKeys || []);
+    list.innerHTML = filtered.map(ch => `<button class="li hdhr-pick-row${selected.has(ch.key)?' on':''}" data-hdhr-key="${esc(ch.key)}" tabindex="0" style="width:100%;text-align:left;margin-bottom:4px;display:flex;align-items:flex-start;gap:8px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:10px;font-weight:700">${esc((ch.guideNumber ? ch.guideNumber + ' · ' : '') + ch.title)}</div>
+        <div style="font-size:8px;color:var(--t3)">${esc(ch.deviceName || '')}${ch.epgTitle ? (' · EPG ' + esc(ch.epgTitle)) : ' · No guide match yet'}</div>
+      </div>
+      <div style="font-size:8px;color:${selected.has(ch.key)?'#2ed573':'var(--t2)'};font-weight:700">${selected.has(ch.key)?'Selected':'Off'}</div>
+    </button>`).join('') || '<div style="font-size:8px;color:var(--t3)">No HDHR channels available.</div>';
+    Array.from(list.querySelectorAll('.hdhr-pick-row')).forEach(btn => btn.onclick = () => {
+      const key = btn.dataset.hdhrKey;
+      const set = new Set(cfg.selectedChannelKeys || []);
+      if (set.has(key)) set.delete(key); else set.add(key);
+      cfg.selectedChannelKeys = Array.from(set);
+      saveSettings();
+      draw();
+      renderHdhrSummary();
+    });
+  }
+  input.value = '';
+  input.oninput = draw;
+  $('hdhr-pick-all').onclick = () => {
+    const keys = getHdhrRepoChannels(deviceId).map(ch => ch.key);
+    cfg.selectedChannelKeys = Array.from(new Set((cfg.selectedChannelKeys || []).concat(keys)));
+    saveSettings(); draw(); renderHdhrSummary();
+  };
+  $('hdhr-pick-none').onclick = () => {
+    const remove = new Set(getHdhrRepoChannels(deviceId).map(ch => ch.key));
+    cfg.selectedChannelKeys = (cfg.selectedChannelKeys || []).filter(k => !remove.has(k));
+    saveSettings(); draw(); renderHdhrSummary();
+  };
+  $('hdhr-pick-refresh').onclick = async () => {
+    try {
+      if (!deviceId) { toast('Open a specific tuner to reload its lineup'); return; }
+      await loadHdhrChannelsFromDevice(deviceId, {});
+      draw();
+      renderHdhrSettings();
+    } catch (e) { toast('HDHR reload failed: ' + e.message); }
+  };
+  $('hdhr-pick-cancel').onclick = () => { modal.classList.remove('on'); refreshTvFocus(); };
+  $('hdhr-pick-save').onclick = async () => {
+    if (cfg.xmltvUrl) {
+      try { await ensureHdhrXmltvLoaded(false); } catch (e) {}
+      cfg.repoChannels = (cfg.repoChannels || []).map(ch => ch.epgTitle ? ch : ({ ...ch, epgTitle: autoMatchHdhrEpgId({ GuideNumber: ch.guideNumber, GuideName: ch.guideName }, null) || '' }));
+      saveSettings();
+    }
+    const result = syncHdhrSelectionToLibrary();
+    modal.classList.remove('on');
+    renderHdhrSettings();
+    toast('HDHR selection saved · added ' + result.added + ' · updated ' + result.updated + (result.removed ? (' · removed ' + result.removed) : ''));
+    setTimeout(refreshTvFocus, 40);
+  };
+  draw();
+  modal.classList.add('on');
+  setTimeout(() => { if (isTvDevice) { refreshTvFocus(); } else { input.focus(); } }, 40);
 }
 function renderHdhrSettings() {
   const cfg = getHdhrCfg();
   const scanBtn = $('s-hdhr-scan');
   const openBtn = $('s-hdhr-open');
+  const manageBtn = $('s-hdhr-manage');
   const remoteTgl = $('s-hdhr-remote-toggle');
+  const tailscaleTgl = $('s-hdhr-ts-toggle');
   const remoteBase = $('s-hdhr-remote-base');
+  const xmltvInput = $('s-hdhr-xmltv');
+  const fetchGuideBtn = $('s-hdhr-fetch-guide');
+  const openEpgBtn = $('s-hdhr-open-epg');
   const status = $('s-hdhr-status');
   const list = $('s-hdhr-devices');
+  if (tailscaleTgl) {
+    tailscaleTgl.className = 'tgl' + (cfg.tailscaleMode ? ' on' : '');
+    tailscaleTgl.onclick = () => {
+      cfg.tailscaleMode = !cfg.tailscaleMode;
+      if (cfg.tailscaleMode) cfg.preferRemote = false;
+      saveSettings();
+      renderHdhrSettings();
+      toast(cfg.tailscaleMode ? 'HDHR Tailscale/VPN mode enabled' : 'HDHR Tailscale/VPN mode disabled');
+    };
+  }
   if (remoteTgl) {
     remoteTgl.className = 'tgl' + (cfg.preferRemote ? ' on' : '');
-    remoteTgl.onclick = () => { cfg.preferRemote = !cfg.preferRemote; remoteTgl.className = 'tgl' + (cfg.preferRemote ? ' on' : ''); saveSettings(); toast(cfg.preferRemote ? 'HDHR remote playback enabled' : 'HDHR remote playback disabled'); };
+    remoteTgl.onclick = () => {
+      cfg.preferRemote = !cfg.preferRemote;
+      if (cfg.preferRemote) cfg.tailscaleMode = false;
+      saveSettings();
+      renderHdhrSettings();
+      toast(cfg.preferRemote ? 'HDHR relay URL enabled' : 'HDHR relay URL disabled');
+    };
   }
   if (remoteBase) {
     remoteBase.value = cfg.remoteBaseUrl || '';
     remoteBase.onchange = () => { cfg.remoteBaseUrl = normalizeHdhrBase(remoteBase.value); saveSettings(); };
   }
+  if (xmltvInput) {
+    xmltvInput.value = cfg.xmltvUrl || '';
+    xmltvInput.onchange = () => { cfg.xmltvUrl = normalizeEpgUrl(xmltvInput.value); saveSettings(); };
+  }
+  if (fetchGuideBtn) fetchGuideBtn.onclick = async () => {
+    if (!cfg.xmltvUrl) { toast('Set an HDHR XMLTV guide URL first'); return; }
+    try {
+      await ensureHdhrXmltvLoaded(true);
+      cfg.repoChannels = (cfg.repoChannels || []).map(ch => ({ ...ch, epgTitle: autoMatchHdhrEpgId({ GuideNumber: ch.guideNumber, GuideName: ch.guideName }, null) || ch.epgTitle || '' }));
+      saveSettings();
+      syncHdhrSelectionToLibrary();
+      renderHdhrSettings();
+      toast('HDHR guide refreshed');
+    } catch (e) {
+      toast('HDHR guide refresh failed: ' + e.message);
+    }
+  };
+  if (openEpgBtn) openEpgBtn.onclick = () => { $('mo-epg').classList.add('on'); setTimeout(refreshTvFocus, 40); };
   if (scanBtn) scanBtn.onclick = () => {
     if (window.NativePlayer && typeof window.NativePlayer.scanHdhrDevices === 'function') {
       if (status) status.textContent = 'Scanning local network for HDHomeRun devices…';
@@ -2147,13 +2385,26 @@ function renderHdhrSettings() {
     }
   };
   if (openBtn) openBtn.onclick = () => { activeLibPage = 'hdhr'; showTab('lib-scr'); renderCats(); renderLibModes(); renderLibExtra(); renderLib(); setTimeout(refreshTvFocus, 40); };
-  if (status) status.textContent = (cfg.devices && cfg.devices.length) ? ('Found ' + cfg.devices.length + ' HDHomeRun device' + (cfg.devices.length!==1?'s':'')) : 'No HDHomeRun devices scanned yet';
+  if (manageBtn) manageBtn.onclick = () => openHdhrPicker('');
+  if (status) status.textContent = (cfg.devices && cfg.devices.length)
+    ? ('Found ' + cfg.devices.length + ' HDHomeRun device' + (cfg.devices.length!==1?'s':'') + (cfg.tailscaleMode ? ' · Tailscale/VPN mode' : (cfg.preferRemote ? ' · relay URL mode' : ' · local LAN mode')))
+    : 'No HDHomeRun devices scanned yet';
+  renderHdhrSummary();
   if (list) {
     list.innerHTML = (cfg.devices || []).map(dev => {
+      const repoCount = getHdhrRepoChannels(dev.deviceId).length;
+      const selectedCount = getHdhrRepoChannels(dev.deviceId).filter(ch => (cfg.selectedChannelKeys || []).includes(ch.key)).length;
       const addedCount = items.filter(m => isHdhrItem(m) && m.hdhrMeta && String(m.hdhrMeta.deviceId) === String(dev.deviceId)).length;
-      return `<div class="li" style="margin-bottom:6px;align-items:flex-start"><div style="flex:1;min-width:0"><div style="font-size:10px;font-weight:600">${esc(dev.friendlyName || 'HDHomeRun')}<span style="color:var(--t3);font-weight:400"> · ${esc(dev.modelNumber || dev.deviceId || '')}</span></div><div style="font-size:8px;color:var(--t3)">${esc(dev.ip || '')}${dev.tunerCount ? (' · ' + dev.tunerCount + ' tuners') : ''}${addedCount ? (' · ' + addedCount + ' in library') : ''}</div></div><div class="tv-row" style="flex-wrap:wrap;justify-content:flex-end"><button class="bc hdhr-add" data-device-id="${esc(dev.deviceId)}" style="padding:6px 10px;font-size:8px">Add Channels</button></div></div>`;
+      return `<div class="li" style="margin-bottom:6px;align-items:flex-start"><div style="flex:1;min-width:0"><div style="font-size:10px;font-weight:600">${esc(dev.friendlyName || 'HDHomeRun')}<span style="color:var(--t3);font-weight:400"> · ${esc(dev.modelNumber || dev.deviceId || '')}</span></div><div style="font-size:8px;color:var(--t3)">${esc(dev.ip || '')}${dev.tunerCount ? (' · ' + dev.tunerCount + ' tuners') : ''}${repoCount ? (' · repo ' + repoCount) : ''}${selectedCount ? (' · selected ' + selectedCount) : ''}${addedCount ? (' · live ' + addedCount) : ''}</div></div><div class="tv-row" style="flex-wrap:wrap;justify-content:flex-end"><button class="bc hdhr-load" data-device-id="${esc(dev.deviceId)}" style="padding:6px 10px;font-size:8px">Load Repo</button><button class="bc hdhr-pick" data-device-id="${esc(dev.deviceId)}" style="padding:6px 10px;font-size:8px">Choose</button></div></div>`;
     }).join('') || '<div style="font-size:8px;color:var(--t3)">Press Scan HDHR Devices to look for tuners on your local network.</div>';
-    Array.from(list.querySelectorAll('.hdhr-add')).forEach(btn => btn.onclick = async () => { try { await addHdhrChannelsFromDevice(btn.dataset.deviceId); } catch (e) { toast('HDHR add failed: ' + e.message); } });
+    Array.from(list.querySelectorAll('.hdhr-load')).forEach(btn => btn.onclick = async () => {
+      try {
+        if (cfg.xmltvUrl) { try { await ensureHdhrXmltvLoaded(false); } catch (e) {} }
+        await loadHdhrChannelsFromDevice(btn.dataset.deviceId, {});
+        renderHdhrSettings();
+      } catch (e) { toast('HDHR load failed: ' + e.message); }
+    });
+    Array.from(list.querySelectorAll('.hdhr-pick')).forEach(btn => btn.onclick = () => openHdhrPicker(btn.dataset.deviceId));
   }
 }
 window.onNativeHdhrScanResults = function(rawJson) {
@@ -2170,7 +2421,6 @@ window.onNativeHdhrScanResults = function(rawJson) {
     toast('HDHR scan parse error');
   }
 }
-
 function getLibPageCounts() {
   // Count all items you own — pill reflects your library, not today's filter state.
   // (Sport filter hides channels on non-game days; that shouldn't make them disappear

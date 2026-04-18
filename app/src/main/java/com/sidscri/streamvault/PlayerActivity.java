@@ -16,6 +16,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -36,16 +37,22 @@ import androidx.annotation.OptIn;
 import androidx.documentfile.provider.DocumentFile;
 import androidx.media3.common.Format;
 import androidx.media3.common.MediaItem;
+import androidx.media3.common.MimeTypes;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
+import androidx.media3.common.Tracks;
+import androidx.media3.common.VideoSize;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.DataSource;
 import androidx.media3.datasource.DefaultHttpDataSource;
+import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.hls.HlsMediaSource;
 import androidx.media3.exoplayer.rtsp.RtspMediaSource;
 import androidx.media3.exoplayer.source.MediaSource;
 import androidx.media3.exoplayer.source.ProgressiveMediaSource;
+import androidx.media3.extractor.DefaultExtractorsFactory;
+import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory;
 import androidx.media3.ui.PlayerView;
 
 import org.json.JSONArray;
@@ -86,6 +93,8 @@ public class PlayerActivity extends Activity {
     public static final String EXTRA_SEEK_MS        = "seek_ms";
 
     // ─── State ───────────────────────────────────────────────────────────────
+    private static final String TAG = "StreamVaultPlayer";
+
     private ExoPlayer   player;
     private PlayerView  playerView;
     private View        loadingView, errorContainer;
@@ -107,6 +116,8 @@ public class PlayerActivity extends Activity {
     private boolean     timeshiftUserEnabled = true;  // from settings/intent
     private String      itemId          = null; // for Plex progress reporting
     private boolean     foAuto          = true;
+    private String      streamCategory  = "";
+    private String      streamTitle     = "";
     private ConnectivityManager.NetworkCallback networkCallback;
     private WifiManager.WifiLock wifiLock;
     private Runnable liveKeepAlive;
@@ -176,6 +187,8 @@ public class PlayerActivity extends Activity {
         foAuto      = getIntent().getBooleanExtra(EXTRA_FO_AUTO, true);
         savePath    = getIntent().getStringExtra(EXTRA_SAVE_PATH);
         itemId      = getIntent().getStringExtra(EXTRA_ITEM_ID);
+        streamCategory = String.valueOf(getIntent().getStringExtra(EXTRA_CATEGORY) != null ? getIntent().getStringExtra(EXTRA_CATEGORY) : "");
+        streamTitle    = String.valueOf(getIntent().getStringExtra(EXTRA_TITLE) != null ? getIntent().getStringExtra(EXTRA_TITLE) : "");
         long globalSeek = getIntent().getLongExtra(EXTRA_SEEK_MS, 0);
         timeshiftUserEnabled = getIntent().getBooleanExtra("ts_enabled", true);
         timeshiftMaxMin      = getIntent().getIntExtra("ts_max_min", 30);
@@ -213,6 +226,39 @@ public class PlayerActivity extends Activity {
     private boolean isIptvItem() {
         // ITV items don't have itemId set (only Plex items do)
         return itemId == null || itemId.isEmpty();
+    }
+
+    private boolean isLikelyHdhrTs(String rawUrl) {
+        String url = rawUrl != null ? rawUrl.toLowerCase(Locale.US) : "";
+        String cat = streamCategory != null ? streamCategory.toLowerCase(Locale.US) : "";
+        String ttl = streamTitle != null ? streamTitle.toLowerCase(Locale.US) : "";
+        return cat.contains("hdhr")
+            || ttl.contains("hdhomerun")
+            || url.contains("/auto/v")
+            || url.contains("/tuner")
+            || url.contains("hdhomerun")
+            || url.contains("/lineup.m3u");
+    }
+
+    private String buildTrackSummary(Tracks tracks) {
+        if (tracks == null) return "tracks=null";
+        StringBuilder sb = new StringBuilder();
+        for (Tracks.Group group : tracks.getGroups()) {
+            for (int i = 0; i < group.length; i++) {
+                if (!group.isTrackSupported(i)) continue;
+                Format f = group.getTrackFormat(i);
+                if (f == null) continue;
+                if (sb.length() > 0) sb.append(" | ");
+                String sampleMime = f.sampleMimeType != null ? f.sampleMimeType : "?";
+                String containerMime = f.containerMimeType != null ? f.containerMimeType : "?";
+                String codecs = f.codecs != null ? f.codecs : "";
+                sb.append(sampleMime).append(" @ ").append(containerMime);
+                if (!codecs.isEmpty()) sb.append(" [").append(codecs).append("]");
+                if (f.width > 0 || f.height > 0) sb.append(" ").append(f.width).append("x").append(f.height);
+                if (f.channelCount > 0) sb.append(" ").append(f.channelCount).append("ch");
+            }
+        }
+        return sb.length() == 0 ? "no-supported-tracks" : sb.toString();
     }
 
     // ─── UI ──────────────────────────────────────────────────────────────────
@@ -484,9 +530,10 @@ public class PlayerActivity extends Activity {
         if (idx>0) showMsg("Trying: "+display);
 
         DataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
-            .setUserAgent("StreamVault/5.6 ExoPlayer")
+            .setUserAgent("StreamVault/5.7 ExoPlayer")
             .setConnectTimeoutMs(15000).setReadTimeoutMs(15000)
-            .setAllowCrossProtocolRedirects(true);
+            .setAllowCrossProtocolRedirects(true)
+            .setContentTypePredicate(value -> true);
         // Wake lock keeps CPU alive during HLS segment downloads
         long tsBufferMs = (long) timeshiftMaxMin * 60 * 1000L;
         if (tsBufferMs <= 0) tsBufferMs = 30 * 60 * 1000L;
@@ -496,7 +543,9 @@ public class PlayerActivity extends Activity {
                     5_000, 7_500)
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build();
-        player = new ExoPlayer.Builder(this).setLoadControl(loadControl).build();
+        DefaultRenderersFactory renderersFactory = new DefaultRenderersFactory(this)
+            .setEnableDecoderFallback(true);
+        player = new ExoPlayer.Builder(this, renderersFactory).setLoadControl(loadControl).build();
         acquireWifiLock();
         playerView.setPlayer(player);
         playbackStartTime = System.currentTimeMillis();
@@ -504,16 +553,28 @@ public class PlayerActivity extends Activity {
         String scheme = getScheme(v.url);
         boolean useRtsp   = "rtsp".equals(scheme)||"rtsps".equals(scheme);
         boolean preferHls = !useRtsp && isLikelyHls(v.url);
+        boolean preferHdhrTs = !useRtsp && !preferHls && isLikelyHdhrTs(v.url);
+        MediaItem mediaItem = preferHdhrTs
+            ? new MediaItem.Builder().setUri(Uri.parse(v.url)).setMimeType(MimeTypes.VIDEO_MP2T).build()
+            : MediaItem.fromUri(Uri.parse(v.url));
+        DefaultExtractorsFactory extractorsFactory = new DefaultExtractorsFactory()
+            .setTsExtractorFlags(DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS
+                | DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES);
         MediaSource src = useRtsp
-            ? new RtspMediaSource.Factory().createMediaSource(MediaItem.fromUri(Uri.parse(v.url)))
+            ? new RtspMediaSource.Factory().createMediaSource(mediaItem)
             : (preferHls
-                ? new HlsMediaSource.Factory(httpFactory).setAllowChunklessPreparation(true).createMediaSource(MediaItem.fromUri(Uri.parse(v.url)))
-                : new ProgressiveMediaSource.Factory(httpFactory).createMediaSource(MediaItem.fromUri(Uri.parse(v.url))));
+                ? new HlsMediaSource.Factory(httpFactory).setAllowChunklessPreparation(true).createMediaSource(mediaItem)
+                : new ProgressiveMediaSource.Factory(httpFactory, extractorsFactory).createMediaSource(mediaItem));
+
+        Log.d(TAG, "playVariant url=" + v.url + " scheme=" + scheme + " hls=" + preferHls + " hdhrTs=" + preferHdhrTs + " category=" + streamCategory);
+        if (statusText != null && preferHdhrTs) statusText.setText("Source " + (idx+1) + "/" + variants.size() + " · HDHR TS mode" + (locked?" · 🔒":""));
 
         final boolean[] primaryFailed = {false};
         final DataSource.Factory hf2 = httpFactory;
+        final boolean hdhrTs = preferHdhrTs;
         player.addListener(new Player.Listener() {
             @Override public void onPlaybackStateChanged(int state) {
+                Log.d(TAG, "state=" + state + " hdhrTs=" + hdhrTs + " url=" + v.url);
                 if (state==Player.STATE_READY) {
                     loadingView.setVisibility(View.GONE);
                     errorContainer.setVisibility(View.GONE);
@@ -552,13 +613,29 @@ public class PlayerActivity extends Activity {
                     }
                 }
             }
+            @Override public void onTracksChanged(Tracks tracks) {
+                Log.d(TAG, "tracks=" + buildTrackSummary(tracks));
+            }
+            @Override public void onVideoSizeChanged(VideoSize videoSize) {
+                Log.d(TAG, "videoSize=" + videoSize.width + "x" + videoSize.height + " ratio=" + videoSize.pixelWidthHeightRatio);
+            }
+            @Override public void onRenderedFirstFrame() {
+                Log.d(TAG, "firstVideoFrameRendered url=" + v.url);
+            }
             @Override public void onPlayerError(PlaybackException error) {
+                Log.e(TAG, "playerError code=" + error.errorCodeName + " msg=" + error.getMessage(), error);
                 cancelFailoverTimeout();
                 if (!primaryFailed[0]&&preferHls) {
                     primaryFailed[0]=true;
                     try {
                         player.stop();
-                        MediaSource progressive = new ProgressiveMediaSource.Factory(hf2).createMediaSource(MediaItem.fromUri(Uri.parse(v.url)));
+                        MediaItem fallbackItem = hdhrTs
+                            ? new MediaItem.Builder().setUri(Uri.parse(v.url)).setMimeType(MimeTypes.VIDEO_MP2T).build()
+                            : MediaItem.fromUri(Uri.parse(v.url));
+                        DefaultExtractorsFactory fallbackExtractors = new DefaultExtractorsFactory()
+                            .setTsExtractorFlags(DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS
+                                | DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES);
+                        MediaSource progressive = new ProgressiveMediaSource.Factory(hf2, fallbackExtractors).createMediaSource(fallbackItem);
                         player.setMediaSource(progressive); player.prepare(); player.setPlayWhenReady(true);
                     } catch (Exception e) { tryNextVariant(); }
                     return;
