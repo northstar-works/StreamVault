@@ -736,16 +736,24 @@ document.addEventListener('keydown', function(e) {
           <div style="font-size:8px;color:var(--t3);margin-top:4px">Use only when you have a reverse proxy or relay for HDHR stream paths. For Tailscale/VPN, keep this blank and use saved LAN tuner IPs.</div>
         </div>
         <div style="margin-top:8px">
+          <label>HDHR guide provider</label>
+          <select id="s-hdhr-xmltv-provider">
+            <option value="schedulesdirect">Schedules Direct (recommended)</option>
+            <option value="custom">Custom XMLTV URL</option>
+          </select>
+          <div style="font-size:8px;color:var(--t3);margin-top:4px">Default provider is Schedules Direct for US/Canada lineups. Enter your own XMLTV export URL below.</div>
+        </div>
+        <div style="margin-top:8px">
           <label>HDHR XMLTV guide URL</label>
-          <input id="s-hdhr-xmltv" placeholder="https://provider.com/guide.xml or .xml.gz">
-          <div style="font-size:8px;color:var(--t3);margin-top:4px">Optional. StreamVault can use this XMLTV source to auto-match guide IDs for HDHR channels, similar to the guide data approach used by DVR apps.</div>
+          <input id="s-hdhr-xmltv" placeholder="Schedules Direct XMLTV URL or .xml/.xml.gz export">
+          <div style="font-size:8px;color:var(--t3);margin-top:4px">Optional. StreamVault can use this XMLTV source to auto-match guide IDs for HDHR channels. Schedules Direct is the default recommendation, but it still requires your own account and XMLTV export/feed URL.</div>
         </div>
         <div class="tv-row" data-tv-group="hdhr-guide-actions" style="margin-top:8px">
           <button class="bc" id="s-hdhr-fetch-guide" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Fetch / Refresh HDHR Guide</button>
           <button class="bc" id="s-hdhr-open-epg" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Open EPG Sources</button>
         </div>
         <div id="s-hdhr-status" style="font-size:9px;color:var(--t2);margin-top:8px">No HDHomeRun devices scanned yet</div>
-        <div id="s-hdhr-summary" style="font-size:8px;color:var(--t3);margin-top:4px">Repo not loaded yet</div>
+        <div id="s-hdhr-summary" style="font-size:8px;color:var(--t3);margin-top:4px">Repo not loaded yet · guide default: Schedules Direct</div>
         <div id="s-hdhr-devices" style="margin-top:8px"></div>
       </div>
     </div>
@@ -2085,6 +2093,7 @@ function getHdhrCfg() {
   settings.hdhr.preferRemote = !!settings.hdhr.preferRemote;
   settings.hdhr.tailscaleMode = settings.hdhr.tailscaleMode !== false;
   settings.hdhr.xmltvUrl = String(settings.hdhr.xmltvUrl || '').trim();
+  settings.hdhr.xmltvProvider = String(settings.hdhr.xmltvProvider || 'schedulesdirect').trim() || 'schedulesdirect';
   return settings.hdhr;
 }
 function normalizeHdhrBase(url) {
@@ -2330,6 +2339,7 @@ function renderHdhrSettings() {
   const tailscaleTgl = $('s-hdhr-ts-toggle');
   const remoteBase = $('s-hdhr-remote-base');
   const xmltvInput = $('s-hdhr-xmltv');
+  const xmltvProvider = $('s-hdhr-xmltv-provider');
   const fetchGuideBtn = $('s-hdhr-fetch-guide');
   const openEpgBtn = $('s-hdhr-open-epg');
   const status = $('s-hdhr-status');
@@ -2358,12 +2368,17 @@ function renderHdhrSettings() {
     remoteBase.value = cfg.remoteBaseUrl || '';
     remoteBase.onchange = () => { cfg.remoteBaseUrl = normalizeHdhrBase(remoteBase.value); saveSettings(); };
   }
+  if (xmltvProvider) {
+    xmltvProvider.value = cfg.xmltvProvider || 'schedulesdirect';
+    xmltvProvider.onchange = () => { cfg.xmltvProvider = String(xmltvProvider.value || 'schedulesdirect'); saveSettings(); };
+  }
   if (xmltvInput) {
+    xmltvInput.placeholder = (cfg.xmltvProvider === 'schedulesdirect') ? 'Schedules Direct XMLTV URL or .xml/.xml.gz export' : 'https://provider.com/guide.xml or .xml.gz';
     xmltvInput.value = cfg.xmltvUrl || '';
     xmltvInput.onchange = () => { cfg.xmltvUrl = normalizeEpgUrl(xmltvInput.value); saveSettings(); };
   }
   if (fetchGuideBtn) fetchGuideBtn.onclick = async () => {
-    if (!cfg.xmltvUrl) { toast('Set an HDHR XMLTV guide URL first'); return; }
+    if (!cfg.xmltvUrl) { toast(cfg.xmltvProvider === 'schedulesdirect' ? 'Enter your Schedules Direct XMLTV export URL first' : 'Set an HDHR XMLTV guide URL first'); return; }
     try {
       await ensureHdhrXmltvLoaded(true);
       cfg.repoChannels = (cfg.repoChannels || []).map(ch => ({ ...ch, epgTitle: autoMatchHdhrEpgId({ GuideNumber: ch.guideNumber, GuideName: ch.guideName }, null) || ch.epgTitle || '' }));

@@ -1,0 +1,4 @@
+5.7.3-b158
+- Set Schedules Direct as the default recommended HDHR XMLTV provider
+- Added HDHR guide provider selector (Schedules Direct / Custom XMLTV)
+- Improved HDHR XMLTV helper text and prompts
