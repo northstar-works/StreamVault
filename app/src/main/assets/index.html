@@ -490,6 +490,18 @@ document.addEventListener('keydown', function(e) {
           <button class="bc" id="sport-grp-detect" tabindex="0" style="padding:6px 12px;font-size:9px;border-radius:var(--rs);width:100%">Auto-detect from current library</button>
         </div>
 
+        <p style="font-size:9px;color:var(--ac);font-weight:600;margin-bottom:4px">② Add sport tab (no dedicated group)</p>
+        <p style="font-size:8px;color:var(--t3);margin-bottom:6px">For sports like NASCAR, PGA, LIV Golf, F1 that air across multiple repo groups — creates a pill tab using cross-group EPG matching. No My Teams needed.</p>
+        <div class="tv-row" data-tv-group="sport-virtual-row" style="position:relative;margin-bottom:12px">
+          <input id="sport-virtual-input" tabindex="0" placeholder="Search: NASCAR, PGA, LIV Golf, Formula 1…" autocomplete="off"
+            style="flex:1;padding:5px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px"
+            oninput="window._onVirtualLeagueInput && window._onVirtualLeagueInput(this.value)"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();window.addVirtualLeague&&window.addVirtualLeague();}"
+          >
+          <button class="bs" tabindex="0" onclick="window.addVirtualLeague && window.addVirtualLeague()" style="padding:5px 8px;font-size:9px;border-radius:var(--rs)">Add</button>
+          <div id="sport-virtual-sugg" style="display:none;position:absolute;top:100%;left:0;right:44px;z-index:500;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);max-height:160px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.4);margin-top:2px"></div>
+        </div>
+
         <hr style="border:none;border-top:1px solid var(--bd);margin:4px 0 8px">
 
         <!-- My Teams sub-accordion -->
@@ -6095,6 +6107,50 @@ function guessEspnPaths(groupName) {
   return paths;
 }
 
+// ── Group type auto-detection ─────────────────────────────────────────────────
+// Returns 'single' | 'multi' | 'virtual'
+// 'single'  → group clearly maps to one sport (MLB, NASCAR, EPL…)
+// 'multi'   → generic container (Sports, US Sports, Entertainment Sports)
+// 'virtual' → no dedicated repo group; EPG cross-match only
+function guessGroupType(groupName) {
+  if (!groupName) return 'virtual';
+  const gl = groupName.toLowerCase();
+  // Generic multi-sport container names
+  const isGenericSports = /\bsports?\b/.test(gl)
+    && !ESPN_LEAGUE_MAP.some(e => e.keys.some(k => k.length > 5 && gl.includes(k)));
+  if (isGenericSports) return 'multi';
+  // guessEspnPaths returns 4 major-league paths for generic groups → multi
+  const guessed = guessEspnPaths(groupName);
+  if (guessed.length >= 3) return 'multi';
+  if (guessed.length === 1) return 'single';
+  // Direct name match against any ESPN_LEAGUE_MAP entry → single
+  const directHit = ESPN_LEAGUE_MAP.some(e => e.keys.some(k => k.length > 3 && gl.includes(k)));
+  return directHit ? 'single' : 'multi';
+}
+
+// Scan a group's channel names + group name to auto-populate ESPN paths.
+// Searches SPORT_PREFIX_MAP, ESPN_LEAGUE_MAP keys, and guessEspnPaths.
+function scanGroupForSportPaths(lg) {
+  const detected = new Set(lg.espnPaths || []);
+  guessEspnPaths(lg.groupName).forEach(p => detected.add(p));
+  const channels = (function() {
+    if (lg.repoId) {
+      const repo = repos.find(r => r.id === lg.repoId);
+      return repo ? (repo.streams || []).filter(s => s.category === lg.groupName) : [];
+    }
+    return items.filter(m => m.category === lg.groupName);
+  })();
+  channels.forEach(function(ch) {
+    const t = (ch.title || ch.name || '').toLowerCase();
+    const p = detectSportPathFromTitle(t);
+    if (p) detected.add(p);
+    ESPN_LEAGUE_MAP.forEach(function(e) {
+      if (e.keys.some(function(k) { return k.length > 3 && t.includes(k); })) detected.add(e.path);
+    });
+  });
+  return Array.from(detected);
+}
+
 function detectSportPathFromTitle(titleLower) {
   for (const entry of SPORT_PREFIX_MAP) {
     if (new RegExp('^' + entry.prefix + '(\\s|\\d|\\||:|$)', 'i').test(titleLower.trim())) return entry.path;
@@ -6136,11 +6192,12 @@ function getSportGroupItems(lg) {
     primary = items.filter(m => m.category === lg.groupName);
   }
 
-  // Secondary (noTeam sports only): also pull channels from OTHER configured
-  // sport league groups whose EPG title matches this sport via detectSportPathFromTitle.
-  // This surfaces e.g. an NBC Sports channel (in "HDHR" group) that is airing
-  // a NASCAR race or LIV Golf tournament, even without a dedicated group.
-  if (isNoTeamLg && paths.length) {
+  // Secondary: for virtual leagues (no dedicated group) OR noTeam sports,
+  // also pull channels from OTHER configured groups whose EPG title matches.
+  // This surfaces e.g. an NBC Sports channel (in "HDHR" group) airing NASCAR,
+  // and makes virtual leagues (no group) work entirely via EPG cross-matching.
+  const usesCrossGroup = lg.virtual || isNoTeamLg;
+  if (usesCrossGroup && paths.length) {
     const primaryUrls = new Set(primary.map(m => m.url || m.id));
     // Gather all items from all OTHER configured sport leagues
     const otherLeagues = (settings.sportLeagues || []).filter(function(ol){ return ol.groupName !== lg.groupName; });
@@ -8050,7 +8107,8 @@ function renderSportLeagueSettings() {
     const selOpt = grpSel.options[grpSel.selectedIndex];
     const repoId = selOpt ? (selOpt.dataset.repo || '') : '';
     const autoPaths = guessEspnPaths(val);
-    settings.sportLeagues.push({ groupName: val, repoId, enabled: false, espnPaths: autoPaths, pinnedTeams: [], cachedGamesByPath: {}, cacheDate: '' });
+    const autoType = guessGroupType(val);
+    settings.sportLeagues.push({ groupName: val, groupType: autoType, virtual: false, repoId, enabled: false, espnPaths: autoPaths, pinnedTeams: [], cachedGamesByPath: {}, cacheDate: '' });
     _invalidateSportCache();
     saveSettings();
     fetchLeagueSchedule(settings.sportLeagues.length - 1).then(() => { renderSportLeagueSettings(); renderCats(); renderLib(); renderSportTab(); updateSportNavVisibility(); });
@@ -8064,7 +8122,7 @@ function renderSportLeagueSettings() {
     let added = 0;
     detectSportLeagueGroups().forEach(g => {
       if (!settings.sportLeagues.find(l => l.groupName === g)) {
-        settings.sportLeagues.push({ groupName: g, repoId: '', enabled: false, espnPaths: guessEspnPaths(g), pinnedTeams: [], cachedGamesByPath: {}, cacheDate: '' });
+        settings.sportLeagues.push({ groupName: g, groupType: guessGroupType(g), virtual: false, repoId: '', enabled: false, espnPaths: guessEspnPaths(g), pinnedTeams: [], cachedGamesByPath: {}, cacheDate: '' });
         _invalidateSportCache();
         added++;
       }
@@ -8082,11 +8140,17 @@ function renderSportLeagueSettings() {
     return;
   }
 
-  const espnOpts = '<option value="">— no ESPN link —</option>' +
-    '<option value="__all__">All (add all my team leagues)</option>' +
-    ESPN_SPORT_OPTIONS.map(o => `<option value="${esc(o.path)}">${esc(o.label)} (${esc(o.path)})</option>`).join('');
+  // Build full searchable path list: ESPN_LEAGUE_MAP + INTL_LEAGUE_DIR
+  const _allSearchPaths = [
+    ...ESPN_LEAGUE_MAP.map(e => ({ path: e.path, label: e.label, noTeam: !!e.noTeam })),
+    ...INTL_LEAGUE_DIR.map(e => ({ path: e.path, label: e.label, noTeam: false }))
+  ];
 
-  lst.innerHTML = settings.sportLeagues.map((lg, i) => {
+  // Split leagues into regular (group-backed) and virtual (no group)
+  const _regularLeagues = settings.sportLeagues.map((lg, i) => ({ lg, i })).filter(x => !x.lg.virtual);
+  const _virtualLeagues = settings.sportLeagues.map((lg, i) => ({ lg, i })).filter(x => x.lg.virtual);
+
+  function _renderLeagueCard({ lg, i }) {
     const paths = lg.espnPaths || (lg.espnPath ? [lg.espnPath] : []);
     const gc = _totalGameCount(lg);
     const cacheLabel = !paths.length
@@ -8096,53 +8160,245 @@ function renderSportLeagueSettings() {
       : `<span style="color:var(--gn)">${gc} game${gc!==1?'s':''} today ✓</span>`;
 
     const pathChips = paths.map((p, pi) => {
-      const lbl = (ESPN_SPORT_OPTIONS.find(o => o.path === p) || {}).label || p;
-      return `<span style="display:inline-flex;align-items:center;gap:2px;background:rgba(100,180,255,.15);border:1px solid rgba(100,180,255,.3);border-radius:4px;padding:2px 6px;font-size:8px;margin:2px">${esc(lbl)}<button onclick="rmSportPath(${i},${pi})" style="color:var(--rd);background:none;border:none;cursor:pointer;font-size:10px;padding:0 0 0 3px">✕</button></span>`;
+      const lbl = (_allSearchPaths.find(o => o.path === p) || {}).label || p;
+      const rmBtn = lg.virtual && paths.length <= 1 ? '' :
+        `<button onclick="rmSportPath(${i},${pi})" style="color:var(--rd);background:none;border:none;cursor:pointer;font-size:10px;padding:0 0 0 3px">✕</button>`;
+      return `<span style="display:inline-flex;align-items:center;gap:2px;background:rgba(100,180,255,.15);border:1px solid rgba(100,180,255,.3);border-radius:4px;padding:2px 6px;font-size:8px;margin:2px">${esc(lbl)}${rmBtn}</span>`;
     }).join('');
 
-    const repoName = lg.repoId ? (repos.find(r=>r.id===lg.repoId)||{}).name||lg.repoId : 'Library';
+    const _noTeamPathsCard = new Set(ESPN_LEAGUE_MAP.filter(e => e.noTeam).map(e => e.path));
+    const isNoTeamCard = paths.some(p => _noTeamPathsCard.has(p));
+    const noTeamBadge = isNoTeamCard
+      ? '<span style="display:inline-block;background:rgba(255,165,2,.15);border:1px solid rgba(255,165,2,.4);color:var(--or);border-radius:4px;padding:2px 7px;font-size:8px;margin-left:4px">🏁 Event sport</span>'
+      : '';
+
+    // Group type detection + badge
+    const effType = lg.groupType || (lg.virtual ? 'virtual' : guessGroupType(lg.groupName));
+    const typeBadgeStyle = effType === 'virtual'
+      ? 'background:rgba(108,92,231,.15);border-color:rgba(108,92,231,.4);color:#a08fff'
+      : effType === 'single'
+        ? 'background:rgba(46,213,115,.1);border-color:rgba(46,213,115,.3);color:var(--gn)'
+        : 'background:rgba(0,184,212,.1);border-color:rgba(0,184,212,.3);color:#4dd9f0';
+    const typeIcon = effType === 'virtual' ? '🔗' : effType === 'single' ? '🏷' : '🗂';
+    const typeLabel = effType === 'virtual' ? 'Virtual' : effType === 'single' ? 'Single sport' : 'Multi-sport';
+    const typeBadge = `<span style="display:inline-block;border:1px solid;border-radius:4px;padding:2px 7px;font-size:8px;margin-left:4px;${typeBadgeStyle}">${typeIcon} ${typeLabel}</span>`;
+
+    // Subtitle
+    const repoName = lg.virtual ? 'Cross-group EPG match' : (lg.repoId ? (repos.find(r=>r.id===lg.repoId)||{}).name||lg.repoId : 'Library');
     const _srcItems = getSportGroupItems(lg);
     const srcCount = _srcItems.length;
-    const _crossCount = _srcItems.filter(function(m){return m._crossGroupMatch;}).length;
-    const srcCountLabel = srcCount + ' channel' + (srcCount!==1?'s':'') + (_crossCount > 0 ? ' (' + _crossCount + ' cross-group)' : '');
-    const _noTeamPathsCard = new Set(ESPN_LEAGUE_MAP.filter(function(e){return e.noTeam;}).map(function(e){return e.path;}));
-    const isNoTeamCard = paths.some(function(p){return _noTeamPathsCard.has(p);});
-    const noTeamBadge = isNoTeamCard ? '<span style="display:inline-block;background:rgba(255,165,2,.15);border:1px solid rgba(255,165,2,.4);color:var(--or);border-radius:4px;padding:2px 7px;font-size:8px;margin-left:4px">🏁 Event sport · No teams needed</span>' : '';
+    const _crossCount = _srcItems.filter(m => m._crossGroupMatch).length;
+    const srcCountLabel = lg.virtual
+      ? (_crossCount + ' matched channel' + (_crossCount !== 1 ? 's' : ''))
+      : (srcCount + ' channel' + (srcCount !== 1 ? 's' : '') + (_crossCount > 0 ? ' (+' + _crossCount + ' cross)' : ''));
+
+    // Path editor section — locked for single-sport non-virtual, full picker otherwise
+    const isSingle = effType === 'single' && !lg.virtual;
+    const pathHint = isNoTeamCard
+      ? 'Event sport — all channels show when any event is scheduled. No My Teams needed.'
+      : lg.virtual
+        ? 'Virtual tab — finds channels across all groups whose EPG title matches.'
+        : 'Channels in this group matched by title keywords to the sport.';
+
+    const autoFillBtn = (!isSingle && !lg.virtual)
+      ? `<button class="bc" onclick="autoFillSportPaths(${i})" style="padding:5px 8px;font-size:9px;border-radius:var(--rs)" title="Scan channels to auto-detect sport paths">🔍 Auto-fill</button>`
+      : '';
+    const typeToggleBtn = !lg.virtual
+      ? `<button class="bc" onclick="toggleGroupType(${i})" style="padding:5px 8px;font-size:9px;border-radius:var(--rs)" title="Toggle single/multi sport">${isSingle ? '→ Multi' : '→ Single'}</button>`
+      : '';
+
+    // Searchable path picker (hidden for single-sport locked groups)
+    const pickerHtml = isSingle ? '' : `
+        <div style="position:relative;margin-top:4px">
+          <div style="display:flex;gap:4px;align-items:center">
+            <input id="sport-path-search-${i}" tabindex="0" placeholder="Search leagues to add…" autocomplete="off"
+              style="flex:1;padding:5px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px">
+            <button class="bc" onclick="refreshSportLeague(${i})" style="padding:5px 8px;font-size:9px;border-radius:var(--rs)" title="Fetch schedule">↻</button>
+          </div>
+          <div id="sport-path-sugg-${i}" style="display:none;position:absolute;top:100%;left:0;right:44px;z-index:500;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);max-height:150px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.4);margin-top:2px"></div>
+        </div>`;
 
     return `<div style="border:1px solid var(--bd);border-radius:var(--rs);padding:8px;margin-bottom:8px">
       <div class="sr" style="margin-bottom:6px">
-        <div style="flex:1">
-          <div class="sl">${esc(lg.groupName)}${noTeamBadge}</div>
+        <div style="flex:1;min-width:0">
+          <div class="sl" style="display:flex;flex-wrap:wrap;align-items:center;gap:2px">${esc(lg.groupName)}${typeBadge}${noTeamBadge}</div>
           <div class="sd">${esc(repoName)} · ${srcCountLabel} · ${cacheLabel}</div>
         </div>
-        <div style="display:flex;align-items:center;gap:4px">
-          <span style="font-size:8px;color:var(--t2)">${lg.enabled?'Filter ON':'Filter OFF'}</span>
+        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+          <span style="font-size:8px;color:var(--t2)">${lg.enabled?'ON':'OFF'}</span>
           <div class="tgl${lg.enabled?' on':''}" id="sport-tgl-${i}" onclick="window.toggleSportLeague && window.toggleSportLeague(${i})"></div>
           <button onclick="rmSportLeague(${i})" style="color:var(--rd);background:none;border:none;cursor:pointer;font-size:12px;padding:2px 6px" title="Remove">✕</button>
         </div>
       </div>
-      <div style="margin-bottom:6px">
-        <div style="font-size:8px;color:var(--t2);margin-bottom:3px">ESPN schedule paths${isNoTeamCard ? ' · Event sports (Golf/NASCAR/F1/etc) show all channels when any event is scheduled — no My Teams needed' : ' (channels matched by title prefix)'}:</div>
-        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:2px;margin-bottom:4px">
-          ${pathChips || '<span style="font-size:8px;color:var(--t3)">None added</span>'}
-        </div>
-        <div style="display:flex;gap:4px;align-items:center">
-          <select id="sport-path-add-${i}" style="flex:1;padding:5px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px">${espnOpts}</select>
-          <button class="bs" onclick="addSportPath(${i})" style="padding:5px 8px;font-size:9px;border-radius:var(--rs)">＋</button>
-          <button class="bc" onclick="refreshSportLeague(${i})" style="padding:5px 8px;font-size:9px;border-radius:var(--rs)" title="Fetch schedule">↻</button>
-        </div>
+      <div style="font-size:8px;color:var(--t3);margin-bottom:5px">${pathHint}</div>
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:2px;margin-bottom:4px">
+        ${pathChips || '<span style="font-size:8px;color:var(--t3)">No ESPN paths</span>'}
       </div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:2px">
+        ${autoFillBtn}${typeToggleBtn}
+      </div>
+      ${pickerHtml}
     </div>`;
-  }).join('');
+  }
 
+  const regularHtml = _regularLeagues.map(_renderLeagueCard).join('');
+  const virtualHtml = _virtualLeagues.length
+    ? `<div style="font-size:9px;font-weight:700;color:var(--ac);margin:10px 0 4px">🔗 Virtual sport tabs (cross-group EPG)</div>` + _virtualLeagues.map(_renderLeagueCard).join('')
+    : '';
+
+  lst.innerHTML = (regularHtml || '<p style="font-size:8px;color:var(--t3)">No group leagues yet.</p>') + virtualHtml;
+
+  // Wire up searchable path pickers for each league card
   settings.sportLeagues.forEach((lg, i) => {
-    const espnSel = $('sport-path-add-' + i);
-    // dynamic wiring done via inline onclick
+    const searchInp = $('sport-path-search-' + i);
+    const suggDiv   = $('sport-path-sugg-'   + i);
+    if (!searchInp || !suggDiv) return;
+    searchInp.oninput = function() {
+      const q = searchInp.value.toLowerCase().trim();
+      const existing = new Set(lg.espnPaths || []);
+      if (!q) { suggDiv.style.display = 'none'; return; }
+      const matches = _allSearchPaths
+        .filter(o => !existing.has(o.path) && (o.label.toLowerCase().includes(q) || o.path.toLowerCase().includes(q)))
+        .slice(0, 12);
+      if (!matches.length) { suggDiv.style.display = 'none'; return; }
+      suggDiv.innerHTML = matches.map(o =>
+        `<div data-path="${esc(o.path)}" style="padding:5px 8px;cursor:pointer;font-size:9px;border-bottom:1px solid var(--bd)">${esc(o.label)}<span style="color:var(--t3);font-size:8px;margin-left:4px">${esc(o.path)}</span>${o.noTeam ? ' <span style="color:var(--or);font-size:7px">🏁 event</span>' : ''}</div>`
+      ).join('');
+      suggDiv.style.display = 'block';
+      Array.from(suggDiv.children).forEach(el => {
+        el.onmouseenter = () => el.style.background = 'var(--c2)';
+        el.onmouseleave = () => el.style.background = '';
+        el.onclick = () => {
+          const p = el.dataset.path;
+          if (!p) return;
+          if (!lg.espnPaths) lg.espnPaths = [];
+          if (!lg.espnPaths.includes(p)) {
+            lg.espnPaths.push(p);
+            _invalidateSportCache();
+            saveSettings();
+          }
+          searchInp.value = '';
+          suggDiv.style.display = 'none';
+          fetchLeagueSchedule(i).then(function() { renderSportLeagueSettings(); renderSportTab(); });
+          renderSportLeagueSettings();
+        };
+      });
+    };
+    // Close suggestions when focus leaves
+    searchInp.onblur = () => setTimeout(() => { if (suggDiv) suggDiv.style.display = 'none'; }, 200);
   });
+
+  // Wire virtual league search input
+  const virtInp  = $('sport-virtual-input');
+  const virtSugg = $('sport-virtual-sugg');
+  if (virtInp && virtSugg) {
+    window._onVirtualLeagueInput = function(val) {
+      const q = val.toLowerCase().trim();
+      const existingPaths = new Set(
+        (settings.sportLeagues || []).filter(l => l.virtual).flatMap(l => l.espnPaths || [])
+      );
+      virtInp.dataset.selectedPath = '';
+      if (!q) { virtSugg.style.display = 'none'; return; }
+      const matches = _allSearchPaths
+        .filter(o => !existingPaths.has(o.path) && (o.label.toLowerCase().includes(q) || o.path.toLowerCase().includes(q)))
+        .slice(0, 10);
+      if (!matches.length) { virtSugg.style.display = 'none'; return; }
+      virtSugg.innerHTML = matches.map(o =>
+        `<div data-path="${esc(o.path)}" data-label="${esc(o.label)}" style="padding:5px 8px;cursor:pointer;font-size:9px;border-bottom:1px solid var(--bd)">${esc(o.label)}<span style="color:var(--t3);font-size:8px;margin-left:4px">${esc(o.path)}</span>${o.noTeam ? ' <span style="color:var(--or);font-size:7px">🏁</span>' : ''}</div>`
+      ).join('');
+      virtSugg.style.display = 'block';
+      Array.from(virtSugg.children).forEach(el => {
+        el.onmouseenter = () => el.style.background = 'var(--c2)';
+        el.onmouseleave = () => el.style.background = '';
+        el.onclick = () => {
+          virtInp.value = el.dataset.label;
+          virtInp.dataset.selectedPath  = el.dataset.path;
+          virtInp.dataset.selectedLabel = el.dataset.label;
+          virtSugg.style.display = 'none';
+        };
+      });
+    };
+    virtInp.onblur = () => setTimeout(() => { if (virtSugg) virtSugg.style.display = 'none'; }, 200);
+  }
+
   updateSportNavVisibility();
 }
 
 // ── Window functions ─────────────────────────────────────────────────────────
+
+// Auto-fill ESPN paths for a multi-sport group by scanning channel names
+window.autoFillSportPaths = function(i) {
+  const lg = settings.sportLeagues && settings.sportLeagues[i];
+  if (!lg) return;
+  const paths = scanGroupForSportPaths(lg);
+  if (!paths.length) { toast('No sports detected in this group'); return; }
+  lg.espnPaths = paths;
+  lg.groupType = lg.groupType || 'multi';
+  _invalidateSportCache();
+  saveSettings();
+  toast('Auto-filled ' + paths.length + ' sport path' + (paths.length !== 1 ? 's' : ''));
+  fetchLeagueSchedule(i).then(function() { renderSportLeagueSettings(); renderSportTab(); });
+  renderSportLeagueSettings();
+};
+
+// Toggle a league card between 'single' and 'multi' group type
+window.toggleGroupType = function(i) {
+  const lg = settings.sportLeagues && settings.sportLeagues[i];
+  if (!lg) return;
+  const cur = lg.groupType || guessGroupType(lg.groupName);
+  if (cur === 'single') {
+    lg.groupType = 'multi';
+    // Auto-fill paths when switching to multi
+    lg.espnPaths = scanGroupForSportPaths(lg);
+  } else {
+    lg.groupType = 'single';
+    // Lock to one auto-detected path
+    const guessed = guessEspnPaths(lg.groupName);
+    if (guessed.length) lg.espnPaths = [guessed[0]];
+  }
+  _invalidateSportCache();
+  saveSettings();
+  renderSportLeagueSettings();
+  renderSportTab();
+};
+
+// Add a virtual league (sport tab with no dedicated group — cross-EPG match)
+window.addVirtualLeague = function() {
+  const inp = $('sport-virtual-input');
+  const sugg = $('sport-virtual-sugg');
+  if (!inp) return;
+  const path = inp.dataset.selectedPath || '';
+  const label = inp.dataset.selectedLabel || inp.value.trim();
+  if (!path) { toast('Search and select a sport first'); return; }
+  if (!settings.sportLeagues) settings.sportLeagues = [];
+  if (settings.sportLeagues.find(l => l.virtual && l.espnPaths && l.espnPaths.includes(path))) {
+    toast('Already added'); return;
+  }
+  const mapEntry = ESPN_LEAGUE_MAP.find(e => e.path === path);
+  const groupName = mapEntry ? mapEntry.label : label;
+  settings.sportLeagues.push({
+    groupName,
+    groupType: 'virtual',
+    virtual: true,
+    repoId: '',
+    enabled: true,
+    espnPaths: [path],
+    pinnedTeams: [],
+    cachedGamesByPath: {},
+    cacheDate: ''
+  });
+  _invalidateSportCache();
+  saveSettings();
+  inp.value = '';
+  inp.dataset.selectedPath = '';
+  inp.dataset.selectedLabel = '';
+  if (sugg) sugg.style.display = 'none';
+  fetchLeagueSchedule(settings.sportLeagues.length - 1).then(function() {
+    renderSportLeagueSettings(); renderSportTab(); updateSportNavVisibility();
+  });
+  renderSportLeagueSettings();
+  toast('Added virtual league: ' + groupName);
+};
 
 window.refreshSportLeague = async (i) => {
   const lg = settings.sportLeagues && settings.sportLeagues[i];
@@ -8452,49 +8708,18 @@ window.rmSportLeague = (i) => {
   }, 60);
 };
 
-window.addSportPath = (i) => {
-  const sel = $('sport-path-add-' + i);
-  if (!sel || !sel.value) { toast('Pick an ESPN league first'); return; }
-  if (!settings.sportLeagues[i].espnPaths) settings.sportLeagues[i].espnPaths = [];
-  if (sel.value === '__all__') {
-    var _allPaths = new Set();
-    (settings.myTeams || []).forEach(function(t) { if (t.espnPath) _allPaths.add(t.espnPath); });
-    (settings.sportLeagues || []).forEach(function(lg) {
-      var p = lg.espnPaths || [];
-      if (p.length === 1) _allPaths.add(p[0]);
-    });
-    var added = 0;
-    _allPaths.forEach(function(p) {
-      if (!settings.sportLeagues[i].espnPaths.includes(p)) {
-        settings.sportLeagues[i].espnPaths.push(p);
-        added++;
-      }
-    });
-    if (!added) { toast('All leagues already added'); return; }
-    settings.sportLeagues[i].cacheDate = '';
-    saveSettings();
-    fetchLeagueSchedule(i).then(() => { renderSportLeagueSettings(); renderSportTab(); setTimeout(function() { var el = $('sport-path-add-' + i); if (el) el.focus(); }, 60); });
-    renderSportLeagueSettings();
-    setTimeout(function() { var el = $('sport-path-add-' + i); if (el) el.focus(); }, 60);
-    toast(added + ' league path(s) added');
-    return;
-  }
-  if (settings.sportLeagues[i].espnPaths.includes(sel.value)) { toast('Already added'); return; }
-  settings.sportLeagues[i].espnPaths.push(sel.value);
-  settings.sportLeagues[i].cacheDate = '';
-  saveSettings();
-  fetchLeagueSchedule(i).then(() => { renderSportLeagueSettings(); renderSportTab(); setTimeout(function() { var el = $('sport-path-add-' + i); if (el) el.focus(); }, 60); });
-  renderSportLeagueSettings();
-  setTimeout(function() { var el = $('sport-path-add-' + i); if (el) el.focus(); }, 60);
-};
+// addSportPath: kept as no-op stub for any lingering references; path adding now
+// done via the searchable picker input wired in renderSportLeagueSettings().
+window.addSportPath = (i) => {};
 
 window.rmSportPath = (i, pi) => {
-  if (!settings.sportLeagues[i].espnPaths) return;
+  if (!settings.sportLeagues[i] || !settings.sportLeagues[i].espnPaths) return;
   const removed = settings.sportLeagues[i].espnPaths.splice(pi, 1)[0];
   if (removed && settings.sportLeagues[i].cachedGamesByPath) delete settings.sportLeagues[i].cachedGamesByPath[removed];
-  saveSettings(); renderSportLeagueSettings();
-  // Restore focus to the ESPN dropdown for this league group
-  setTimeout(function() { var el = $('sport-path-add-' + i); if (el) el.focus(); }, 60);
+  _invalidateSportCache();
+  saveSettings();
+  renderSportLeagueSettings();
+  renderSportTab();
 };
 
 
