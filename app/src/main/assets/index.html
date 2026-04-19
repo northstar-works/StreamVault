@@ -2216,7 +2216,13 @@ function syncHdhrSelectionToLibrary() {
   const cfg = getHdhrCfg();
   const selected = new Set(cfg.selectedChannelKeys || []);
   const repo = cfg.repoChannels || [];
-  const selectedChannels = repo.filter(ch => selected.has(ch.key));
+  // Sort by guide number numerically so HDHR tab shows channels in tuner order
+  // guideNumber is a string like "4.1", "27.1" — split on "." for major/minor sort
+  const selectedChannels = repo.filter(ch => selected.has(ch.key)).sort((a, b) => {
+    const [aMaj, aMin = 0] = (a.guideNumber || '0').split('.').map(Number);
+    const [bMaj, bMin = 0] = (b.guideNumber || '0').split('.').map(Number);
+    return aMaj !== bMaj ? aMaj - bMaj : aMin - bMin;
+  });
   let added = 0, updated = 0;
   selectedChannels.forEach(ch => {
     const existing = items.find(m => isHdhrItem(m) && m.hdhrMeta && hdhrChannelKey(m.hdhrMeta.deviceId, m.hdhrMeta.streamPath) === ch.key);
@@ -2275,7 +2281,13 @@ function openHdhrPicker(deviceId) {
   function draw() {
     const q = normalizeChannelNameLoose(input.value || '');
     rows = getHdhrRepoChannels(deviceId);
-    const filtered = rows.filter(ch => !q || normalizeChannelNameLoose((ch.guideNumber ? ch.guideNumber + ' ' : '') + ch.title).includes(q));
+    const filtered = rows
+      .filter(ch => !q || normalizeChannelNameLoose((ch.guideNumber ? ch.guideNumber + ' ' : '') + ch.title).includes(q))
+      .sort((a, b) => {
+        const [aMaj, aMin = 0] = (a.guideNumber || '0').split('.').map(Number);
+        const [bMaj, bMin = 0] = (b.guideNumber || '0').split('.').map(Number);
+        return aMaj !== bMaj ? aMaj - bMaj : aMin - bMin;
+      });
     const selected = new Set(cfg.selectedChannelKeys || []);
     list.innerHTML = filtered.map(ch => `<button class="li hdhr-pick-row${selected.has(ch.key)?' on':''}" data-hdhr-key="${esc(ch.key)}" tabindex="0" style="width:100%;text-align:left;margin-bottom:4px;display:flex;align-items:flex-start;gap:8px">
       <div style="flex:1;min-width:0">
@@ -5932,12 +5944,13 @@ const ESPN_LEAGUE_MAP = [
   { keys:['ncaaf','ncaa football','cfb','college football'], path:'football/college-football',            label:'CFB',         icon:'🎓🏈' },
   { keys:['ncaa basketball','ncaab','college basketball'], path:'basketball/mens-college-basketball',   label:'NCAAB',       icon:'🎓🏀' },
   { keys:['liga mx'],                                      path:'soccer/mex.1',                         label:'Liga MX',     icon:'🇲🇽' },
-  { keys:['ufc','mma','ultimate fighting'],                path:'mma/ufc',                              label:'UFC/MMA',     icon:'🥊' },
-  { keys:['boxing','ppv boxing'],                          path:'boxing/boxing',                        label:'Boxing',      icon:'🥊' },
-  { keys:['tennis','atp','wta'],                           path:'tennis/atp',                           label:'Tennis',      icon:'🎾' },
-  { keys:['golf','pga'],                                   path:'golf/leaderboard',                     label:'Golf',        icon:'⛳' },
-  { keys:['racing','nascar'],                              path:'racing/nascar',                        label:'NASCAR',      icon:'🏁' },
-  { keys:['formula 1','formula one','f1'],                 path:'racing/f1',                            label:'Formula 1',   icon:'🏎️' },
+  { keys:['ufc','mma','ultimate fighting'],                path:'mma/ufc',                              label:'UFC/MMA',     icon:'🥊', noTeam:true },
+  { keys:['boxing','ppv boxing'],                          path:'boxing/boxing',                        label:'Boxing',      icon:'🥊', noTeam:true },
+  { keys:['tennis','atp','wta'],                           path:'tennis/atp',                           label:'Tennis',      icon:'🎾', noTeam:true },
+  { keys:['golf','pga'],                                   path:'golf/leaderboard',                     label:'Golf',        icon:'⛳', noTeam:true },
+  { keys:['liv golf','liv'],                               path:'golf/liv',                             label:'LIV Golf',    icon:'⛳', noTeam:true },
+  { keys:['racing','nascar'],                              path:'racing/nascar',                        label:'NASCAR',      icon:'🏁', noTeam:true },
+  { keys:['formula 1','formula one','f1'],                 path:'racing/f1',                            label:'Formula 1',   icon:'🏎️', noTeam:true },
   { keys:['cricket'],                                      path:'cricket/icc-cricket',                  label:'Cricket',     icon:'🏏' },
   { keys:['cfl','canadian football'],                      path:'football/cfl',                         label:'CFL',         icon:'🇨🇦🏈' },
   { keys:['rugby','mlr','major league rugby'],             path:'rugby/289262',                         label:'MLR',         icon:'🏉' },
@@ -6102,19 +6115,68 @@ function isSportLeagueGroup(category) { return !!(category && getSportLeagueConf
 
 // Get all configured sport groups' source items (from repos or library)
 function getSportGroupItems(lg) {
+  const paths = lg.espnPaths || (lg.espnPath ? [lg.espnPath] : []);
+  const _noTeamPathsGrp = new Set(ESPN_LEAGUE_MAP.filter(function(e){return e.noTeam;}).map(function(e){return e.path;}));
+  const isNoTeamLg = paths.some(function(p){return _noTeamPathsGrp.has(p);});
+
+  // Primary: channels whose category exactly matches this league's groupName
+  let primary = [];
   if (lg.repoId) {
     const repo = repos.find(r => r.id === lg.repoId);
     if (repo) {
-      return (repo.streams || [])
-        .filter(s => s.category === lg.groupName)  // ONLY streams in this group
+      primary = (repo.streams || [])
+        .filter(s => s.category === lg.groupName)
         .map(s => ({
           id: s.url, title: s.name || s.title || '', url: s.url,
           category: lg.groupName, icon: s.icon || '',
           epgTitle: s.epgTitle || '', region: s.region || ''
         }));
     }
+  } else {
+    primary = items.filter(m => m.category === lg.groupName);
   }
-  return items.filter(m => m.category === lg.groupName);
+
+  // Secondary (noTeam sports only): also pull channels from OTHER configured
+  // sport league groups whose EPG title matches this sport via detectSportPathFromTitle.
+  // This surfaces e.g. an NBC Sports channel (in "HDHR" group) that is airing
+  // a NASCAR race or LIV Golf tournament, even without a dedicated group.
+  if (isNoTeamLg && paths.length) {
+    const primaryUrls = new Set(primary.map(m => m.url || m.id));
+    // Gather all items from all OTHER configured sport leagues
+    const otherLeagues = (settings.sportLeagues || []).filter(function(ol){ return ol.groupName !== lg.groupName; });
+    const otherItems = [];
+    otherLeagues.forEach(function(ol) {
+      const olItems = ol.repoId
+        ? (function(){
+            const r = repos.find(function(r2){return r2.id===ol.repoId;});
+            return r ? (r.streams||[]).filter(function(s){return s.category===ol.groupName;}).map(function(s){return {id:s.url,title:s.name||s.title||'',url:s.url,category:ol.groupName,icon:s.icon||'',epgTitle:s.epgTitle||'',region:s.region||''};}) : [];
+          })()
+        : items.filter(function(m){return m.category===ol.groupName;});
+      olItems.forEach(function(m){ if(!primaryUrls.has(m.url||m.id)) otherItems.push(m); });
+    });
+    // Also check library items not in any configured group
+    const configuredGroups = new Set((settings.sportLeagues||[]).map(function(ol){return ol.groupName;}));
+    items.forEach(function(m){
+      if(!configuredGroups.has(m.category) && !primaryUrls.has(m.url||m.id)) otherItems.push(m);
+    });
+    // Filter otherItems to those whose EPG title resolves to one of this league's paths
+    const matched = otherItems.filter(function(m) {
+      const epg = (m.epgTitle || m.title || '').toLowerCase();
+      if (!epg) return false;
+      const detectedPath = detectSportPathFromTitle(epg);
+      if (detectedPath && paths.includes(detectedPath)) return true;
+      // Fallback: keyword match against ESPN_LEAGUE_MAP keys for this path
+      return paths.some(function(p) {
+        const entry = ESPN_LEAGUE_MAP.find(function(e){return e.path===p;});
+        return entry && entry.keys.some(function(k){ return epg.includes(k); });
+      });
+    });
+    // Tag cross-group matches so they can be distinguished if needed
+    const crossMatched = matched.map(function(m){ return Object.assign({}, m, {_crossGroupMatch: true}); });
+    return primary.concat(crossMatched);
+  }
+
+  return primary;
 }
 
 // All sport channels across all configured leagues
@@ -6449,10 +6511,14 @@ function shouldShowSportTeam(item) {
   // (UFC 327 channels are named "PPV 01: Main Card" etc., not by fighter name)
   // Event-based bypass: group name OR ESPN paths containing combat sports.
   // Covers Paramount+ which has mma/ufc as an ESPN path but a neutral group name.
-  var _combatPaths = ['mma/ufc','boxing/boxing','mma/bellator','mma/pfl'];
-  var isPpvGroup = /\bppv\b|pay.per.view|ufc|boxing|combat/i.test(cfg.groupName)
-    || paths.some(function(p) { return _combatPaths.indexOf(p) >= 0; });
-  if (isPpvGroup) return true; // always show PPV/UFC channels regardless of game state
+  // No-team / event-based sports: show ALL channels when any event is scheduled today.
+  // Covers UFC/boxing (PPV 01: Main Card), Golf (no home/away), NASCAR, F1, Tennis, LIV Golf.
+  // Driven by noTeam flag in ESPN_LEAGUE_MAP so adding new sports auto-inherits this bypass.
+  var _noTeamPaths = new Set(ESPN_LEAGUE_MAP.filter(function(e) { return e.noTeam; }).map(function(e) { return e.path; }));
+  ['mma/bellator','mma/pfl'].forEach(function(p) { _noTeamPaths.add(p); });
+  var isNoTeamSport = paths.some(function(p) { return _noTeamPaths.has(p); })
+    || /\bppv\b|pay.per.view|ufc|boxing|combat/i.test(cfg.groupName);
+  if (isNoTeamSport) return true; // show all channels for event/individual sports
   // Broadcast channel bypass: generic broadcast channels (ESPN, ESPN2, FS1, TNT…)
   // have no team name in their title — always show them regardless of filter.
   // Uses pre-built _sportTeamNameSet for O(1) lookup instead of nested league/game loops.
@@ -6547,6 +6613,7 @@ function _normalizeSportGroupLabel(groupName) {
     { re: /\bnascar\b/i,                           abbr: 'NASCAR'},
     { re: /\bufc\b|\bmma\b/i,                      abbr: 'UFC'   },
     { re: /\bwnba\b/i,                             abbr: 'WNBA'  },
+    { re: /\\bliv\\s*golf\\b/i,                      abbr: 'LIV'   },
     { re: /\bpga\b|\bgolf\b/i,                     abbr: 'PGA'   },
     { re: /\bepl\b|\bpremier\s*league\b/i,          abbr: 'EPL'   },
     { re: /\bparamount\b/i,                         abbr: 'Paramount+' },
@@ -7203,7 +7270,8 @@ function renderSportTab() {
   // Without this, each game card calls findGamesForItem for every channel = O(games × channels).
   // With this map it's O(channels) once + O(1) per game card lookup.
   const _chsByGameKey = new Map(); // gameKey → { primary: [], alt: [] }
-  var _combatPathSet = new Set(['mma/ufc','boxing/boxing','mma/bellator','mma/pfl']);
+  var _combatPathSet = new Set(ESPN_LEAGUE_MAP.filter(function(e){return e.noTeam;}).map(function(e){return e.path;}));
+  ['mma/bellator','mma/pfl'].forEach(function(p){_combatPathSet.add(p);});
   var _combatGameKeys = [];
   allGames.forEach(function(g) {
     if (g._path && _combatPathSet.has(g._path)) {
@@ -8033,13 +8101,19 @@ function renderSportLeagueSettings() {
     }).join('');
 
     const repoName = lg.repoId ? (repos.find(r=>r.id===lg.repoId)||{}).name||lg.repoId : 'Library';
-    const srcCount = getSportGroupItems(lg).length;
+    const _srcItems = getSportGroupItems(lg);
+    const srcCount = _srcItems.length;
+    const _crossCount = _srcItems.filter(function(m){return m._crossGroupMatch;}).length;
+    const srcCountLabel = srcCount + ' channel' + (srcCount!==1?'s':'') + (_crossCount > 0 ? ' (' + _crossCount + ' cross-group)' : '');
+    const _noTeamPathsCard = new Set(ESPN_LEAGUE_MAP.filter(function(e){return e.noTeam;}).map(function(e){return e.path;}));
+    const isNoTeamCard = paths.some(function(p){return _noTeamPathsCard.has(p);});
+    const noTeamBadge = isNoTeamCard ? '<span style="display:inline-block;background:rgba(255,165,2,.15);border:1px solid rgba(255,165,2,.4);color:var(--or);border-radius:4px;padding:2px 7px;font-size:8px;margin-left:4px">🏁 Event sport · No teams needed</span>' : '';
 
     return `<div style="border:1px solid var(--bd);border-radius:var(--rs);padding:8px;margin-bottom:8px">
       <div class="sr" style="margin-bottom:6px">
         <div style="flex:1">
-          <div class="sl">${esc(lg.groupName)}</div>
-          <div class="sd">${esc(repoName)} · ${srcCount} channels · ${cacheLabel}</div>
+          <div class="sl">${esc(lg.groupName)}${noTeamBadge}</div>
+          <div class="sd">${esc(repoName)} · ${srcCountLabel} · ${cacheLabel}</div>
         </div>
         <div style="display:flex;align-items:center;gap:4px">
           <span style="font-size:8px;color:var(--t2)">${lg.enabled?'Filter ON':'Filter OFF'}</span>
@@ -8048,7 +8122,7 @@ function renderSportLeagueSettings() {
         </div>
       </div>
       <div style="margin-bottom:6px">
-        <div style="font-size:8px;color:var(--t2);margin-bottom:3px">ESPN leagues (channels matched by title prefix):</div>
+        <div style="font-size:8px;color:var(--t2);margin-bottom:3px">ESPN schedule paths${isNoTeamCard ? ' · Event sports (Golf/NASCAR/F1/etc) show all channels when any event is scheduled — no My Teams needed' : ' (channels matched by title prefix)'}:</div>
         <div style="display:flex;flex-wrap:wrap;align-items:center;gap:2px;margin-bottom:4px">
           ${pathChips || '<span style="font-size:8px;color:var(--t3)">None added</span>'}
         </div>
