@@ -551,12 +551,30 @@ public class PlayerActivity extends Activity {
         playbackStartTime = System.currentTimeMillis();
 
         String scheme = getScheme(v.url);
-        boolean useRtsp   = "rtsp".equals(scheme)||"rtsps".equals(scheme);
-        boolean preferHls = !useRtsp && isLikelyHls(v.url);
+        boolean useRtsp      = "rtsp".equals(scheme) || "rtsps".equals(scheme);
+        boolean preferHls    = !useRtsp && isLikelyHls(v.url);
         boolean preferHdhrTs = !useRtsp && !preferHls && isLikelyHdhrTs(v.url);
+
+        // On mobile, raw MPEG-TS from HDHomeRun causes black screen + audio only
+        // because most phone SoCs lack a hardware MPEG-TS demuxer. The HDHR device
+        // supports native H.264 transcoding: append ?transcode=<quality> so ExoPlayer
+        // receives a compatible stream. Quality is user-configurable in HDHR Settings.
+        // TV build ("tv" flavor) always uses raw TS for best quality via hardware decoder.
+        boolean isMobileFlavor = "mobile".equals(BuildConfig.DEVICE_FLAVOR);
+        String hdhrTranscodeQuality = isMobileFlavor
+            ? getSharedPreferences("sv_prefs", MODE_PRIVATE).getString("hdhr_transcode", "mobile")
+            : "none";
+        String playUrl = v.url;
+        if (preferHdhrTs && isMobileFlavor && !"none".equals(hdhrTranscodeQuality)) {
+            if (!playUrl.contains("transcode=")) {
+                playUrl = playUrl + (playUrl.contains("?") ? "&" : "?") + "transcode=" + hdhrTranscodeQuality;
+            }
+            Log.d(TAG, "HDHR mobile transcode=" + hdhrTranscodeQuality + " url=" + playUrl);
+        }
+
         MediaItem mediaItem = preferHdhrTs
-            ? new MediaItem.Builder().setUri(Uri.parse(v.url)).setMimeType(MimeTypes.VIDEO_MP2T).build()
-            : MediaItem.fromUri(Uri.parse(v.url));
+            ? new MediaItem.Builder().setUri(Uri.parse(playUrl)).setMimeType(MimeTypes.VIDEO_MP2T).build()
+            : MediaItem.fromUri(Uri.parse(playUrl));
         DefaultExtractorsFactory extractorsFactory = new DefaultExtractorsFactory()
             .setTsExtractorFlags(DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS
                 | DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES);
@@ -566,8 +584,8 @@ public class PlayerActivity extends Activity {
                 ? new HlsMediaSource.Factory(httpFactory).setAllowChunklessPreparation(true).createMediaSource(mediaItem)
                 : new ProgressiveMediaSource.Factory(httpFactory, extractorsFactory).createMediaSource(mediaItem));
 
-        Log.d(TAG, "playVariant url=" + v.url + " scheme=" + scheme + " hls=" + preferHls + " hdhrTs=" + preferHdhrTs + " category=" + streamCategory);
-        if (statusText != null && preferHdhrTs) statusText.setText("Source " + (idx+1) + "/" + variants.size() + " · HDHR TS mode" + (locked?" · 🔒":""));
+        Log.d(TAG, "playVariant url=" + playUrl + " scheme=" + scheme + " hls=" + preferHls + " hdhrTs=" + preferHdhrTs + " mobileFlavor=" + isMobileFlavor + " category=" + streamCategory);
+        if (statusText != null && preferHdhrTs) statusText.setText("Source " + (idx+1) + "/" + variants.size() + (isMobileFlavor ? " · HDHR mobile" : " · HDHR TS") + (locked ? " · 🔒" : ""));
 
         final boolean[] primaryFailed = {false};
         final DataSource.Factory hf2 = httpFactory;
@@ -629,9 +647,12 @@ public class PlayerActivity extends Activity {
                     primaryFailed[0]=true;
                     try {
                         player.stop();
+                        String fallbackUrl = hdhrTs && isMobileFlavor && !v.url.contains("transcode=")
+                            ? v.url + (v.url.contains("?") ? "&" : "?") + "transcode=mobile"
+                            : v.url;
                         MediaItem fallbackItem = hdhrTs
-                            ? new MediaItem.Builder().setUri(Uri.parse(v.url)).setMimeType(MimeTypes.VIDEO_MP2T).build()
-                            : MediaItem.fromUri(Uri.parse(v.url));
+                            ? new MediaItem.Builder().setUri(Uri.parse(fallbackUrl)).setMimeType(MimeTypes.VIDEO_MP2T).build()
+                            : MediaItem.fromUri(Uri.parse(fallbackUrl));
                         DefaultExtractorsFactory fallbackExtractors = new DefaultExtractorsFactory()
                             .setTsExtractorFlags(DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS
                                 | DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES);

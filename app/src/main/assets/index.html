@@ -741,6 +741,7 @@ document.addEventListener('keydown', function(e) {
           <button class="bc" id="s-hdhr-manage" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Choose Channels</button>
         </div>
         <div class="sr" style="margin-top:8px"><div><div class="sl">Tailscale / VPN remote mode</div><div class="sd">Keep using the tuner's saved LAN IPs remotely over Tailscale or another VPN. This is the best fit when your phone can reach your home subnet.</div></div><div class="tgl" id="s-hdhr-ts-toggle"></div></div>
+        <div style="margin-top:8px"><label style="font-size:9px;color:var(--t2)">Mobile transcode quality</label><select id="s-hdhr-transcode" style="width:100%;margin-top:3px;padding:5px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px"><option value="mobile">Mobile (recommended — H.264 phone-compatible)</option><option value="heavy">Heavy (higher quality, more CPU on tuner)</option><option value="none">None (raw MPEG-TS — LAN/TV only)</option></select><div style="font-size:8px;color:var(--t3);margin-top:3px">Applied only on the mobile APK. TV build always uses raw MPEG-TS for best quality.</div></div>
         <div class="sr" style="margin-top:8px"><div><div class="sl">Prefer remote HDHR relay URL</div><div class="sd">When enabled, HDHR items use the remote base URL below instead of the local tuner IP. Leave this off when using Tailscale/VPN subnet access.</div></div><div class="tgl" id="s-hdhr-remote-toggle"></div></div>
         <div style="margin-top:8px">
           <label>Remote HDHR base URL</label>
@@ -1778,6 +1779,42 @@ async function refreshAltCache(silent) {
   renderSettings();
   if (!silent) toast(repoErrors.length ? ('Alternative scan done with ' + repoErrors.length + ' repo warning(s)') : 'Alternative scan complete');
 }
+// Eagerly load the HDHR XMLTV guide after startup EPG finishes, then re-match
+// all HDHR channel IDs so the guide populates without user intervention.
+// Safe to call multiple times — ensureHdhrXmltvLoaded is idempotent.
+async function _startupEnsureHdhrEpg() {
+  try {
+    const cfg = getHdhrCfg();
+    if (!cfg.xmltvUrl) return; // no HDHR XMLTV configured
+    const loaded = await ensureHdhrXmltvLoaded(false);
+    if (!loaded) return;
+    // Re-match every HDHR repo channel that doesn't have an epgTitle yet
+    let matched = 0;
+    cfg.repoChannels = (cfg.repoChannels || []).map(ch => {
+      if (ch.epgTitle) return ch;
+      const epgTitle = autoMatchHdhrEpgId({ GuideNumber: ch.guideNumber, GuideName: ch.guideName }, null) || '';
+      if (epgTitle) matched++;
+      return { ...ch, epgTitle };
+    });
+    // Propagate matched epgTitles into the live library items
+    items.forEach(m => {
+      if (!isHdhrItem(m) || m.epgTitle) return;
+      const ch = (cfg.repoChannels || []).find(c =>
+        m.hdhrMeta && c.key === hdhrChannelKey(m.hdhrMeta.deviceId, m.hdhrMeta.streamPath)
+      );
+      if (ch && ch.epgTitle) m.epgTitle = ch.epgTitle;
+    });
+    if (matched) {
+      saveSettings();
+      saveItems();
+      renderLib();
+      console.log('[SV] HDHR EPG: matched ' + matched + ' channel(s) on startup');
+    }
+  } catch(e) {
+    console.warn('[SV] _startupEnsureHdhrEpg failed:', e.message);
+  }
+}
+
 function queueStartupAltCheck() {
   if (settings.autoAltCheck === false) return;
   // Delay 8s: give EPG fetch, renderLib, and first paint time to complete
@@ -1803,9 +1840,16 @@ async function parseXMLTV(xml) {
   // Channels are usually small — process all at once
   doc.querySelectorAll('channel').forEach(ch => {
     const id = ch.getAttribute('id');
-    const dn = ch.querySelector('display-name');
+    // Collect ALL display-name elements — our hdhr-xmltv server emits both
+    // the call-sign ("KDFWDT") and the guide number ("4.1") as separate display-names.
+    const allDn = Array.from(ch.querySelectorAll('display-name')).map(n => n.textContent.trim()).filter(Boolean);
+    const dn = allDn[0] || id;
     const ic = ch.querySelector('icon');
-    channels[id] = { name: dn ? dn.textContent : id, icon: ic ? (ic.getAttribute('src') || '') : '' };
+    channels[id] = {
+      name: dn,
+      displayNames: allDn,   // stored for suffix/number matching in autoMatchHdhrEpgId
+      icon: ic ? (ic.getAttribute('src') || '') : ''
+    };
   });
 
   // Programmes can be 50k+ — process in chunks and yield between each
@@ -2107,6 +2151,7 @@ function getHdhrCfg() {
   settings.hdhr.tailscaleMode = settings.hdhr.tailscaleMode !== false;
   settings.hdhr.xmltvUrl = String(settings.hdhr.xmltvUrl || '').trim();
   settings.hdhr.xmltvProvider = String(settings.hdhr.xmltvProvider || 'schedulesdirect').trim() || 'schedulesdirect';
+  settings.hdhr.mobileTranscode = String(settings.hdhr.mobileTranscode || 'mobile').trim() || 'mobile';
   return settings.hdhr;
 }
 function normalizeHdhrBase(url) {
@@ -2144,19 +2189,38 @@ function autoMatchHdhrEpgId(row, dev) {
   const ids = getAllEpgIds();
   if (!ids.length) return '';
   const guideNumber = String(row.GuideNumber || row.guideNumber || '').trim();
-  const guideName = String(row.GuideName || row.guideName || row.name || '').trim();
+  const guideName   = String(row.GuideName   || row.guideName   || row.name || '').trim();
+
   if (guideNumber) {
-    const exactByNumber = ids.find(id => String(id).trim() === guideNumber);
-    if (exactByNumber) return exactByNumber;
+    // 1. Exact channel ID match (Schedules Direct style: "4.1")
+    const exactById = ids.find(id => String(id).trim() === guideNumber);
+    if (exactById) return exactById;
+
+    // 2. hdhr-xmltv style: channel IDs end with "-4.1" (e.g. "HDHomeRun_CONNECT_QUATRO-4.1")
+    //    Match by suffix "-{guideNumber}" to handle any device name prefix.
+    const suffix = '-' + guideNumber;
+    const byHdhrSuffix = ids.find(id => String(id).endsWith(suffix));
+    if (byHdhrSuffix) return byHdhrSuffix;
+
+    // 3. Check display-names stored in epgData.channels for a match against guideNumber
+    const byDisplayNum = ids.find(id => {
+      const meta = (epgData.channels && epgData.channels[id]) || {};
+      const dn = (meta.displayNames || []);
+      return dn.some(n => String(n).trim() === guideNumber);
+    });
+    if (byDisplayNum) return byDisplayNum;
   }
+
+  // 4. Name-based fuzzy match against channel display-name
   const target = normalizeChannelNameLoose(guideName);
   if (!target) return '';
   let best = '';
   for (const id of ids) {
-    const meta = epgData.channels && epgData.channels[id] || {};
-    const names = [id, meta.name || ''].filter(Boolean).map(normalizeChannelNameLoose);
-    if (names.some(n => n === target)) return id;
-    if (!best && names.some(n => n && (n.includes(target) || target.includes(n)))) best = id;
+    const meta = (epgData.channels && epgData.channels[id]) || {};
+    const nameCandidates = [id, meta.name || '', ...(meta.displayNames || [])]
+      .filter(Boolean).map(normalizeChannelNameLoose);
+    if (nameCandidates.some(n => n === target)) return id;
+    if (!best && nameCandidates.some(n => n && (n.includes(target) || target.includes(n)))) best = id;
   }
   return best;
 }
@@ -2419,6 +2483,18 @@ function renderHdhrSettings() {
   if (xmltvInput) {
     xmltvInput.value = cfg.xmltvUrl || '';
     xmltvInput.onchange = () => { cfg.xmltvUrl = normalizeEpgUrl(xmltvInput.value); saveSettings(); };
+  }
+  const transcodeSelect = $('s-hdhr-transcode');
+  if (transcodeSelect) {
+    transcodeSelect.value = cfg.mobileTranscode || 'mobile';
+    transcodeSelect.onchange = () => {
+      cfg.mobileTranscode = transcodeSelect.value;
+      saveSettings();
+      // Persist to SharedPreferences via native bridge so PlayerActivity picks it up immediately
+      if (window.NativePlayer && typeof window.NativePlayer.setHdhrTranscode === 'function') {
+        window.NativePlayer.setHdhrTranscode(cfg.mobileTranscode);
+      }
+    };
   }
   if (fetchGuideBtn) fetchGuideBtn.onclick = async () => {
     const _missingToasts = { 'schedulesdirect': 'Enter your Schedules Direct XMLTV export URL first', 'hdhr-native': 'Enter your hdhr-xmltv bridge URL first (e.g. https://epg.yourdomain.com/hdhr-epg.xmltv)', 'custom': 'Set an HDHR XMLTV guide URL first' };
@@ -5959,8 +6035,10 @@ const ESPN_LEAGUE_MAP = [
   { keys:['ufc','mma','ultimate fighting'],                path:'mma/ufc',                              label:'UFC/MMA',     icon:'🥊', noTeam:true },
   { keys:['boxing','ppv boxing'],                          path:'boxing/boxing',                        label:'Boxing',      icon:'🥊', noTeam:true },
   { keys:['tennis','atp','wta'],                           path:'tennis/atp',                           label:'Tennis',      icon:'🎾', noTeam:true },
-  { keys:['golf','pga'],                                   path:'golf/leaderboard',                     label:'Golf',        icon:'⛳', noTeam:true },
-  { keys:['liv golf','liv'],                               path:'golf/liv',                             label:'LIV Golf',    icon:'⛳', noTeam:true },
+  { keys:['golf','pga tour','pga'],                          path:'golf/pga',                             label:'PGA Tour',    icon:'⛳', noTeam:true },
+  { keys:['pga champions','champions tour'],                 path:'golf/champions',                       label:'PGA Champions',icon:'⛳', noTeam:true },
+  { keys:['dp world tour','european tour','euro golf'],      path:'golf/euro',                            label:'DP World Tour',icon:'⛳', noTeam:true },
+  { keys:['liv golf','liv'],                                 path:'golf/liv',                             label:'LIV Golf',    icon:'⛳', noTeam:true },
   { keys:['racing','nascar'],                              path:'racing/nascar',                        label:'NASCAR',      icon:'🏁', noTeam:true },
   { keys:['formula 1','formula one','f1'],                 path:'racing/f1',                            label:'Formula 1',   icon:'🏎️', noTeam:true },
   { keys:['cricket'],                                      path:'cricket/icc-cricket',                  label:'Cricket',     icon:'🏏' },
@@ -6671,6 +6749,8 @@ function _normalizeSportGroupLabel(groupName) {
     { re: /\bufc\b|\bmma\b/i,                      abbr: 'UFC'   },
     { re: /\bwnba\b/i,                             abbr: 'WNBA'  },
     { re: /\\bliv\\s*golf\\b/i,                      abbr: 'LIV'   },
+    { re: /\bpga\s*champions\b|\bchampions\s*tour\b/i, abbr: 'PGA Champ.' },
+    { re: /\bdp\s*world\b|\beuropean\s*tour\b/i,  abbr: 'DP World' },
     { re: /\bpga\b|\bgolf\b/i,                     abbr: 'PGA'   },
     { re: /\bepl\b|\bpremier\s*league\b/i,          abbr: 'EPL'   },
     { re: /\bparamount\b/i,                         abbr: 'Paramount+' },
@@ -9413,6 +9493,20 @@ setInterval(() => {
 }, 30 * 60000);
 
 // ─── Init ───
+// Seed SharedPreferences with saved HDHR transcode preference so PlayerActivity
+// uses the right quality before the user opens Settings.
+(function() {
+  try {
+    const sv = localStorage.getItem('sv_settings');
+    if (sv) {
+      const parsed = JSON.parse(sv);
+      const q = parsed && parsed.hdhr && parsed.hdhr.mobileTranscode;
+      if (q && window.NativePlayer && typeof window.NativePlayer.setHdhrTranscode === 'function') {
+        window.NativePlayer.setHdhrTranscode(q);
+      }
+    }
+  } catch(e) {}
+})();
 loadItems();
 loadRepos();
 loadEpg();
@@ -9479,6 +9573,9 @@ setTimeout(async () => {
     fetchAllEpg(true).then(function() {
       clearTimeout(_tvTimeout);
       _hideSplashOnce();
+      // After EPG loads, eagerly load HDHR XMLTV guide and re-match channel IDs.
+      // Runs non-blocking so it never delays splash or D-pad activation.
+      _startupEnsureHdhrEpg();
     }).catch(function() {
       clearTimeout(_tvTimeout);
       _hideSplashOnce();
@@ -9491,9 +9588,11 @@ setTimeout(async () => {
     if (epgSrc.length) {
       fetchAllEpg(true).then(function() {
         if (isTvDevice) setTimeout(function() { fetchAllLeagueSchedules(false); }, 300);
+        _startupEnsureHdhrEpg();
       }).catch(function() {});
     } else {
       if (isTvDevice) setTimeout(function() { fetchAllLeagueSchedules(false); }, 300);
+      _startupEnsureHdhrEpg();
     }
   }
 }, 800);

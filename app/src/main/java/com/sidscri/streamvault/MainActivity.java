@@ -322,6 +322,15 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public void setHdhrTranscode(String quality) {
+            // Persist mobile transcode preference so PlayerActivity can read it.
+            // Valid values: "mobile", "heavy", "none"
+            String q = (quality != null && !quality.isEmpty()) ? quality : "mobile";
+            getSharedPreferences("sv_prefs", MODE_PRIVATE).edit()
+                .putString("hdhr_transcode", q).apply();
+        }
+
+        @JavascriptInterface
         public void scanHdhrDevices() {
             runOnUiThread(() -> toastNative("Scanning network for HDHomeRun devices…"));
             new Thread(() -> {
