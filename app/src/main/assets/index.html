@@ -739,9 +739,10 @@ document.addEventListener('keydown', function(e) {
           <label>HDHR guide provider</label>
           <select id="s-hdhr-xmltv-provider">
             <option value="schedulesdirect">Schedules Direct (recommended)</option>
+            <option value="hdhr-native">HDHomeRun Native Guide (self-hosted)</option>
             <option value="custom">Custom XMLTV URL</option>
           </select>
-          <div style="font-size:8px;color:var(--t3);margin-top:4px">Default provider is Schedules Direct for US/Canada lineups. Enter your own XMLTV export URL below.</div>
+          <div id="s-hdhr-xmltv-provider-hint" style="font-size:8px;color:var(--t3);margin-top:4px">Default provider is Schedules Direct for US/Canada lineups. Enter your own XMLTV export URL below.</div>
         </div>
         <div style="margin-top:8px">
           <label>HDHR XMLTV guide URL</label>
@@ -2368,17 +2369,36 @@ function renderHdhrSettings() {
     remoteBase.value = cfg.remoteBaseUrl || '';
     remoteBase.onchange = () => { cfg.remoteBaseUrl = normalizeHdhrBase(remoteBase.value); saveSettings(); };
   }
+  const _hdhrXmltvProviderHints = {
+    'schedulesdirect': 'Schedules Direct for US/Canada lineups — requires your own account and XMLTV export/feed URL.',
+    'hdhr-native':     'Self-hosted hdhr-xmltv bridge. Enter your epg.yourdomain.com/hdhr-epg.xmltv URL below.',
+    'custom':          'Any XMLTV-compatible URL (.xml or .xml.gz). Enter the full URL below.'
+  };
+  function _updateHdhrXmltvProviderUi(provider) {
+    const hint = $('s-hdhr-xmltv-provider-hint');
+    if (hint) hint.textContent = _hdhrXmltvProviderHints[provider] || _hdhrXmltvProviderHints['custom'];
+    if (xmltvInput) {
+      if (provider === 'hdhr-native') xmltvInput.placeholder = 'https://epg.yourdomain.com/hdhr-epg.xmltv';
+      else if (provider === 'schedulesdirect') xmltvInput.placeholder = 'Schedules Direct XMLTV URL or .xml/.xml.gz export';
+      else xmltvInput.placeholder = 'https://provider.com/guide.xml or .xml.gz';
+    }
+  }
   if (xmltvProvider) {
     xmltvProvider.value = cfg.xmltvProvider || 'schedulesdirect';
-    xmltvProvider.onchange = () => { cfg.xmltvProvider = String(xmltvProvider.value || 'schedulesdirect'); saveSettings(); };
+    _updateHdhrXmltvProviderUi(cfg.xmltvProvider || 'schedulesdirect');
+    xmltvProvider.onchange = () => {
+      cfg.xmltvProvider = String(xmltvProvider.value || 'schedulesdirect');
+      _updateHdhrXmltvProviderUi(cfg.xmltvProvider);
+      saveSettings();
+    };
   }
   if (xmltvInput) {
-    xmltvInput.placeholder = (cfg.xmltvProvider === 'schedulesdirect') ? 'Schedules Direct XMLTV URL or .xml/.xml.gz export' : 'https://provider.com/guide.xml or .xml.gz';
     xmltvInput.value = cfg.xmltvUrl || '';
     xmltvInput.onchange = () => { cfg.xmltvUrl = normalizeEpgUrl(xmltvInput.value); saveSettings(); };
   }
   if (fetchGuideBtn) fetchGuideBtn.onclick = async () => {
-    if (!cfg.xmltvUrl) { toast(cfg.xmltvProvider === 'schedulesdirect' ? 'Enter your Schedules Direct XMLTV export URL first' : 'Set an HDHR XMLTV guide URL first'); return; }
+    const _missingToasts = { 'schedulesdirect': 'Enter your Schedules Direct XMLTV export URL first', 'hdhr-native': 'Enter your hdhr-xmltv bridge URL first (e.g. https://epg.yourdomain.com/hdhr-epg.xmltv)', 'custom': 'Set an HDHR XMLTV guide URL first' };
+    if (!cfg.xmltvUrl) { toast(_missingToasts[cfg.xmltvProvider] || _missingToasts['custom']); return; }
     try {
       await ensureHdhrXmltvLoaded(true);
       cfg.repoChannels = (cfg.repoChannels || []).map(ch => ({ ...ch, epgTitle: autoMatchHdhrEpgId({ GuideNumber: ch.guideNumber, GuideName: ch.guideName }, null) || ch.epgTitle || '' }));
