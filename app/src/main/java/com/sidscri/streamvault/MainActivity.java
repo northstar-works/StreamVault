@@ -323,11 +323,17 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void setHdhrTranscode(String quality) {
-            // Persist mobile transcode preference so PlayerActivity can read it.
-            // Valid values: "mobile", "heavy", "none"
             String q = (quality != null && !quality.isEmpty()) ? quality : "mobile";
             getSharedPreferences("sv_prefs", MODE_PRIVATE).edit()
                 .putString("hdhr_transcode", q).apply();
+        }
+
+        @JavascriptInterface
+        public void setHdhrProxyEnabled(String enabled) {
+            // Persist mobile proxy toggle so PlayerActivity skips the ?transcode hack
+            boolean on = "true".equalsIgnoreCase(enabled);
+            getSharedPreferences("sv_prefs", MODE_PRIVATE).edit()
+                .putBoolean("hdhr_proxy_enabled", on).apply();
         }
 
         @JavascriptInterface

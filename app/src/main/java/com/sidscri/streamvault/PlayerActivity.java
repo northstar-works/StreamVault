@@ -235,9 +235,17 @@ public class PlayerActivity extends Activity {
         return cat.contains("hdhr")
             || ttl.contains("hdhomerun")
             || url.contains("/auto/v")
+            || url.contains("/proxy/v")   // hdhr-xmltv ffmpeg proxy endpoint
             || url.contains("/tuner")
             || url.contains("hdhomerun")
             || url.contains("/lineup.m3u");
+    }
+
+    private boolean isHdhrProxyUrl(String rawUrl) {
+        // True when the URL is our ffmpeg proxy — outputs H.264/AAC so
+        // we still use ProgressiveMediaSource but skip the ?transcode hack.
+        String url = rawUrl != null ? rawUrl.toLowerCase(Locale.US) : "";
+        return url.contains("/proxy/v");
     }
 
     private String buildTrackSummary(Tracks tracks) {
@@ -561,15 +569,22 @@ public class PlayerActivity extends Activity {
         // receives a compatible stream. Quality is user-configurable in HDHR Settings.
         // TV build ("tv" flavor) always uses raw TS for best quality via hardware decoder.
         boolean isMobileFlavor = "mobile".equals(BuildConfig.DEVICE_FLAVOR);
-        String hdhrTranscodeQuality = isMobileFlavor
-            ? getSharedPreferences("sv_prefs", MODE_PRIVATE).getString("hdhr_transcode", "mobile")
-            : "none";
+        boolean hdhrProxyEnabled = isMobileFlavor &&
+            getSharedPreferences("sv_prefs", MODE_PRIVATE).getBoolean("hdhr_proxy_enabled", false);
         String playUrl = v.url;
-        if (preferHdhrTs && isMobileFlavor && !"none".equals(hdhrTranscodeQuality)) {
-            if (!playUrl.contains("transcode=")) {
+        // Only apply ?transcode when: mobile flavor, proxy NOT enabled (proxy does the transcoding
+        // server-side), and stream is a raw HDHR TS but NOT already a proxy URL.
+        if (preferHdhrTs && isMobileFlavor && !hdhrProxyEnabled && !isHdhrProxyUrl(playUrl)) {
+            String hdhrTranscodeQuality = getSharedPreferences("sv_prefs", MODE_PRIVATE)
+                .getString("hdhr_transcode", "mobile");
+            if (!"none".equals(hdhrTranscodeQuality) && !playUrl.contains("transcode=")) {
                 playUrl = playUrl + (playUrl.contains("?") ? "&" : "?") + "transcode=" + hdhrTranscodeQuality;
+                Log.d(TAG, "HDHR ?transcode=" + hdhrTranscodeQuality + " url=" + playUrl);
             }
-            Log.d(TAG, "HDHR mobile transcode=" + hdhrTranscodeQuality + " url=" + playUrl);
+        }
+        // Proxy URLs already contain H.264/AAC — log for debugging
+        if (isHdhrProxyUrl(playUrl)) {
+            Log.d(TAG, "HDHR proxy stream (H.264/AAC via ffmpeg): " + playUrl);
         }
 
         MediaItem mediaItem = preferHdhrTs
@@ -585,7 +600,8 @@ public class PlayerActivity extends Activity {
                 : new ProgressiveMediaSource.Factory(httpFactory, extractorsFactory).createMediaSource(mediaItem));
 
         Log.d(TAG, "playVariant url=" + playUrl + " scheme=" + scheme + " hls=" + preferHls + " hdhrTs=" + preferHdhrTs + " mobileFlavor=" + isMobileFlavor + " category=" + streamCategory);
-        if (statusText != null && preferHdhrTs) statusText.setText("Source " + (idx+1) + "/" + variants.size() + (isMobileFlavor ? " · HDHR mobile" : " · HDHR TS") + (locked ? " · 🔒" : ""));
+        String _hdhrModeLabel = isHdhrProxyUrl(playUrl) ? "HDHR proxy" : (isMobileFlavor ? "HDHR mobile" : "HDHR TS");
+        if (statusText != null && preferHdhrTs) statusText.setText("Source " + (idx+1) + "/" + variants.size() + " · " + _hdhrModeLabel + (locked ? " · 🔒" : ""));
 
         final boolean[] primaryFailed = {false};
         final DataSource.Factory hf2 = httpFactory;

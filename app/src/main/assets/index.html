@@ -741,7 +741,12 @@ document.addEventListener('keydown', function(e) {
           <button class="bc" id="s-hdhr-manage" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Choose Channels</button>
         </div>
         <div class="sr" style="margin-top:8px"><div><div class="sl">Tailscale / VPN remote mode</div><div class="sd">Keep using the tuner's saved LAN IPs remotely over Tailscale or another VPN. This is the best fit when your phone can reach your home subnet.</div></div><div class="tgl" id="s-hdhr-ts-toggle"></div></div>
-        <div style="margin-top:8px"><label style="font-size:9px;color:var(--t2)">Mobile transcode quality</label><select id="s-hdhr-transcode" style="width:100%;margin-top:3px;padding:5px;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px"><option value="mobile">Mobile (recommended — H.264 phone-compatible)</option><option value="heavy">Heavy (higher quality, more CPU on tuner)</option><option value="none">None (raw MPEG-TS — LAN/TV only)</option></select><div style="font-size:8px;color:var(--t3);margin-top:3px">Applied only on the mobile APK. TV build always uses raw MPEG-TS for best quality.</div></div>
+        <div class="sr" style="margin-top:8px"><div><div class="sl">Mobile stream proxy</div><div class="sd">Route HDHR streams through your hdhr-xmltv server for ffmpeg H.264 transcoding. Fixes black screen on phones (CONNECT Quatro streams MPEG-2 which phones cannot decode).</div></div><div class="tgl" id="s-hdhr-proxy-toggle"></div></div>
+        <div style="margin-top:6px" id="s-hdhr-proxy-row">
+          <label style="font-size:9px;color:var(--t2)">Mobile proxy base URL</label>
+          <input id="s-hdhr-proxy-url" placeholder="https://epg.yourdomain.com" style="width:100%;margin-top:3px;padding:5px;box-sizing:border-box;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px">
+          <div style="font-size:8px;color:var(--t3);margin-top:3px">Same base as your XMLTV server — streams at /proxy/v4.1 etc. Requires ffmpeg in hdhr-xmltv container (see docs).</div>
+        </div>
         <div class="sr" style="margin-top:8px"><div><div class="sl">Prefer remote HDHR relay URL</div><div class="sd">When enabled, HDHR items use the remote base URL below instead of the local tuner IP. Leave this off when using Tailscale/VPN subnet access.</div></div><div class="tgl" id="s-hdhr-remote-toggle"></div></div>
         <div style="margin-top:8px">
           <label>Remote HDHR base URL</label>
@@ -1782,6 +1787,70 @@ async function refreshAltCache(silent) {
 // Eagerly load the HDHR XMLTV guide after startup EPG finishes, then re-match
 // all HDHR channel IDs so the guide populates without user intervention.
 // Safe to call multiple times — ensureHdhrXmltvLoaded is idempotent.
+// ── HDHR affiliate/network helpers ───────────────────────────────────────────
+// Maps common US broadcast affiliate names and callsign patterns → short label.
+// Priority: stored hdhrMeta.affiliate → EPG channel name match → callsign prefix.
+const _AFFILIATE_MAP = [
+  // Broadcast networks — name/alias variants
+  ['abc',       'ABC'],  ['nbc',  'NBC'],  ['cbs',  'CBS'],  ['fox',  'Fox'],
+  ['pbs',       'PBS'],  ['cw',   'CW'],   ['ion',  'ION'],  ['mytv', 'MyTV'],
+  ['mnt',       'MNT'],  ['telemundo','Telemundo'],['univision','Univ.'],
+  ['antenna',   'ATV'],  ['comet','Comet'],['heroes','Heroes'],['quest','Quest'],
+  ['laff',      'Laff'], ['bounce','Bounce'],['charge','Charge'],['grit','Grit'],
+  ['cozi',      'Cozi'], ['fetv', 'FETV'], ['tbn',  'TBN'],  ['daystar','Daystar'],
+  ['justice',   'Justice'],['stadium','Stadium'],['buzzr','Buzzr'],
+  ['movies!',   'Movies!'],['getv','GetTV'],['twist','Twist'],['defy','Defy'],
+  ['nosey',     'Nosey'],['busted','Busted'],['great','GREAT'],['shop lc','ShopLC'],
+  ['jewelry','JTV'],['home shopping','HSN'],['qvc','QVC'],['hsn','HSN'],
+];
+// Callsign prefix → affiliate (US broadcast callsigns start with K or W)
+const _CALLSIGN_PREFIX_MAP = {
+  // DFW callsigns — auto-detected by prefix+suffix
+  'kdfw': 'Fox',  'kxas': 'NBC',  'wfaa': 'ABC',  'ktvt': 'CBS',
+  'kera': 'PBS',  'ktxa': 'CW',   'kdfi': 'MyTV', 'kfwd': 'MNT',
+  'ktxd': 'IND',  'kuvn': 'Univ.','kstr': 'Telemundo',
+  // Generic affiliate patterns by callsign suffix (fallback)
+};
+
+function _getHdhrAffiliate(item) {
+  // 1. Explicitly stored affiliate from server.js/XMLTV
+  if (item.hdhrMeta && item.hdhrMeta.affiliate) return item.hdhrMeta.affiliate;
+  // 2. EPG channel display name (from XMLTV) contains affiliate hint
+  if (item.epgTitle) {
+    const chMeta = epgData.channels && epgData.channels[item.epgTitle];
+    if (chMeta && chMeta.affiliate) return chMeta.affiliate;
+    const chName = ((chMeta && chMeta.name) || '').toLowerCase();
+    for (const [key, label] of _AFFILIATE_MAP) {
+      if (chName.includes(key)) return label;
+    }
+  }
+  // 3. Channel title callsign prefix lookup
+  const titleLower = (item.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  for (const [cs, aff] of Object.entries(_CALLSIGN_PREFIX_MAP)) {
+    if (titleLower.startsWith(cs)) return aff;
+  }
+  // 4. Title keyword scan (e.g. "IONPlus" → ION)
+  for (const [key, label] of _AFFILIATE_MAP) {
+    if (titleLower.includes(key.replace(/[^a-z0-9]/g, ''))) return label;
+  }
+  return '';
+}
+
+// Assign a recognizable brand color to each major network
+function _affiliateBadgeColor(affiliate) {
+  const a = (affiliate || '').toLowerCase();
+  if (a === 'abc')  return '#0057a8';
+  if (a === 'nbc')  return '#d4a017';
+  if (a === 'cbs')  return '#003087';
+  if (a === 'fox')  return '#c0392b';
+  if (a === 'pbs')  return '#1a6b2b';
+  if (a === 'cw')   return '#3d0091';
+  if (a === 'ion')  return '#00a5b5';
+  if (a === 'mytv' || a === 'mynetwork') return '#555';
+  if (a === 'telemundo' || a === 'univ.') return '#e05c00';
+  return 'rgba(80,80,80,0.7)'; // generic grey for unknowns
+}
+
 async function _startupEnsureHdhrEpg() {
   try {
     const cfg = getHdhrCfg();
@@ -1840,14 +1909,20 @@ async function parseXMLTV(xml) {
   // Channels are usually small — process all at once
   doc.querySelectorAll('channel').forEach(ch => {
     const id = ch.getAttribute('id');
-    // Collect ALL display-name elements — our hdhr-xmltv server emits both
-    // the call-sign ("KDFWDT") and the guide number ("4.1") as separate display-names.
-    const allDn = Array.from(ch.querySelectorAll('display-name')).map(n => n.textContent.trim()).filter(Boolean);
-    const dn = allDn[0] || id;
+    // Collect display-name elements — hdhr-xmltv emits call-sign, guide number,
+    // and optionally lang="x-affiliate" (e.g. "Fox", "NBC") as separate entries.
+    const allDnEls = Array.from(ch.querySelectorAll('display-name'));
+    const allDn = allDnEls.map(n => n.textContent.trim()).filter(Boolean);
+    const affiliateEl = allDnEls.find(n => n.getAttribute('lang') === 'x-affiliate');
+    const affiliate = affiliateEl ? affiliateEl.textContent.trim() : '';
+    // Filter affiliate out of the general displayNames list
+    const displayNames = allDn.filter(n => n !== affiliate);
+    const dn = displayNames[0] || id;
     const ic = ch.querySelector('icon');
     channels[id] = {
       name: dn,
-      displayNames: allDn,   // stored for suffix/number matching in autoMatchHdhrEpgId
+      displayNames,          // stored for suffix/number matching in autoMatchHdhrEpgId
+      affiliate,             // e.g. "Fox", "NBC", "ABC" — from lineup.json Affiliate field
       icon: ic ? (ic.getAttribute('src') || '') : ''
     };
   });
@@ -2074,6 +2149,13 @@ function showTab(id) {
   if (id === 'lib-scr') {
     // Rebuild PlexStr card fresh on return so stale library results don't persist
     setTimeout(function() { if (typeof renderLibExtra === 'function') renderLibExtra(); }, 0);
+    // Re-match HDHR EPG titles if any items are still unmatched (fast if already matched)
+    setTimeout(function() {
+      const _hdhrUnmatched = items.some(m => isHdhrItem(m) && !m.epgTitle);
+      if (_hdhrUnmatched && typeof _startupEnsureHdhrEpg === 'function') {
+        _startupEnsureHdhrEpg();
+      }
+    }, 200);
   }
   if (id === 'sport-scr') {
     // Default: open to My Teams Only > Live Today (overridable in settings)
@@ -2152,6 +2234,8 @@ function getHdhrCfg() {
   settings.hdhr.xmltvUrl = String(settings.hdhr.xmltvUrl || '').trim();
   settings.hdhr.xmltvProvider = String(settings.hdhr.xmltvProvider || 'schedulesdirect').trim() || 'schedulesdirect';
   settings.hdhr.mobileTranscode = String(settings.hdhr.mobileTranscode || 'mobile').trim() || 'mobile';
+  settings.hdhr.mobileProxyEnabled = !!settings.hdhr.mobileProxyEnabled;
+  settings.hdhr.mobileProxyUrl = String(settings.hdhr.mobileProxyUrl || '').trim();
   return settings.hdhr;
 }
 function normalizeHdhrBase(url) {
@@ -2241,6 +2325,27 @@ function resolveHdhrPlayableUrl(item, url) {
   if (!isHdhrItem(item)) return extractUrl(url || item.url || '');
   const cfg = getHdhrCfg();
   const hd = item.hdhrMeta || {};
+
+  // Mobile proxy mode: rewrite /auto/v4.1 → https://proxy.host/proxy/v4.1
+  // Enabled when: proxy toggle ON + proxy base URL set + not TV device
+  // Fixes MPEG-2 black screen on Android phones (CONNECT Quatro doesn't transcode).
+  if (!isTvDevice && cfg.mobileProxyEnabled && cfg.mobileProxyUrl) {
+    // Extract the channel path from the stream URL — /auto/v4.1 → v4.1
+    const rawUrl = extractUrl(url || item.url || '');
+    let channelPath = hd.streamPath || '';
+    if (!channelPath) {
+      try { channelPath = new URL(rawUrl).pathname; } catch(_) { channelPath = rawUrl; }
+    }
+    // channelPath is like /auto/v4.1 — extract the v{num} part
+    const vMatch = channelPath.match(/\/(v[\d.]+)(?:[?#]|$)/);
+    if (vMatch) {
+      return normalizeHdhrBase(cfg.mobileProxyUrl) + '/proxy/' + vMatch[1];
+    }
+    // Fallback: strip leading slash and use as-is
+    const cleanPath = channelPath.replace(/^\/auto\//, '');
+    if (cleanPath) return normalizeHdhrBase(cfg.mobileProxyUrl) + '/proxy/' + cleanPath;
+  }
+
   const remoteBase = normalizeHdhrBase(cfg.remoteBaseUrl || '');
   if (cfg.tailscaleMode) return extractUrl(url || item.url || '');
   if (cfg.preferRemote && remoteBase) {
@@ -2484,16 +2589,36 @@ function renderHdhrSettings() {
     xmltvInput.value = cfg.xmltvUrl || '';
     xmltvInput.onchange = () => { cfg.xmltvUrl = normalizeEpgUrl(xmltvInput.value); saveSettings(); };
   }
-  const transcodeSelect = $('s-hdhr-transcode');
-  if (transcodeSelect) {
-    transcodeSelect.value = cfg.mobileTranscode || 'mobile';
-    transcodeSelect.onchange = () => {
-      cfg.mobileTranscode = transcodeSelect.value;
+  // Mobile proxy toggle + URL
+  const proxyToggle = $('s-hdhr-proxy-toggle');
+  const proxyUrlInput = $('s-hdhr-proxy-url');
+  const proxyRow = $('s-hdhr-proxy-row');
+  if (proxyToggle) {
+    proxyToggle.className = 'tgl' + (cfg.mobileProxyEnabled ? ' on' : '');
+    proxyToggle.onclick = () => {
+      cfg.mobileProxyEnabled = !cfg.mobileProxyEnabled;
       saveSettings();
-      // Persist to SharedPreferences via native bridge so PlayerActivity picks it up immediately
-      if (window.NativePlayer && typeof window.NativePlayer.setHdhrTranscode === 'function') {
-        window.NativePlayer.setHdhrTranscode(cfg.mobileTranscode);
+      renderHdhrSettings();
+      // Notify native layer
+      if (window.NativePlayer && typeof window.NativePlayer.setHdhrProxyEnabled === 'function') {
+        window.NativePlayer.setHdhrProxyEnabled(cfg.mobileProxyEnabled ? 'true' : 'false');
       }
+      toast(cfg.mobileProxyEnabled ? 'Mobile proxy enabled — mobile streams via ffmpeg' : 'Mobile proxy disabled');
+    };
+  }
+  if (proxyRow) proxyRow.style.display = cfg.mobileProxyEnabled ? 'block' : 'none';
+  if (proxyUrlInput) {
+    proxyUrlInput.value = cfg.mobileProxyUrl || '';
+    // Auto-suggest from XMLTV URL base
+    if (!cfg.mobileProxyUrl && cfg.xmltvUrl) {
+      try {
+        const u = new URL(cfg.xmltvUrl);
+        proxyUrlInput.placeholder = u.origin;
+      } catch(_) {}
+    }
+    proxyUrlInput.onchange = () => {
+      cfg.mobileProxyUrl = normalizeHdhrBase(proxyUrlInput.value);
+      saveSettings();
     };
   }
   if (fetchGuideBtn) fetchGuideBtn.onclick = async () => {
@@ -3080,6 +3205,14 @@ function renderLib() {
     const alts = getAltCount(m);
     const altBadge = alts > 0 ? `<span class="tg2" style="background:rgba(255,165,2,.12);color:var(--or)">${alts}alt</span>` : '';
 
+    // HDHR: build channel number prefix and network affiliate badge
+    const _hdhrNum = isHdhrItem(m) && m.hdhrMeta && m.hdhrMeta.guideNumber ? m.hdhrMeta.guideNumber : '';
+    const _hdhrAffiliate = isHdhrItem(m) ? _getHdhrAffiliate(m) : '';
+    const _affiliateBadge = _hdhrAffiliate
+      ? `<span class="tg2" style="background:${_affiliateBadgeColor(_hdhrAffiliate)};color:#fff;font-weight:700">${esc(_hdhrAffiliate)}</span>`
+      : '';
+    const _displayTitle = _hdhrNum ? `${_hdhrNum} · ${m.title}` : m.title;
+
     let epgNow = '';
     if (m.epgTitle) {
       const nn = getNowNext(m.epgTitle);
@@ -3093,8 +3226,8 @@ function renderLib() {
     return `<div class="itm" data-tv-zone="channel-list" data-tv-col="1" style="animation-delay:${i * 0.01}s" onclick="playItem('${m.id}')">
       <div class="th">${thumb}</div>
       <div class="nf">
-        <div class="nm">${esc(m.title)}</div>
-        <div class="mt">${regBadge}${catBadge}${srcBadge}${altBadge}${gameTimeBadge}</div>
+        <div class="nm">${esc(_displayTitle)}</div>
+        <div class="mt">${_affiliateBadge}${regBadge}${catBadge}${srcBadge}${altBadge}${gameTimeBadge}</div>
         ${epgNow}
       </div>
       <div class="ab${libEditMode ? '' : ' hide'}" data-tv-zone="channel-actions" data-tv-col="2">
@@ -9503,6 +9636,10 @@ setInterval(() => {
       const q = parsed && parsed.hdhr && parsed.hdhr.mobileTranscode;
       if (q && window.NativePlayer && typeof window.NativePlayer.setHdhrTranscode === 'function') {
         window.NativePlayer.setHdhrTranscode(q);
+      }
+      const proxyOn = parsed && parsed.hdhr && parsed.hdhr.mobileProxyEnabled;
+      if (window.NativePlayer && typeof window.NativePlayer.setHdhrProxyEnabled === 'function') {
+        window.NativePlayer.setHdhrProxyEnabled(proxyOn ? 'true' : 'false');
       }
     }
   } catch(e) {}
