@@ -1865,13 +1865,25 @@ async function _startupEnsureHdhrEpg() {
       if (epgTitle) matched++;
       return { ...ch, epgTitle };
     });
-    // Propagate matched epgTitles into the live library items
+    // Propagate matched epgTitles + icons + affiliates into live library items
     items.forEach(m => {
-      if (!isHdhrItem(m) || m.epgTitle) return;
+      if (!isHdhrItem(m)) return;
       const ch = (cfg.repoChannels || []).find(c =>
         m.hdhrMeta && c.key === hdhrChannelKey(m.hdhrMeta.deviceId, m.hdhrMeta.streamPath)
       );
-      if (ch && ch.epgTitle) m.epgTitle = ch.epgTitle;
+      if (!ch) return;
+      // epgTitle
+      if (!m.epgTitle && ch.epgTitle) m.epgTitle = ch.epgTitle;
+      // icon: backfill from EPG channel data if item has no icon
+      if (!m.icon && m.epgTitle) {
+        const epgCh = epgData.channels && epgData.channels[m.epgTitle];
+        if (epgCh && epgCh.icon) { m.icon = epgCh.icon; }
+      }
+      // affiliate: store on hdhrMeta so _getHdhrAffiliate can read it instantly
+      if (m.hdhrMeta && !m.hdhrMeta.affiliate && m.epgTitle) {
+        const epgCh = epgData.channels && epgData.channels[m.epgTitle];
+        if (epgCh && epgCh.affiliate) m.hdhrMeta.affiliate = epgCh.affiliate;
+      }
     });
     if (matched) {
       saveSettings();
@@ -2384,7 +2396,7 @@ async function loadHdhrChannelsFromDevice(deviceId, options) {
       lineupUrl: dev.lineupUrl,
       epgTitle: autoMatchHdhrEpgId(row, dev),
       selected: selectedSet.has(key),
-      icon: ''
+      icon: String(row.ImageURL || row.imageUrl || '').trim()
     };
   }).filter(Boolean);
   cfg.repoChannels = (cfg.repoChannels || []).filter(ch => String(ch.deviceId) !== String(dev.deviceId)).concat(loaded);
@@ -2412,7 +2424,7 @@ function syncHdhrSelectionToLibrary() {
       url: ch.localUrl,
       category: 'HDHR',
       region: ch.deviceName || 'HDHomeRun',
-      icon: ch.icon || '',
+      icon: ch.icon || (ch.epgTitle && epgData.channels && epgData.channels[ch.epgTitle] && epgData.channels[ch.epgTitle].icon) || '',
       epgTitle: ch.epgTitle || '',
       sourceKind: 'hdhr',
       baseName: extractBase(ch.title),
@@ -2423,7 +2435,8 @@ function syncHdhrSelectionToLibrary() {
         guideName: ch.guideName || ch.title,
         streamPath: ch.streamPath,
         baseUrl: ch.baseUrl,
-        lineupUrl: ch.lineupUrl
+        lineupUrl: ch.lineupUrl,
+        affiliate: (ch.epgTitle && epgData.channels && epgData.channels[ch.epgTitle] && epgData.channels[ch.epgTitle].affiliate) || ''
       }
     };
     if (existing) { Object.assign(existing, payload); updated++; }
@@ -2470,13 +2483,25 @@ function openHdhrPicker(deviceId) {
         return aMaj !== bMaj ? aMaj - bMaj : aMin - bMin;
       });
     const selected = new Set(cfg.selectedChannelKeys || []);
-    list.innerHTML = filtered.map(ch => `<button class="li hdhr-pick-row${selected.has(ch.key)?' on':''}" data-hdhr-key="${esc(ch.key)}" tabindex="0" style="width:100%;text-align:left;margin-bottom:4px;display:flex;align-items:flex-start;gap:8px">
-      <div style="flex:1;min-width:0">
-        <div style="font-size:10px;font-weight:700">${esc((ch.guideNumber ? ch.guideNumber + ' · ' : '') + ch.title)}</div>
-        <div style="font-size:8px;color:var(--t3)">${esc(ch.deviceName || '')}${ch.epgTitle ? (' · EPG ' + esc(ch.epgTitle)) : ' · No guide match yet'}</div>
-      </div>
-      <div style="font-size:8px;color:${selected.has(ch.key)?'#2ed573':'var(--t2)'};font-weight:700">${selected.has(ch.key)?'Selected':'Off'}</div>
-    </button>`).join('') || '<div style="font-size:8px;color:var(--t3)">No HDHR channels available.</div>';
+    list.innerHTML = filtered.map(ch => {
+      const _chEpgMeta = ch.epgTitle && epgData.channels && epgData.channels[ch.epgTitle];
+      const _chIcon = ch.icon || (_chEpgMeta && _chEpgMeta.icon) || '';
+      const _chAffiliate = (_chEpgMeta && _chEpgMeta.affiliate) || '';
+      const _affiliateSpan = _chAffiliate
+        ? `<span style="background:${_affiliateBadgeColor(_chAffiliate)};color:#fff;font-size:7px;font-weight:700;padding:1px 5px;border-radius:3px;margin-right:4px">${esc(_chAffiliate)}</span>`
+        : '';
+      const _iconEl = _chIcon
+        ? `<img src="${esc(_chIcon)}" onerror="this.style.display='none'" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;border-radius:4px;background:rgba(255,255,255,.06)">`
+        : `<div style="width:28px;height:28px;flex-shrink:0;border-radius:4px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px;color:var(--t3)"><polygon points="5 3 19 12 5 21"/></svg></div>`;
+      return `<button class="li hdhr-pick-row${selected.has(ch.key)?' on':''}" data-hdhr-key="${esc(ch.key)}" tabindex="0" style="width:100%;text-align:left;margin-bottom:4px;display:flex;align-items:center;gap:8px">
+        ${_iconEl}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:10px;font-weight:700;display:flex;align-items:center;flex-wrap:wrap;gap:2px">${_affiliateSpan}${esc((ch.guideNumber ? ch.guideNumber + ' · ' : '') + ch.title)}</div>
+          <div style="font-size:8px;color:var(--t3)">${ch.epgTitle ? esc(ch.epgTitle) : '⚠ No guide match yet'}</div>
+        </div>
+        <div style="font-size:8px;color:${selected.has(ch.key)?'#2ed573':'var(--t2)'};font-weight:700;flex-shrink:0">${selected.has(ch.key)?'✓ On':'Off'}</div>
+      </button>`;
+    }).join('') || '<div style="font-size:8px;color:var(--t3)">No HDHR channels available.</div>';
     Array.from(list.querySelectorAll('.hdhr-pick-row')).forEach(btn => btn.onclick = () => {
       const key = btn.dataset.hdhrKey;
       const set = new Set(cfg.selectedChannelKeys || []);
@@ -3194,8 +3219,13 @@ function renderLib() {
   const fSlice = f.length > LIB_RENDER_CAP ? f.slice(0, LIB_RENDER_CAP) : f;
   const overCap = f.length > LIB_RENDER_CAP;
   $('lib-lst').innerHTML = fSlice.map((m, i) => {
-    const thumb = m.icon
-      ? `<img src="${esc(m.icon)}" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><svg style="display:none" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>`
+    // For HDHR items: fall back to EPG channel icon if item icon not yet backfilled
+    const _epgIcon = isHdhrItem(m) && !m.icon && m.epgTitle
+      ? ((epgData.channels && epgData.channels[m.epgTitle] && epgData.channels[m.epgTitle].icon) || '')
+      : '';
+    const _thumbSrc = m.icon || _epgIcon;
+    const thumb = _thumbSrc
+      ? `<img src="${esc(_thumbSrc)}" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><svg style="display:none" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>`
       : `<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>`;
 
     const catBadge = m.category ? `<span class="tg2" style="background:var(--acs);color:var(--ac)">${esc(m.category)}</span>` : '';
@@ -4519,11 +4549,17 @@ function renderGuide() {
     html += `<div class="grow2" style="height:${rowH}px;min-height:${rowH}px;max-height:${rowH}px;width:${totalW}px">`;
 
     // Channel cell — sticky left
+    const _guideIcon = m.icon || (ch && ch.icon) || '';
+    const _guideAffiliate = (m.hdhrMeta && m.hdhrMeta.affiliate) || (ch && ch.affiliate) || _getHdhrAffiliate(m);
+    const _guideNum = m.hdhrMeta && m.hdhrMeta.guideNumber ? m.hdhrMeta.guideNumber : '';
     html += `<div class="gch" role="button" tabindex="0" data-item-id="${m.id}" data-ch-idx="${chIdx}" onclick="playItem('${m.id}')" style="width:${chW}px;min-width:${chW}px;height:${rowH}px">`;
-    if (m.icon || (ch && ch.icon)) {
-      html += `<img src="${esc(m.icon||ch.icon)}" onerror="this.style.display='none'" style="flex-shrink:0">`;
+    if (_guideIcon) {
+      html += `<img src="${esc(_guideIcon)}" onerror="this.style.display='none'" style="flex-shrink:0;width:28px;height:28px;object-fit:contain">`;
+    } else if (_guideAffiliate) {
+      html += `<span style="flex-shrink:0;font-size:7px;font-weight:700;padding:2px 4px;border-radius:3px;background:${_affiliateBadgeColor(_guideAffiliate)};color:#fff;margin-right:2px">${esc(_guideAffiliate)}</span>`;
     }
-    html += `<span class="gch-nm">${esc(m.title)}</span></div>`;
+    const _guideTitleDisplay = _guideNum ? `${_guideNum} ${m.title}` : m.title;
+    html += `<span class="gch-nm">${esc(_guideTitleDisplay)}</span></div>`;
 
     // Program strip — position:relative div, explicit size, overflow:hidden
     // Programs absolutely positioned inside this div ONLY
@@ -8481,6 +8517,9 @@ function renderSportLeagueSettings() {
       Array.from(suggDiv.children).forEach(el => {
         el.onmouseenter = () => el.style.background = 'var(--c2)';
         el.onmouseleave = () => el.style.background = '';
+        // onmousedown + preventDefault keeps focus on the input so blur doesn't
+        // fire and hide the dropdown before onclick can register (touch & mouse fix)
+        el.onmousedown = (e) => e.preventDefault();
         el.onclick = () => {
           const p = el.dataset.path;
           if (!p) return;
@@ -8497,8 +8536,8 @@ function renderSportLeagueSettings() {
         };
       });
     };
-    // Close suggestions when focus leaves
-    searchInp.onblur = () => setTimeout(() => { if (suggDiv) suggDiv.style.display = 'none'; }, 200);
+    // Close suggestions when focus leaves (500ms gives touch events time to fire first)
+    searchInp.onblur = () => setTimeout(() => { if (suggDiv) suggDiv.style.display = 'none'; }, 500);
   });
 
   // Wire virtual league search input
@@ -8523,6 +8562,7 @@ function renderSportLeagueSettings() {
       Array.from(virtSugg.children).forEach(el => {
         el.onmouseenter = () => el.style.background = 'var(--c2)';
         el.onmouseleave = () => el.style.background = '';
+        el.onmousedown = (e) => e.preventDefault();
         el.onclick = () => {
           virtInp.value = el.dataset.label;
           virtInp.dataset.selectedPath  = el.dataset.path;
@@ -8531,7 +8571,7 @@ function renderSportLeagueSettings() {
         };
       });
     };
-    virtInp.onblur = () => setTimeout(() => { if (virtSugg) virtSugg.style.display = 'none'; }, 200);
+    virtInp.onblur = () => setTimeout(() => { if (virtSugg) virtSugg.style.display = 'none'; }, 500);
   }
 
   updateSportNavVisibility();
@@ -9228,7 +9268,7 @@ function _renderMyTeamSuggestions() {
   var items = window._myTeamSuggestions || [];
   if (!items.length) { sug.style.display = 'none'; return; }
   sug.innerHTML = items.map(function(t, i) {
-    return '<div onclick="window.selectMyTeamSuggestion(' + i + ')" style="padding:7px 10px;cursor:pointer;font-size:9px;color:var(--t1);border-bottom:1px solid var(--bd)">'
+    return '<div onmousedown="event.preventDefault()" onclick="window.selectMyTeamSuggestion(' + i + ')" style="padding:7px 10px;cursor:pointer;font-size:9px;color:var(--t1);border-bottom:1px solid var(--bd)">'
       + esc(t.name) + (t.leagueLabel ? ' <span style="font-size:7px;color:var(--t3)">' + esc(t.leagueLabel) + '</span>' : '')
       + '</div>';
   }).join('');
