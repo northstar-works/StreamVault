@@ -192,6 +192,20 @@ body.tv-mode .gpr.tv-f .gt{white-space:normal!important;text-overflow:clip!impor
 .acc-body{display:none;padding-top:4px}
 .acc.open>.acc-body{display:block}
 body.tv-mode .acc-hdr{min-height:44px}
+body.mobile-mode #set-scr .acc-hdr{font-size:14px;padding:12px 0;min-height:48px}
+body.mobile-mode #set-scr .acc-chev{font-size:18px}
+body.mobile-mode #set-scr .sr{padding:12px 0}
+body.mobile-mode #set-scr .sr .sl{font-size:14px}
+body.mobile-mode #set-scr .sr .sd{font-size:11px}
+body.mobile-mode #set-scr .sr select,body.mobile-mode #set-scr .sr input[type=number]{font-size:14px;padding:8px 10px;max-width:160px;min-height:40px}
+body.mobile-mode #set-scr .sr input[type=text],body.mobile-mode #set-scr .sr input[type=password],body.mobile-mode #set-scr .sr input[type=url]{font-size:14px;padding:8px 10px;min-height:40px}
+body.mobile-mode #set-scr .tgl{width:50px;height:28px;border-radius:14px}
+body.mobile-mode #set-scr .tgl::after{width:20px;height:20px;top:3px;left:3px}
+body.mobile-mode #set-scr .tgl.on::after{transform:translateX(22px)}
+body.mobile-mode #set-scr button.bs,body.mobile-mode #set-scr button.bc{font-size:13px;padding:10px 16px;min-height:42px}
+body.mobile-mode #set-scr .px-note{font-size:11px}
+body.mobile-mode #set-scr .px-title{font-size:15px}
+body.mobile-mode #set-scr .px-sub{font-size:12px}
 .px-note{font-size:8px;color:var(--t2);margin-top:6px;line-height:1.4}
 
 /* EPG Cards */
@@ -4692,6 +4706,7 @@ function shouldUseTvMode() {
 function applyTvMode() {
   isTvDevice = shouldUseTvMode();
   document.body.classList.toggle('tv-mode', isTvDevice);
+  document.body.classList.toggle('mobile-mode', !isTvDevice);
   refreshTvFocus();
 }
 function normalizeTvFocusable(el) {
