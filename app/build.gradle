@@ -10,8 +10,8 @@ android {
         applicationId "com.sidscri.streamvault"
         minSdk 24
         targetSdk 34
-        versionCode 165
-        versionName "5.8.0"
+        versionCode 166
+        versionName "5.8.1"
     }
 
     buildFeatures {

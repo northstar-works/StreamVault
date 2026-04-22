@@ -1851,7 +1851,10 @@ function _affiliateBadgeColor(affiliate) {
   return 'rgba(80,80,80,0.7)'; // generic grey for unknowns
 }
 
+let _hdhrEpgEnsureDone = false; // flag: don't re-run after initial match succeeds
+
 async function _startupEnsureHdhrEpg() {
+  if (_hdhrEpgEnsureDone) return; // already matched this session — skip
   try {
     const cfg = getHdhrCfg();
     if (!cfg.xmltvUrl) return; // no HDHR XMLTV configured
@@ -1885,11 +1888,15 @@ async function _startupEnsureHdhrEpg() {
         if (epgCh && epgCh.affiliate) m.hdhrMeta.affiliate = epgCh.affiliate;
       }
     });
+    // Check if all channels are now matched
+    const _allMatched = items.filter(isHdhrItem).every(m => !!m.epgTitle);
+    if (_allMatched) _hdhrEpgEnsureDone = true; // stop re-running on tab switches
+
     if (matched) {
       saveSettings();
       saveItems();
       renderLib();
-      console.log('[SV] HDHR EPG: matched ' + matched + ' channel(s) on startup');
+      console.log('[SV] HDHR EPG: matched ' + matched + ' channel(s) on startup' + (_allMatched ? ' — all done' : ''));
     }
   } catch(e) {
     console.warn('[SV] _startupEnsureHdhrEpg failed:', e.message);
@@ -1910,7 +1917,9 @@ async function parseXMLTV(xml) {
   // Parse in async chunks to keep the UI/D-pad responsive on Fire TV.
   // DOMParser itself is synchronous but we yield the event loop between
   // batches of programme elements so input events can still be processed.
-  const CHUNK = 100; // smaller chunks = more frequent yields = Fire TV stays responsive
+  // Fire TV has ~4ms setTimeout overhead per yield. Larger chunks = fewer yields = faster parse.
+  // 500 items = ~1/5 the yields vs 100, while still yielding often enough to stay responsive.
+  const CHUNK = 500;
   const yield_ = () => new Promise(r => setTimeout(r, 0));
 
   const parser = new DOMParser();
@@ -2161,13 +2170,15 @@ function showTab(id) {
   if (id === 'lib-scr') {
     // Rebuild PlexStr card fresh on return so stale library results don't persist
     setTimeout(function() { if (typeof renderLibExtra === 'function') renderLibExtra(); }, 0);
-    // Re-match HDHR EPG titles if any items are still unmatched (fast if already matched)
-    setTimeout(function() {
-      const _hdhrUnmatched = items.some(m => isHdhrItem(m) && !m.epgTitle);
-      if (_hdhrUnmatched && typeof _startupEnsureHdhrEpg === 'function') {
-        _startupEnsureHdhrEpg();
-      }
-    }, 200);
+    // Re-match HDHR EPG titles only if some items are still unmatched AND not already done
+    if (!_hdhrEpgEnsureDone) {
+      setTimeout(function() {
+        const _hdhrUnmatched = items.some(m => isHdhrItem(m) && !m.epgTitle);
+        if (_hdhrUnmatched && typeof _startupEnsureHdhrEpg === 'function') {
+          _startupEnsureHdhrEpg();
+        }
+      }, 200);
+    }
   }
   if (id === 'sport-scr') {
     // Default: open to My Teams Only > Live Today (overridable in settings)
@@ -6417,7 +6428,14 @@ function getSportLeagueConfig(category) {
 function isSportLeagueGroup(category) { return !!(category && getSportLeagueConfig(category)); }
 
 // Get all configured sport groups' source items (from repos or library)
+// Cache for getSportGroupItems — keyed by groupName+itemsLen to auto-invalidate on library changes
+const _sportGroupItemsCache = new Map();
+
 function getSportGroupItems(lg) {
+  // Fast cache check: groupName + items.length + repos snapshot
+  const _cacheKey = (lg.groupName || '') + '|' + (lg.repoId || '') + '|' + items.length;
+  if (_sportGroupItemsCache.has(_cacheKey)) return _sportGroupItemsCache.get(_cacheKey);
+
   const paths = lg.espnPaths || (lg.espnPath ? [lg.espnPath] : []);
   const _noTeamPathsGrp = new Set(ESPN_LEAGUE_MAP.filter(function(e){return e.noTeam;}).map(function(e){return e.path;}));
   const isNoTeamLg = paths.some(function(p){return _noTeamPathsGrp.has(p);});
@@ -6477,9 +6495,12 @@ function getSportGroupItems(lg) {
     });
     // Tag cross-group matches so they can be distinguished if needed
     const crossMatched = matched.map(function(m){ return Object.assign({}, m, {_crossGroupMatch: true}); });
-    return primary.concat(crossMatched);
+    const _result = primary.concat(crossMatched);
+  _sportGroupItemsCache.set(_cacheKey, _result);
+  return _result;
   }
 
+  _sportGroupItemsCache.set(_cacheKey, primary);
   return primary;
 }
 
@@ -6487,6 +6508,7 @@ function getSportGroupItems(lg) {
 function _invalidateSportCache() {
   _sportItemsCache = null;
   _sportItemsCacheKey = '';
+  _sportGroupItemsCache.clear(); // also clear the per-group items cache
   _invalidateSportGameIndex(); // also wipe the channel→game index
 }
 
