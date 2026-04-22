@@ -10,8 +10,8 @@ android {
         applicationId "com.sidscri.streamvault"
         minSdk 24
         targetSdk 34
-        versionCode 166
-        versionName "5.8.1"
+        versionCode 167
+        versionName "5.8.2"
     }
 
     buildFeatures {
@@ -79,6 +79,11 @@ dependencies {
     implementation 'androidx.media3:media3-exoplayer-rtsp:1.2.1'
     implementation 'androidx.media3:media3-ui:1.2.1'
     implementation 'androidx.media3:media3-datasource-okhttp:1.2.1'
+
+    // FFmpeg software decoder — adds MPEG-2 support for mobile (HDHR CONNECT streams)
+    // Ships as prebuilt AAR with libffmpeg.so — no custom native build required.
+    // TV APK already handles MPEG-2 via hardware decoder; mobile needs software fallback.
+    mobileImplementation 'androidx.media3:media3-decoder-ffmpeg:1.2.1'
 }
 
 // ─── Version token injection into index.html ────────────────────────────────

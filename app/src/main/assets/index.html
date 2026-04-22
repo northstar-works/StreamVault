@@ -740,18 +740,13 @@ document.addEventListener('keydown', function(e) {
           <button class="bc" id="s-hdhr-open" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Open HDHR Tab</button>
           <button class="bc" id="s-hdhr-manage" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Choose Channels</button>
         </div>
-        <div class="sr" style="margin-top:8px"><div><div class="sl">Tailscale / VPN remote mode</div><div class="sd">Keep using the tuner's saved LAN IPs remotely over Tailscale or another VPN. This is the best fit when your phone can reach your home subnet.</div></div><div class="tgl" id="s-hdhr-ts-toggle"></div></div>
-        <div class="sr" style="margin-top:8px"><div><div class="sl">Mobile stream proxy</div><div class="sd">Route HDHR streams through your hdhr-xmltv server for ffmpeg H.264 transcoding. Fixes black screen on phones (CONNECT Quatro streams MPEG-2 which phones cannot decode).</div></div><div class="tgl" id="s-hdhr-proxy-toggle"></div></div>
-        <div style="margin-top:6px" id="s-hdhr-proxy-row">
-          <label style="font-size:9px;color:var(--t2)">Mobile proxy base URL</label>
-          <input id="s-hdhr-proxy-url" placeholder="https://epg.yourdomain.com" style="width:100%;margin-top:3px;padding:5px;box-sizing:border-box;background:var(--c1);border:1px solid var(--bd);border-radius:var(--rs);color:var(--t1);font-size:9px">
-          <div style="font-size:8px;color:var(--t3);margin-top:3px">Same base as your XMLTV server — streams at /proxy/v4.1 etc. Requires ffmpeg in hdhr-xmltv container (see docs).</div>
-        </div>
-        <div class="sr" style="margin-top:8px"><div><div class="sl">Prefer remote HDHR relay URL</div><div class="sd">When enabled, HDHR items use the remote base URL below instead of the local tuner IP. Leave this off when using Tailscale/VPN subnet access.</div></div><div class="tgl" id="s-hdhr-remote-toggle"></div></div>
+        <div class="sr" style="margin-top:8px"><div><div class="sl">Tailscale / VPN mode</div><div class="sd">Phone connects to HDHR directly over Tailscale subnet routing. Best option — no proxy needed. Enable this when your phone is on Tailscale and your home network is subnet-routed.</div></div><div class="tgl" id="s-hdhr-ts-toggle"></div></div>
+        <div style="margin-top:8px;padding:8px;background:rgba(46,213,115,.08);border:1px solid rgba(46,213,115,.2);border-radius:var(--rs)"><div style="font-size:9px;color:var(--gn);font-weight:600">📱 Mobile video</div><div style="font-size:8px;color:var(--t2);margin-top:3px">MPEG-2 playback is handled automatically via the built-in software decoder. No proxy or extra configuration needed.</div></div>
+        <div class="sr" style="margin-top:8px"><div><div class="sl">Remote relay (no VPN)</div><div class="sd">For cellular or networks without Tailscale. Routes HDHR streams through your hdhr-xmltv server's ffmpeg proxy. Set the relay URL to your hdhr subdomain below.</div></div><div class="tgl" id="s-hdhr-remote-toggle"></div></div>
         <div style="margin-top:8px">
           <label>Remote HDHR base URL</label>
           <input id="s-hdhr-remote-base" placeholder="https://tv.yourdomain.com">
-          <div style="font-size:8px;color:var(--t3);margin-top:4px">Use only when you have a reverse proxy or relay for HDHR stream paths. For Tailscale/VPN, keep this blank and use saved LAN tuner IPs.</div>
+          <div style="font-size:8px;color:var(--t3);margin-top:4px">Enter your hdhr subdomain base URL (e.g. https://hdhr.sidneyshelton.com). Streams are routed to /proxy/v4.1 etc. for ffmpeg H.264 transcoding.</div>
         </div>
         <div style="margin-top:8px">
           <label>HDHR guide provider</label>
@@ -2349,31 +2344,23 @@ function resolveHdhrPlayableUrl(item, url) {
   const cfg = getHdhrCfg();
   const hd = item.hdhrMeta || {};
 
-  // Mobile proxy mode: rewrite /auto/v4.1 → https://proxy.host/proxy/v4.1
-  // Enabled when: proxy toggle ON + proxy base URL set + not TV device
-  // Fixes MPEG-2 black screen on Android phones (CONNECT Quatro doesn't transcode).
-  if (!isTvDevice && cfg.mobileProxyEnabled && cfg.mobileProxyUrl) {
-    // Extract the channel path from the stream URL — /auto/v4.1 → v4.1
-    const rawUrl = extractUrl(url || item.url || '');
-    let channelPath = hd.streamPath || '';
-    if (!channelPath) {
-      try { channelPath = new URL(rawUrl).pathname; } catch(_) { channelPath = rawUrl; }
-    }
-    // channelPath is like /auto/v4.1 — extract the v{num} part
-    const vMatch = channelPath.match(/\/(v[\d.]+)(?:[?#]|$)/);
-    if (vMatch) {
-      return normalizeHdhrBase(cfg.mobileProxyUrl) + '/proxy/' + vMatch[1];
-    }
-    // Fallback: strip leading slash and use as-is
-    const cleanPath = channelPath.replace(/^\/auto\//, '');
-    if (cleanPath) return normalizeHdhrBase(cfg.mobileProxyUrl) + '/proxy/' + cleanPath;
-  }
-
   const remoteBase = normalizeHdhrBase(cfg.remoteBaseUrl || '');
+  // Tailscale / VPN subnet mode: phone reaches HDHR directly via VPN — use LAN IP as-is.
+  // The media3-decoder-ffmpeg extension handles MPEG-2 decoding natively on mobile.
   if (cfg.tailscaleMode) return extractUrl(url || item.url || '');
+  // Remote relay mode: route through the hdhr-xmltv proxy for non-VPN remote access.
+  // Rewrites /auto/v4.1 → /proxy/v4.1 so the ffmpeg transcode endpoint is used.
   if (cfg.preferRemote && remoteBase) {
-    const path = hd.streamPath || (() => { try { return new URL(extractUrl(url || item.url || ''), location.href).pathname; } catch (e) { return ''; } })();
-    if (path) return remoteBase + path;
+    const streamPath = hd.streamPath || (() => {
+      try { return new URL(extractUrl(url || item.url || ''), location.href).pathname; }
+      catch (e) { return ''; }
+    })();
+    if (streamPath) {
+      // Convert /auto/v4.1 → /proxy/v4.1 for the hdhr-xmltv proxy endpoint
+      const vMatch = streamPath.match(/\/(v[\d.]+)(?:[?#]|$)/);
+      const proxyPath = vMatch ? '/proxy/' + vMatch[1] : streamPath;
+      return remoteBase + proxyPath;
+    }
   }
   return extractUrl(url || item.url || '');
 }
@@ -2625,38 +2612,7 @@ function renderHdhrSettings() {
     xmltvInput.value = cfg.xmltvUrl || '';
     xmltvInput.onchange = () => { cfg.xmltvUrl = normalizeEpgUrl(xmltvInput.value); saveSettings(); };
   }
-  // Mobile proxy toggle + URL
-  const proxyToggle = $('s-hdhr-proxy-toggle');
-  const proxyUrlInput = $('s-hdhr-proxy-url');
-  const proxyRow = $('s-hdhr-proxy-row');
-  if (proxyToggle) {
-    proxyToggle.className = 'tgl' + (cfg.mobileProxyEnabled ? ' on' : '');
-    proxyToggle.onclick = () => {
-      cfg.mobileProxyEnabled = !cfg.mobileProxyEnabled;
-      saveSettings();
-      renderHdhrSettings();
-      // Notify native layer
-      if (window.NativePlayer && typeof window.NativePlayer.setHdhrProxyEnabled === 'function') {
-        window.NativePlayer.setHdhrProxyEnabled(cfg.mobileProxyEnabled ? 'true' : 'false');
-      }
-      toast(cfg.mobileProxyEnabled ? 'Mobile proxy enabled — mobile streams via ffmpeg' : 'Mobile proxy disabled');
-    };
-  }
-  if (proxyRow) proxyRow.style.display = cfg.mobileProxyEnabled ? 'block' : 'none';
-  if (proxyUrlInput) {
-    proxyUrlInput.value = cfg.mobileProxyUrl || '';
-    // Auto-suggest from XMLTV URL base
-    if (!cfg.mobileProxyUrl && cfg.xmltvUrl) {
-      try {
-        const u = new URL(cfg.xmltvUrl);
-        proxyUrlInput.placeholder = u.origin;
-      } catch(_) {}
-    }
-    proxyUrlInput.onchange = () => {
-      cfg.mobileProxyUrl = normalizeHdhrBase(proxyUrlInput.value);
-      saveSettings();
-    };
-  }
+  // Mobile video handled by built-in ffmpeg software decoder — no proxy UI needed
   if (fetchGuideBtn) fetchGuideBtn.onclick = async () => {
     const _missingToasts = { 'schedulesdirect': 'Enter your Schedules Direct XMLTV export URL first', 'hdhr-native': 'Enter your hdhr-xmltv bridge URL first (e.g. https://epg.yourdomain.com/hdhr-epg.xmltv)', 'custom': 'Set an HDHR XMLTV guide URL first' };
     if (!cfg.xmltvUrl) { toast(_missingToasts[cfg.xmltvProvider] || _missingToasts['custom']); return; }

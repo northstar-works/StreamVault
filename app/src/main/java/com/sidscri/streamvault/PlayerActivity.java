@@ -551,8 +551,19 @@ public class PlayerActivity extends Activity {
                     5_000, 7_500)
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build();
+        // On mobile: prefer the ffmpeg extension decoder so MPEG-2 streams from
+        // HDHomeRun CONNECT play with video (phones lack hardware MPEG-2 decoders).
+        // EXTENSION_RENDERER_MODE_PREFER uses software decoder when hardware can't handle
+        // the codec, then falls back to hardware for codecs it can handle (H.264 etc).
+        // TV build: hardware decoders handle everything so leave mode at default.
+        boolean isMobileForRenderer = "mobile".equals(BuildConfig.DEVICE_FLAVOR);
         DefaultRenderersFactory renderersFactory = new DefaultRenderersFactory(this)
-            .setEnableDecoderFallback(true);
+            .setEnableDecoderFallback(true)
+            .setExtensionRendererMode(
+                isMobileForRenderer
+                    ? DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
+                    : DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
+            );
         player = new ExoPlayer.Builder(this, renderersFactory).setLoadControl(loadControl).build();
         acquireWifiLock();
         playerView.setPlayer(player);
@@ -563,29 +574,12 @@ public class PlayerActivity extends Activity {
         boolean preferHls    = !useRtsp && isLikelyHls(v.url);
         boolean preferHdhrTs = !useRtsp && !preferHls && isLikelyHdhrTs(v.url);
 
-        // On mobile, raw MPEG-TS from HDHomeRun causes black screen + audio only
-        // because most phone SoCs lack a hardware MPEG-TS demuxer. The HDHR device
-        // supports native H.264 transcoding: append ?transcode=<quality> so ExoPlayer
-        // receives a compatible stream. Quality is user-configurable in HDHR Settings.
-        // TV build ("tv" flavor) always uses raw TS for best quality via hardware decoder.
+        // HDHR CONNECT streams MPEG-2 video in MPEG-TS. The mobile APK includes the
+        // media3-decoder-ffmpeg extension which provides a software MPEG-2 decoder,
+        // so ExoPlayer can decode it without any proxy or server-side transcoding.
+        // EXTENSION_RENDERER_MODE_PREFER (set in renderersFactory above) activates it.
         boolean isMobileFlavor = "mobile".equals(BuildConfig.DEVICE_FLAVOR);
-        boolean hdhrProxyEnabled = isMobileFlavor &&
-            getSharedPreferences("sv_prefs", MODE_PRIVATE).getBoolean("hdhr_proxy_enabled", false);
         String playUrl = v.url;
-        // Only apply ?transcode when: mobile flavor, proxy NOT enabled (proxy does the transcoding
-        // server-side), and stream is a raw HDHR TS but NOT already a proxy URL.
-        if (preferHdhrTs && isMobileFlavor && !hdhrProxyEnabled && !isHdhrProxyUrl(playUrl)) {
-            String hdhrTranscodeQuality = getSharedPreferences("sv_prefs", MODE_PRIVATE)
-                .getString("hdhr_transcode", "mobile");
-            if (!"none".equals(hdhrTranscodeQuality) && !playUrl.contains("transcode=")) {
-                playUrl = playUrl + (playUrl.contains("?") ? "&" : "?") + "transcode=" + hdhrTranscodeQuality;
-                Log.d(TAG, "HDHR ?transcode=" + hdhrTranscodeQuality + " url=" + playUrl);
-            }
-        }
-        // Proxy URLs already contain H.264/AAC — log for debugging
-        if (isHdhrProxyUrl(playUrl)) {
-            Log.d(TAG, "HDHR proxy stream (H.264/AAC via ffmpeg): " + playUrl);
-        }
 
         MediaItem mediaItem = preferHdhrTs
             ? new MediaItem.Builder().setUri(Uri.parse(playUrl)).setMimeType(MimeTypes.VIDEO_MP2T).build()
@@ -600,7 +594,7 @@ public class PlayerActivity extends Activity {
                 : new ProgressiveMediaSource.Factory(httpFactory, extractorsFactory).createMediaSource(mediaItem));
 
         Log.d(TAG, "playVariant url=" + playUrl + " scheme=" + scheme + " hls=" + preferHls + " hdhrTs=" + preferHdhrTs + " mobileFlavor=" + isMobileFlavor + " category=" + streamCategory);
-        String _hdhrModeLabel = isHdhrProxyUrl(playUrl) ? "HDHR proxy" : (isMobileFlavor ? "HDHR mobile" : "HDHR TS");
+        String _hdhrModeLabel = isMobileFlavor ? "HDHR" : "HDHR TS";
         if (statusText != null && preferHdhrTs) statusText.setText("Source " + (idx+1) + "/" + variants.size() + " · " + _hdhrModeLabel + (locked ? " · 🔒" : ""));
 
         final boolean[] primaryFailed = {false};
@@ -663,12 +657,9 @@ public class PlayerActivity extends Activity {
                     primaryFailed[0]=true;
                     try {
                         player.stop();
-                        String fallbackUrl = hdhrTs && isMobileFlavor && !v.url.contains("transcode=")
-                            ? v.url + (v.url.contains("?") ? "&" : "?") + "transcode=mobile"
-                            : v.url;
                         MediaItem fallbackItem = hdhrTs
-                            ? new MediaItem.Builder().setUri(Uri.parse(fallbackUrl)).setMimeType(MimeTypes.VIDEO_MP2T).build()
-                            : MediaItem.fromUri(Uri.parse(fallbackUrl));
+                            ? new MediaItem.Builder().setUri(Uri.parse(v.url)).setMimeType(MimeTypes.VIDEO_MP2T).build()
+                            : MediaItem.fromUri(Uri.parse(v.url));
                         DefaultExtractorsFactory fallbackExtractors = new DefaultExtractorsFactory()
                             .setTsExtractorFlags(DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS
                                 | DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES);
