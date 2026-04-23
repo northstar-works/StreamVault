@@ -1,4 +1,4 @@
-package com.sidscri.streamvault;
+package com.northstarworks.streamvault;
 
 import android.Manifest;
 import android.annotation.SuppressLint;

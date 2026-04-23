@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace 'com.sidscri.streamvault'
+    namespace 'com.northstarworks.streamvault'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.sidscri.streamvault"
+        applicationId "com.northstarworks.streamvault"
         minSdk 24
         targetSdk 34
         versionCode 169
@@ -22,13 +22,13 @@ android {
     productFlavors {
         mobile {
             dimension "device"
-            applicationId "com.sidscri.streamvault"
+            applicationId "com.northstarworks.streamvault"
             resValue "string", "app_name", "StreamVault"
             buildConfigField "String", "DEVICE_FLAVOR", '"mobile"'
         }
         tv {
             dimension "device"
-            applicationId "com.sidscri.streamvault.tv"
+            applicationId "com.northstarworks.streamvault.tv"
             versionNameSuffix "-tv"
             resValue "string", "app_name", "StreamVault TV"
             buildConfigField "String", "DEVICE_FLAVOR", '"tv"'
