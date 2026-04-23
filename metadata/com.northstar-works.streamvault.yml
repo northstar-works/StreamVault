@@ -2,15 +2,15 @@ Categories:
   - Multimedia
   - Internet
 License: GPL-3.0-only
-AuthorName: Sidscri
-AuthorWebSite: https://github.com/sidscri
-SourceCode: https://github.com/sidscri/StreamVault
-IssueTracker: https://github.com/sidscri/StreamVault/issues
+AuthorName: northstar-works
+AuthorWebSite: https://github.com/northstar-works
+SourceCode: https://github.com/northstar-works/StreamVault
+IssueTracker: https://github.com/northstar-works/StreamVault/issues
 
 AutoName: StreamVault
 
 RepoType: git
-Repo: https://github.com/sidscri/StreamVault.git
+Repo: https://github.com/northstar-works/StreamVault.git
 
 Builds:
   - versionName: 4.4.1
