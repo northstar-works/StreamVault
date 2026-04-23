@@ -380,7 +380,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
   <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b@@VERSION_CODE@@</span>
     <button class="ib" id="btn-lib-edit" title="Toggle edit controls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
     <button class="ib" id="btn-add-top" title="Add stream"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
-    <button class="ib" id="btn-exp" title="Export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
+    <button class="ib" id="btn-hdhr-settings" title="HDHR Settings" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83-2.83l-.06.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06c.38-.47.5-1.1.33-1.82a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9c.17-.73.05-1.35-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06c.47.38 1.1.5 1.82.33a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51c.73.17 1.35.05 1.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06c-.38.47-.5 1.1-.33 1.82a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button>
     <button class="ib" id="btn-home-refresh" title="Refresh repos &amp; EPG"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg></button>
   </div></div>
   <div class="libbar">
@@ -1195,7 +1195,7 @@ let epgData = { channels: {}, programs: {} };
 let settings = { localities: [], startupChannel: '', defaultEpgSource: '', foTimeout: 15, foAuto: true, autoAltCheck: true, altCache: {}, altLastCheck: 0, savePath: '', savePathLabel: '', backupPath: '', backupPathLabel: '', schedules: [], tabOrder: ['itv','plex','icam','local','network'], tvMode: 'auto', plex: { server: '', token: '', section: '', sections: [] }, timeshiftEnabled: true, timeshiftMaxMin: 30, dvrCfg: { remoteEnabled: false, proto: 'ftp', host: '', port: '21', user: '', pass: '', path: '/recordings' }, sportLeagueFilterEnabled: true, sportLeagues: [], sportShowPastGames: true, myTeams: [],
   localEnable: true, localPath: '',
   icamCfg: {},
-  networkCfg: {}, excludedLeagues: [], allGamesExtraEnabled: false, sportDefaultMyTeams: true, manualStreamMatches: {} };
+  networkCfg: {}, excludedLeagues: [], allGamesExtraEnabled: false, sportDefaultMyTeams: true, manualStreamMatches: {}, hdhr: {} };
 let plexAddMode = false;
 let _plexView = ''; // '' | 'search' | 'library' — tracks which plex result view is showing
 
@@ -1724,6 +1724,24 @@ function buildFailoverList(item) {
       }
     });
   });
+
+  // Fix 4: For HDHR items, also scan ALL repo channels (full device list, not just
+  // selected 25) so unselected tuner channels on other devices count as alts.
+  if (isHdhrItem(item) && item.hdhrMeta) {
+    const _itemKey = hdhrChannelKey(item.hdhrMeta.deviceId, item.hdhrMeta.streamPath);
+    const _itemGuideNum = (item.hdhrMeta.guideNumber || '').trim();
+    const _itemBase = base;
+    getHdhrRepoChannels().forEach(ch => {
+      const _chKey = hdhrChannelKey(ch.deviceId, ch.streamPath);
+      if (_chKey === _itemKey) return; // same channel — skip
+      const _guideMatch = _itemGuideNum && (ch.guideNumber || '').trim() === _itemGuideNum;
+      const _nameMatch = ch.guideName && (extractBase(ch.guideName) === _itemBase || extractBase(ch.title || ch.guideName) === _itemBase);
+      if (!_guideMatch && !_nameMatch) return;
+      // Build a synthetic item so resolveHdhrPlayableUrl works
+      const _synth = { hdhrMeta: ch, url: ch.url || '', title: ch.guideName || ch.title || '', region: ch.deviceName || 'HDHomeRun', tags: [] };
+      if (!cands.some(c => c.url === _synth.url)) cands.push(_synth);
+    });
+  }
 
   // Sort: locality > region match > tag priority
   cands.sort((a, b) => {
@@ -2742,6 +2760,9 @@ function renderLibModes() {
   $('lib-modes').querySelectorAll('.lmb').forEach(btn => btn.onclick = () => {
     activeLibPage = btn.dataset.libPage;
     if (activeLibPage !== 'plex') plexAddMode = false;
+    activeCat = 'All'; // reset category filter when switching tabs — prevents empty list
+    // Hide HDHR gear when not on HDHR page
+    const _g = $('btn-hdhr-settings'); if (_g) _g.style.display = activeLibPage === 'hdhr' ? '' : 'none';
     renderCats();
     renderLibModes();
     renderLibExtra();
@@ -3025,14 +3046,20 @@ function renderLibExtra() {
     return;
   }
   if (activeLibPage === 'hdhr') {
-    const cfg = getHdhrCfg();
-    const hdhrCount = items.filter(isHdhrItem).length;
-    extra.innerHTML = `<div class="px-card"><div class="px-head"><div><div class="px-title">HDHomeRun</div><div class="px-sub">Live tuner channels discovered from your HDHomeRun devices.</div></div><span class="cnt">${hdhrCount}</span></div><div class="px-actions"><button class="bs" id="hdhr-scan-btn">Scan Devices</button><button class="bc" id="hdhr-open-settings">HDHR Settings</button></div><div class="px-note">${cfg.devices && cfg.devices.length ? (cfg.devices.length + ' device' + (cfg.devices.length!==1?'s':'') + ' ready') : 'No HDHR devices scanned yet'}</div></div>`;
-    $('hdhr-scan-btn').onclick = () => { showTab('set-scr'); const acc=$('acc-hdhr'); if(acc && !acc.classList.contains('open')) window._toggleSubAcc('acc-hdhr'); setTimeout(()=>{ const b=$('s-hdhr-scan'); if(b) b.click(); }, 80); };
-    $('hdhr-open-settings').onclick = () => { showTab('set-scr'); const acc=$('acc-hdhr'); if(acc && !acc.classList.contains('open')) window._toggleSubAcc('acc-hdhr'); setTimeout(refreshTvFocus, 40); };
+    // Fix 6b: No card section on HDHR page — settings access is via the ⚙ button in the header.
+    extra.innerHTML = '';
+    // Show/hide the HDHR settings gear icon in the main header
+    const _hdhrGear = $('btn-hdhr-settings');
+    if (_hdhrGear) {
+      _hdhrGear.style.display = '';
+      _hdhrGear.onclick = () => { showTab('set-scr'); const acc=$('acc-hdhr'); if(acc && !acc.classList.contains('open')) window._toggleSubAcc('acc-hdhr'); setTimeout(refreshTvFocus, 40); };
+    }
     setTimeout(refreshTvFocus, 30);
     return;
   }
+  // Hide HDHR gear when not on HDHR page
+  const _hdhrGearOff = $('btn-hdhr-settings');
+  if (_hdhrGearOff) _hdhrGearOff.style.display = 'none';
   if (activeLibPage === 'network') {
     const networkCount = items.filter(isNetworkItem).length;
     extra.innerHTML = `<div class="px-card"><div class="px-head"><div><div class="px-title">Network</div><div class="px-sub">Network media from FTP, FTPS, or Samba paths.</div></div><span class="cnt">${networkCount}</span></div><div class="px-actions"><button class="bs" id="net-add-ftp">Add FTP</button><button class="bc" id="net-add-smb">Add Samba</button></div><div class="px-note">Examples: ftp://server/path/video.mp4 or smb://server/share/movie.mkv</div></div>`;
@@ -3210,7 +3237,12 @@ function renderLib() {
       : `<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>`;
 
     const catBadge = m.category ? `<span class="tg2" style="background:var(--acs);color:var(--ac)">${esc(m.category)}</span>` : '';
-    const regBadge = m.region ? `<span class="tg2" style="background:rgba(46,213,115,.12);color:var(--gn)">${esc(m.region)}</span>` : '';
+    // Fix 5: HDHR device name is long — render as tiny muted label instead of prominent badge
+    const regBadge = m.region
+      ? (isHdhrItem(m)
+          ? `<span class="tg2" style="background:transparent;color:var(--t3);font-size:7px;padding:1px 4px;border:1px solid rgba(255,255,255,.1)">${esc(m.region)}</span>`
+          : `<span class="tg2" style="background:rgba(46,213,115,.12);color:var(--gn)">${esc(m.region)}</span>`)
+      : '';
     const srcLabel = isPlexItem(m) ? 'PlexStr' : getSourceType(m.url);
     const srcBadge = m.url || isPlexItem(m) ? `<span class="tg2" style="background:rgba(108,92,231,.12);color:#8f7bff">${esc(srcLabel)}</span>` : '';
     const alts = getAltCount(m);
@@ -3227,7 +3259,10 @@ function renderLib() {
     let epgNow = '';
     if (m.epgTitle) {
       const nn = getNowNext(m.epgTitle);
-      if (nn.now) epgNow = `<div class="en">▶ ${esc(nn.now.title)}</div>`;
+      // Fix 5: HDHR EPG title gets larger/bolder text since device name badge is now tiny
+      if (nn.now) epgNow = isHdhrItem(m)
+        ? `<div class="en" style="font-size:10px;font-weight:600;color:var(--t1);opacity:.9">▶ ${esc(nn.now.title)}</div>`
+        : `<div class="en">▶ ${esc(nn.now.title)}</div>`;
     } else if (isPlexItem(m)) {
       epgNow = `<div class="en">▶ Plex library item</div>`;
     }
@@ -3781,49 +3816,7 @@ $('imp-ok').onclick = () => {
 };
 
 // ─── Export ───
-$('btn-exp').onclick = () => {
-  if (!items.length) { toast('Nothing to export'); return; }
-  const choice = confirm('OK = Export as JSON\nCancel = Export as M3U');
 
-$('btn-home-refresh').onclick = async () => {
-  if (window._homeRefreshBusy) { toast('Refresh already running'); return; }
-  window._homeRefreshBusy = true;
-  toast('Refreshing repos & EPG…');
-  _navLocked = true;
-  const urlRepos = repos.filter(r => r.sourceUrl);
-  let refreshed = 0;
-  for (const repo of urlRepos) {
-    try { await window.refreshRepo(repo.id); refreshed++; } catch(e) {}
-  }
-  if (refreshed) { _invalidateSportGameIndex(); renderCats(); renderLib(); }
-  if (epgSrc.length) {
-    try { await fetchAllEpg(); } catch(e) {}
-  }
-  _navLocked = false;
-  toast('Refreshed ' + refreshed + ' repo' + (refreshed !== 1 ? 's' : '') + (epgSrc.length ? ' + EPG' : ''));
-  if (isTvDevice) setTimeout(refreshTvFocus, 80);
-  window._homeRefreshBusy = false;
-};
-  if (choice) {
-    const json = JSON.stringify(items.map(m => ({
-      name: m.title, url: m.url, category: m.category || undefined,
-      icon: m.icon || undefined, epgTitle: m.epgTitle || undefined
-    })), null, 2);
-    downloadFile(json, 'application/json', 'streamvault-' + dateStr() + '.json');
-  } else {
-    let m3u = '#EXTM3U\n\n';
-    items.forEach(m => {
-      let e = '#EXTINF:-1';
-      if (m.epgTitle) e += ' tvg-id="' + m.epgTitle + '" tvg-name="' + m.epgTitle + '"';
-      if (m.icon) e += ' tvg-logo="' + m.icon + '"';
-      if (m.category) e += ' group-title="' + m.category + '"';
-      e += ',' + m.title;
-      m3u += e + '\n' + m.url + '\n\n';
-    });
-    downloadFile(m3u, 'audio/x-mpegurl', 'streamvault-' + dateStr() + '.m3u');
-  }
-  toast('Exported ' + items.length + ' streams');
-};
 
 $('btn-home-refresh').onclick = async () => {
   if (window._homeRefreshBusy) { toast('Refresh already running'); return; }
@@ -5153,6 +5146,16 @@ function moveTvFocusSpatial(dirCode) {
   if (repoFilterBar && focusWithinContainerRows(repoFilterBar, current, dirCode)) return true;
 
   if ((dirCode === 21 || dirCode === 22) && focusWithinGroupRow(current, dirCode)) return true;
+
+  // ── lib-modes tabs: D-pad Left/Right stays within the tab row ─────────────
+  if ((dirCode === 21 || dirCode === 22) && current.classList && current.classList.contains('lmb') && current.closest('#lib-modes')) {
+    const row = current.closest('#lib-modes');
+    const tabs = Array.from(row.querySelectorAll('.lmb'));
+    const ti = tabs.indexOf(current);
+    const next = tabs[dirCode === 22 ? ti + 1 : ti - 1];
+    if (next) { const ni = els.indexOf(next); if (ni >= 0) return focusElementAtIndex(ni); }
+    return false; // at edge — don't fall through to channel list
+  }
 
   // ── Sport game-card actions (manual link button in edit mode) ───────────
   if (current && current.closest && current.closest('.sport-ab')) {
