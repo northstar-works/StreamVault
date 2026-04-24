@@ -75,52 +75,36 @@ jobs:
           path: app/build/outputs/apk/**/*.apk
           if-no-files-found: error
 
-      - name: Push APKs to fdroid repos
+      - name: Push APKs to fdroid repo
         env:
           FDROID_TOKEN: ${{ secrets.FDROID_REPO_TOKEN }}
         run: |
           MOBILE_APK=$(find app/build/outputs/apk -name "*mobile*release*.apk" | head -1)
           TV_APK=$(find app/build/outputs/apk -name "*tv*release*.apk" | head -1)
-          VERSION=$(grep -oP 'versionName "\K[^"]+' app/build.gradle | head -1)
 
-          # ── Push mobile APK to fdroid (phones/tablets) ──
           git clone \
             "https://x-access-token:${FDROID_TOKEN}@github.com/northstar-works/fdroid.git" \
             fdroid
 
           mkdir -p fdroid/repo
+
+          # Replace old StreamVault APKs
           rm -f fdroid/repo/StreamVault-*mobile*.apk
+          rm -f fdroid/repo/StreamVault-*tv*.apk
+
           [ -n "$MOBILE_APK" ] && cp "$MOBILE_APK" fdroid/repo/
+          [ -n "$TV_APK" ]     && cp "$TV_APK"     fdroid/repo/
 
           cd fdroid
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add repo/
+
           if git diff --cached --quiet; then
-            echo "fdroid: no mobile APK change, skipping."
+            echo "No APK change, skipping."
           else
-            git commit -m "chore: update StreamVault mobile to v${VERSION}"
-            git push
-          fi
-          cd ..
-
-          # ── Push TV APK to fdroid-tv (Fire TV / Android TV) ──
-          git clone \
-            "https://x-access-token:${FDROID_TOKEN}@github.com/northstar-works/fdroid-tv.git" \
-            fdroid-tv
-
-          mkdir -p fdroid-tv/repo
-          rm -f fdroid-tv/repo/StreamVault-*tv*.apk
-          [ -n "$TV_APK" ] && cp "$TV_APK" fdroid-tv/repo/
-
-          cd fdroid-tv
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add repo/
-          if git diff --cached --quiet; then
-            echo "fdroid-tv: no TV APK change, skipping."
-          else
-            git commit -m "chore: update StreamVault TV to v${VERSION}"
+            VERSION=$(grep -oP 'versionName "\K[^"]+' ../app/build.gradle | head -1)
+            git commit -m "chore: update StreamVault APKs to v${VERSION}"
             git push
           fi
 
