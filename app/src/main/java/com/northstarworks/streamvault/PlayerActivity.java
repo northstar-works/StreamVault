@@ -100,7 +100,7 @@ public class PlayerActivity extends Activity {
     private View        loadingView, errorContainer;
     private View        overlayTop, overlayCenter, overlayBottom;
     private TextView    titleText, statusText, nowNextText, strengthText,
-                        errorText, recStatusText, sourceInfoText, timeshiftText;
+                        errorText, recStatusText, sourceInfoText, groupInfoText, timeshiftText;
     private SeekBar     timeshiftBar;
     private ImageButton playPauseBtn, lockBtn, recordBtn, prevBtn, nextBtn,
                         timeshiftPauseBtn, timeshiftLiveBtn;
@@ -463,6 +463,13 @@ public class PlayerActivity extends Activity {
         sourceInfoText.setText("Source 1/"+variants.size());
         bot.addView(sourceInfoText);
 
+        groupInfoText = makeLabel(7,Color.parseColor("#30ffffff"),false);
+        groupInfoText.setGravity(android.view.Gravity.CENTER);
+        if (streamCategory != null && !streamCategory.isEmpty()) {
+            groupInfoText.setText(streamCategory);
+        }
+        bot.addView(groupInfoText);
+
         // Timeshift seek bar (hidden by default, shown when timeshifted)
         if (isIptvItem()) {
             timeshiftBar = new SeekBar(this);
@@ -532,6 +539,7 @@ public class PlayerActivity extends Activity {
         titleText.setText(display);
         statusText.setText("Source "+(idx+1)+"/"+variants.size()+(locked?" · 🔒":""));
         if (sourceInfoText!=null) sourceInfoText.setText("Source "+(idx+1)+"/"+variants.size()+" · ◀▶ prev/next");
+        if (groupInfoText!=null && streamCategory!=null && !streamCategory.isEmpty()) groupInfoText.setText(streamCategory);
         if (prevBtn!=null) prevBtn.setAlpha(variants.size()>1?1f:0.45f);
         if (nextBtn!=null) nextBtn.setAlpha(variants.size()>1?1f:0.45f);
         strengthText.setText("");

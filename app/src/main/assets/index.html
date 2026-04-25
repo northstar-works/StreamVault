@@ -5531,6 +5531,12 @@ window.__svHandleTvKey = function(code) {
   var _now = Date.now();
   if (_now - (window._navLastMs || 0) < 80) return true;
   window._navLastMs = _now;
+  // Queue depth cap: discard events beyond 10 queued movements to prevent
+  // remote hold-down from accumulating 20–30 delayed moves.
+  if (!window._navQueueDepth) window._navQueueDepth = 0;
+  if (window._navQueueDepth >= 10) return true;
+  window._navQueueDepth++;
+  setTimeout(function() { if (window._navQueueDepth > 0) window._navQueueDepth--; }, 80);
   // ── Custom TV picker overlay: intercept ALL keys while open ──────────
   if (window._svPickerCtrl) {
     if (code === 19) { window._svPickerCtrl.up();      return true; }
@@ -5589,6 +5595,29 @@ window.__svHandleTvKey = function(code) {
         el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
         return true;
       }
+      // sport-path-search-N: if suggestions visible, show TV overlay picker
+      var _spPathMatch = el.id && el.id.match(/^sport-path-search-(\d+)$/);
+      if (_spPathMatch) {
+        var _spIdx = parseInt(_spPathMatch[1], 10);
+        var _spSugg = $('sport-path-sugg-' + _spIdx);
+        if (_spSugg && _spSugg.style.display !== 'none' && _spSugg.children.length) {
+          _showSportPathSuggPicker(el, _spSugg, _spIdx);
+          return true;
+        }
+      }
+      // sport-virtual-input: if suggestions visible, show TV overlay picker
+      if (el.id === 'sport-virtual-input') {
+        var _vSugg = $('sport-virtual-sugg');
+        if (_vSugg && _vSugg.style.display !== 'none' && _vSugg.children.length) {
+          _showVirtualLeagueSuggPicker(el, _vSugg);
+          return true;
+        }
+      }
+      // my-team-input: open suggestion picker
+      if (el.id === 'my-team-input') {
+        _showMyTeamSuggestionPicker();
+        return true;
+      }
       el.focus();
       if (['checkbox','radio','range','file','date','time','datetime-local','color'].includes(type)) el.click();
       return true;
@@ -5638,6 +5667,16 @@ window.__svHandleTvKey = function(code) {
       }
     }
     // ─────────────────────────────────────────────────────────────────────
+    // Close any open suggestion dropdown (sport-path, virtual-league, my-team) first
+    var _anyOpenSugg = false;
+    var _myTeamSuggEl = $('my-team-suggestions');
+    if (_myTeamSuggEl && _myTeamSuggEl.style.display !== 'none') { _myTeamSuggEl.style.display = 'none'; _anyOpenSugg = true; }
+    var _virtSuggEl = $('sport-virtual-sugg');
+    if (_virtSuggEl && _virtSuggEl.style.display !== 'none') { _virtSuggEl.style.display = 'none'; _anyOpenSugg = true; }
+    document.querySelectorAll('[id^="sport-path-sugg-"]').forEach(function(el) {
+      if (el.style.display !== 'none') { el.style.display = 'none'; _anyOpenSugg = true; }
+    });
+    if (_anyOpenSugg) { refreshTvFocus(); return true; }
     // Close EPG dropdown first if open
     const _epgListEl = $('in-epg-list');
     if (_epgDropdownOpen || (_epgListEl && _epgListEl.style.display === 'block')) {
@@ -9271,6 +9310,130 @@ function _renderMyTeamSuggestions() {
   sug.style.display = 'block';
 }
 
+// TV-specific: overlay picker for sport-path-search-N suggestion dropdown
+function _showSportPathSuggPicker(inputEl, suggDiv, leagueIdx) {
+  var items = Array.from(suggDiv.children).map(function(el) {
+    return { path: el.dataset.path || '', label: el.textContent || el.innerText || '' };
+  }).filter(function(o) { return o.path; });
+  if (!items.length) return;
+  window._svPickerCtrl = null;
+  var existing = document.getElementById('sv-tv-picker'); if (existing) existing.remove();
+  var focusIdx = 0;
+  var overlay = document.createElement('div');
+  overlay.id = 'sv-tv-picker';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;';
+  var card = document.createElement('div');
+  card.style.cssText = 'background:var(--c1);border-radius:12px;padding:12px 0;min-width:320px;max-width:92vw;max-height:72vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.85);';
+  var titleEl = document.createElement('div');
+  titleEl.style.cssText = 'padding:4px 22px 10px;font-size:9px;color:var(--t3);font-weight:600;border-bottom:1px solid var(--bd);margin-bottom:4px';
+  titleEl.textContent = 'Select a league to add';
+  card.appendChild(titleEl);
+  function renderRows() {
+    Array.from(card.querySelectorAll('[data-pidx]')).forEach(function(r) { r.remove(); });
+    items.forEach(function(t, i) {
+      var row = document.createElement('div');
+      row.dataset.pidx = String(i);
+      var a = (i === focusIdx);
+      row.style.cssText = 'padding:10px 22px;font-size:10px;cursor:pointer;color:' + (a ? '#fff' : 'var(--t1)') + ';background:' + (a ? 'var(--ac)' : 'transparent') + ';font-weight:' + (a ? '700' : '400') + ';';
+      row.textContent = t.label;
+      row.onclick = function() { focusIdx = i; ctrl.confirm(); };
+      card.appendChild(row);
+    });
+    var sel = card.querySelector('[data-pidx="' + focusIdx + '"]');
+    if (sel) sel.scrollIntoView({ block: 'nearest' });
+  }
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  renderRows();
+  var ctrl = {
+    up:      function() { focusIdx = (focusIdx - 1 + items.length) % items.length; renderRows(); },
+    down:    function() { focusIdx = (focusIdx + 1) % items.length; renderRows(); },
+    confirm: function() {
+      var chosen = items[focusIdx];
+      if (!chosen) { ctrl.close(); return; }
+      // Simulate clicking the suggestion via the existing onclick wiring
+      var lg = settings.sportLeagues && settings.sportLeagues[leagueIdx];
+      if (lg) {
+        if (!lg.espnPaths) lg.espnPaths = [];
+        if (!lg.espnPaths.includes(chosen.path)) {
+          lg.espnPaths.push(chosen.path);
+          _invalidateSportCache(); saveSettings();
+        }
+        if (inputEl) { inputEl.value = ''; }
+        if (suggDiv) { suggDiv.style.display = 'none'; }
+        ctrl.close();
+        fetchLeagueSchedule(leagueIdx).then(function() { renderSportLeagueSettings(); renderSportTab(); });
+      } else { ctrl.close(); }
+    },
+    close: function() {
+      window._svPickerCtrl = null;
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      setTimeout(refreshTvFocus, 40);
+    }
+  };
+  window._svPickerCtrl = ctrl;
+}
+
+// TV-specific: overlay picker for sport-virtual-input suggestion dropdown
+function _showVirtualLeagueSuggPicker(inputEl, suggDiv) {
+  var items = Array.from(suggDiv.children).map(function(el) {
+    return { path: el.dataset.path || '', label: el.dataset.label || el.textContent || '' };
+  }).filter(function(o) { return o.path; });
+  if (!items.length) return;
+  window._svPickerCtrl = null;
+  var existing = document.getElementById('sv-tv-picker'); if (existing) existing.remove();
+  var focusIdx = 0;
+  var overlay = document.createElement('div');
+  overlay.id = 'sv-tv-picker';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;';
+  var card = document.createElement('div');
+  card.style.cssText = 'background:var(--c1);border-radius:12px;padding:12px 0;min-width:320px;max-width:92vw;max-height:72vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.85);';
+  var titleEl = document.createElement('div');
+  titleEl.style.cssText = 'padding:4px 22px 10px;font-size:9px;color:var(--t3);font-weight:600;border-bottom:1px solid var(--bd);margin-bottom:4px';
+  titleEl.textContent = 'Select a virtual league';
+  card.appendChild(titleEl);
+  function renderRows() {
+    Array.from(card.querySelectorAll('[data-pidx]')).forEach(function(r) { r.remove(); });
+    items.forEach(function(t, i) {
+      var row = document.createElement('div');
+      row.dataset.pidx = String(i);
+      var a = (i === focusIdx);
+      row.style.cssText = 'padding:10px 22px;font-size:10px;cursor:pointer;color:' + (a ? '#fff' : 'var(--t1)') + ';background:' + (a ? 'var(--ac)' : 'transparent') + ';font-weight:' + (a ? '700' : '400') + ';';
+      row.textContent = t.label;
+      row.onclick = function() { focusIdx = i; ctrl.confirm(); };
+      card.appendChild(row);
+    });
+    var sel = card.querySelector('[data-pidx="' + focusIdx + '"]');
+    if (sel) sel.scrollIntoView({ block: 'nearest' });
+  }
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  renderRows();
+  var ctrl = {
+    up:      function() { focusIdx = (focusIdx - 1 + items.length) % items.length; renderRows(); },
+    down:    function() { focusIdx = (focusIdx + 1) % items.length; renderRows(); },
+    confirm: function() {
+      var chosen = items[focusIdx];
+      if (!chosen) { ctrl.close(); return; }
+      if (inputEl) {
+        inputEl.value = chosen.label;
+        inputEl.dataset.selectedPath = chosen.path;
+        inputEl.dataset.selectedLabel = chosen.label;
+      }
+      if (suggDiv) suggDiv.style.display = 'none';
+      ctrl.close();
+      // Automatically add the virtual league
+      if (typeof window.addVirtualLeague === 'function') window.addVirtualLeague();
+    },
+    close: function() {
+      window._svPickerCtrl = null;
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      setTimeout(refreshTvFocus, 40);
+    }
+  };
+  window._svPickerCtrl = ctrl;
+}
+
 // TV-specific: open suggestion picker overlay when user presses Enter on input
 function _showMyTeamSuggestionPicker() {
   var espnItems = window._myTeamSuggestions || [];
@@ -9749,6 +9912,8 @@ setTimeout(async () => {
       // After EPG loads, eagerly load HDHR XMLTV guide and re-match channel IDs.
       // Runs non-blocking so it never delays splash or D-pad activation.
       _startupEnsureHdhrEpg();
+      // Re-render library and guide so EPG data is immediately visible in ITV channel list
+      renderLib(); renderGuide();
     }).catch(function() {
       clearTimeout(_tvTimeout);
       _hideSplashOnce();
@@ -9762,6 +9927,8 @@ setTimeout(async () => {
       fetchAllEpg(true).then(function() {
         if (isTvDevice) setTimeout(function() { fetchAllLeagueSchedules(false); }, 300);
         _startupEnsureHdhrEpg();
+        // Re-render so EPG data shows in ITV channel list without manual refresh
+        renderLib(); renderGuide();
       }).catch(function() {});
     } else {
       if (isTvDevice) setTimeout(function() { fetchAllLeagueSchedules(false); }, 300);
