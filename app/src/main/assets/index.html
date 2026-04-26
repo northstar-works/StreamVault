@@ -1314,11 +1314,18 @@ function _loadSportGameCache() {
     (settings.sportLeagues || []).forEach((lg, i) => {
       const entry = cache[i];
       if (!entry) return;
-      // Only restore if it's from today — stale dates trigger a normal re-fetch
+      // Only restore game data from today — stale days are useless
       if (entry.cacheDate === today) {
         lg.cachedGamesByPath = entry.cachedGamesByPath || {};
-        lg.cacheDate = entry.cacheDate;
-        lg.lastFetchMs = entry.lastFetchMs || 0;
+        // INTENTIONALLY do NOT restore cacheDate or lastFetchMs.
+        // If we restore cacheDate = today, fetchLeagueSchedule sees
+        // (cacheDate === today && Array.isArray(games)) and skips the
+        // ESPN fetch entirely — sport tab never updates. Instead we leave
+        // cacheDate = '' so fetchLeagueSchedule always does a fresh fetch,
+        // while still having restored game data to show during the brief
+        // startup window before the fetch completes.
+        lg.cacheDate = '';
+        lg.lastFetchMs = 0;
       }
     });
   } catch(e) {}

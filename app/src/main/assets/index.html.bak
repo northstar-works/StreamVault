@@ -1179,7 +1179,15 @@ http://stream.example.com/cnn
 
 // ─── Constants & State ───
 const VERSION = '@@VERSION_NAME@@', BUILD = @@VERSION_CODE@@;
-const KEYS = { items: 'sv_items_v3', repos: 'sv_repos_v2', epgSrc: 'sv_epg_src', epgData: 'sv_epg_data', settings: 'sv_settings_v2' };
+const KEYS = { items: 'sv_items_v3', repos: 'sv_repos_v2', epgSrc: 'sv_epg_src', epgData: 'sv_epg_data', settings: 'sv_settings_v2', sportCache: 'sv_sport_game_cache' };
+
+// ─── Cache TTLs ───────────────────────────────────────────────────────────────
+// Repo M3U streams are large (~MB each). We cache them per-repo in separate
+// localStorage keys so startup skips re-downloading all playlists.
+const REPO_STREAM_TTL_MS = 7 * 24 * 3600 * 1000;  // 7 days — user playlists rarely change
+// EPG: skip re-fetching if the stored programs still cover enough future time
+const EPG_VALID_BUFFER_MS = 4 * 3600 * 1000;       // require ≥4h of future guide coverage
+const EPG_MIN_REFETCH_MS  = 4 * 3600 * 1000;       // never re-fetch within 4h of last fetch
 const PLOG_KEY = 'sv_playlog_v1';      // Plex/VOD progress log
 let playLog = {};                        // {itemId: {posMs, duration, ts, title}}
 function loadPlayLog() { try { const d=localStorage.getItem(PLOG_KEY); if(d) playLog=JSON.parse(d); } catch(e){} }
@@ -1232,6 +1240,89 @@ let brWindowStart = 0;
 let brWindowSize = 80;
 let brActiveIndex = 0;
 let brShowAdded = false; // filter repo browser to only show already-added channels
+
+// ─── Repo stream cache (per-repo localStorage, 7-day TTL) ────────────────────
+function _getRepoStreamCache(id) {
+  try {
+    const raw = localStorage.getItem('sv_rsc_' + id);
+    if (!raw) return null;
+    const c = JSON.parse(raw);
+    if (!c || !Array.isArray(c.streams) || !c.fetchedAt) return null;
+    if (Date.now() - c.fetchedAt > REPO_STREAM_TTL_MS) { localStorage.removeItem('sv_rsc_' + id); return null; }
+    return c;
+  } catch(e) { return null; }
+}
+function _setRepoStreamCache(id, streams) {
+  try { localStorage.setItem('sv_rsc_' + id, JSON.stringify({ streams, fetchedAt: Date.now() })); }
+  catch(e) { /* quota full — silently ignore, next startup will fetch fresh */ }
+}
+function _clearRepoStreamCache(id) {
+  try { localStorage.removeItem('sv_rsc_' + id); } catch(e) {}
+}
+// Purge cache entries for repos that no longer exist
+function _pruneRepoStreamCaches() {
+  const liveIds = new Set(repos.map(r => r.id));
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith('sv_rsc_') && !liveIds.has(k.slice(7))) {
+      try { localStorage.removeItem(k); i--; } catch(e) {}
+    }
+  }
+}
+
+// ─── EPG validity check ───────────────────────────────────────────────────────
+// Returns true if the stored EPG programs still cover enough future time that
+// re-fetching the XMLTV source can be skipped on this startup.
+function _epgIsStillValid(src) {
+  if (!src.lastFetch) return false;
+  // Always honour minimum re-fetch interval regardless of coverage
+  if (Date.now() - src.lastFetch < EPG_MIN_REFETCH_MS) return true;
+  // Check that stored programs extend at least EPG_VALID_BUFFER_MS into the future
+  const programs = epgData.programs || {};
+  let maxStop = 0;
+  for (const id of Object.keys(programs)) {
+    const list = programs[id];
+    if (Array.isArray(list) && list.length) {
+      const last = list[list.length - 1];
+      if (last && last.stop > maxStop) maxStop = last.stop;
+    }
+  }
+  return maxStop > Date.now() + EPG_VALID_BUFFER_MS;
+}
+
+// ─── Sport game cache persistence ────────────────────────────────────────────
+// cachedGamesByPath and cacheDate are stripped from settings before saving to
+// avoid bloating the settings key. We persist them separately so the day-based
+// skip logic in fetchLeagueSchedule has data to skip with on next startup.
+function _saveSportGameCache() {
+  try {
+    const out = {};
+    (settings.sportLeagues || []).forEach((lg, i) => {
+      if (lg.cachedGamesByPath && Object.keys(lg.cachedGamesByPath).length) {
+        out[i] = { cachedGamesByPath: lg.cachedGamesByPath, cacheDate: lg.cacheDate || '', lastFetchMs: lg.lastFetchMs || 0 };
+      }
+    });
+    localStorage.setItem(KEYS.sportCache, JSON.stringify(out));
+  } catch(e) { /* quota — sport data will re-fetch on next startup */ }
+}
+function _loadSportGameCache() {
+  try {
+    const raw = localStorage.getItem(KEYS.sportCache);
+    if (!raw) return;
+    const cache = JSON.parse(raw);
+    const today = new Date().toISOString().slice(0, 10);
+    (settings.sportLeagues || []).forEach((lg, i) => {
+      const entry = cache[i];
+      if (!entry) return;
+      // Only restore if it's from today — stale dates trigger a normal re-fetch
+      if (entry.cacheDate === today) {
+        lg.cachedGamesByPath = entry.cachedGamesByPath || {};
+        lg.cacheDate = entry.cacheDate;
+        lg.lastFetchMs = entry.lastFetchMs || 0;
+      }
+    });
+  } catch(e) {}
+}
 
 // ─── Utilities ───
 const $ = id => document.getElementById(id);
@@ -1785,6 +1876,7 @@ async function ensureRepoStreamsLoaded(repo) {
     const text = await resp.text();
     repo.streams = (await parseM3U(text)).filter(d => d.name && d.url);
     repo.lastRefresh = Date.now();
+    _setRepoStreamCache(repo.id, repo.streams); // persist for 7-day startup cache
     saveRepos();
     return repo.streams;
   })();
@@ -2039,6 +2131,11 @@ async function importLocalEpgFile(file, nameOverride) {
   refreshGuideOnly('Imported XMLTV: ' + src.chCount + ' channels');
 }
 async function fetchEpgSource(src, silent) {
+  // On startup (silent=true), skip sources whose stored programs still cover the future
+  if (silent && _epgIsStillValid(src)) {
+    console.log('[SV] EPG cache valid for "' + (src.name || 'EPG') + '" — skipping fetch (next valid in ' + Math.round((EPG_MIN_REFETCH_MS - (Date.now() - src.lastFetch)) / 60000) + 'm)');
+    return;
+  }
   if (!silent) toast('Fetching EPG: ' + (src.name || 'EPG') + '…');
   try {
     const resp = await fetch(src.url);
@@ -3726,7 +3823,7 @@ window.confirmDel = (id, type) => { delId = id; delType = type; $('cod').classLi
 $('co-no').onclick = () => $('cod').classList.remove('on');
 $('co-yes').onclick = () => {
   if (delType === 'item') { items = items.filter(m => m.id !== delId); saveItems(); refreshAltCache(true); renderCats(); renderLib(); }
-  else if (delType === 'repo') { repos = repos.filter(r => r.id !== delId); saveRepos(); refreshAltCache(true); renderRepos(); }
+  else if (delType === 'repo') { repos = repos.filter(r => r.id !== delId); _clearRepoStreamCache(delId); saveRepos(); refreshAltCache(true); renderRepos(); }
   $('cod').classList.remove('on');
   toast('Deleted');
 };
@@ -3972,6 +4069,7 @@ window.refreshRepo = async (id, silent) => {
     if (!streams.length) throw new Error('No streams in response');
     repo.streams = streams;
     repo.lastRefresh = Date.now();
+    _setRepoStreamCache(repo.id, streams); // persist for 7-day startup cache
     saveRepos();
     refreshAltCache(true);
     renderRepos();
@@ -6630,6 +6728,7 @@ async function fetchLeagueSchedule(idx) {
   lg.cacheDate = today;
   lg.lastFetchMs = Date.now();
   saveSettings();
+  _saveSportGameCache(); // persist cachedGamesByPath so next startup can skip re-fetch
 }
 
 // Fetch all leagues regardless of filter toggle state
@@ -9860,6 +9959,8 @@ loadItems();
 loadRepos();
 loadEpg();
 loadSettings();
+_loadSportGameCache(); // restore today's sport schedule data before fetchAllLeagueSchedules runs
+_pruneRepoStreamCaches(); // clean up cache keys for deleted repos
 loadPlayLog();
 ensureActiveLibPage();
 applyTvMode();
@@ -9887,27 +9988,43 @@ setTimeout(async () => {
 
   const urlRepos = repos.filter(r => r.sourceUrl);
   if (urlRepos.length) {
-    _splashStatus('Refreshing ' + urlRepos.length + ' repo' + (urlRepos.length > 1 ? 's' : '') + '…');
-    let refreshed = 0;
+    // Separate repos into cache-hit (fresh within 7 days) vs stale/missing
+    const cachedRepos = [], staleRepos = [];
     for (const repo of urlRepos) {
-      try {
-        _splashStatus('Loading ' + (repo.name || 'repo') + '…');
-        await window.refreshRepo(repo.id, true);
-        var _stCount = (repo.streams || []).length;
-        if (_stCount > 0) _splashStatus((repo.name || 'repo') + ': ' + _stCount + ' streams loaded');
-        refreshed++;
-      } catch(e) { console.warn('[SV] startup repo refresh:', repo.name, e.message); }
+      const cached = _getRepoStreamCache(repo.id);
+      if (cached) { repo.streams = cached.streams; repo.lastRefresh = cached.fetchedAt; cachedRepos.push(repo); }
+      else staleRepos.push(repo);
     }
-    if (refreshed) {
+    if (cachedRepos.length) {
+      _splashStatus(cachedRepos.length + ' repo' + (cachedRepos.length > 1 ? 's' : '') + ' loaded from cache');
       _invalidateSportGameIndex();
       renderLib();
+    }
+    if (staleRepos.length) {
+      _splashStatus('Refreshing ' + staleRepos.length + ' repo' + (staleRepos.length > 1 ? 's' : '') + '…');
+      let refreshed = 0;
+      for (const repo of staleRepos) {
+        try {
+          _splashStatus('Loading ' + (repo.name || 'repo') + '…');
+          await window.refreshRepo(repo.id, true); // refreshRepo now calls _setRepoStreamCache
+          var _stCount = (repo.streams || []).length;
+          if (_stCount > 0) _splashStatus((repo.name || 'repo') + ': ' + _stCount + ' streams loaded');
+          refreshed++;
+        } catch(e) { console.warn('[SV] startup repo refresh:', repo.name, e.message); }
+      }
+      if (refreshed) {
+        _invalidateSportGameIndex();
+        renderLib();
+      }
     }
   }
 
   // ── Hide splash after repos. EPG runs in background. ──
   // TV: hold splash 10s extra so EPG can finish before D-pad is active.
   if (isTvDevice && epgSrc.length) {
-    _splashStatus('Loading guide data…');
+    const _epgSkipped = epgSrc.filter(s => _epgIsStillValid(s)).length;
+    const _epgNeeded  = epgSrc.length - _epgSkipped;
+    _splashStatus(_epgNeeded > 0 ? 'Loading guide data…' : 'Guide data cached — ready…');
     // Fire EPG in background, hide splash after EPG OR 10s timeout (whichever first)
     var _splashDone = false;
     var _hideSplashOnce = function() {
