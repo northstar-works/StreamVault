@@ -748,6 +748,7 @@ document.addEventListener('keydown', function(e) {
         <svg class="acc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;margin-left:auto;flex-shrink:0"><polyline points="9 6 15 12 9 18"/></svg>
       </button>
       <div class="acc-body" style="display:none;padding:6px 0 4px">
+        <div class="sr" style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--bd)"><div><div class="sl" style="font-weight:700">Enable HDHomeRun</div><div class="sd">Show HDHR tab on Home screen and include tuner channels in your library.</div></div><div class="tgl" id="s-hdhr-enabled-toggle"></div></div>
         <p style="font-size:9px;color:var(--t2);margin-bottom:6px">Scan your local network for HDHomeRun tuners, load their channels into a managed HDHR repo, then choose which ones should appear on the Home screen under the dedicated HDHR tab.</p>
         <div class="tv-row" data-tv-group="hdhr-actions">
           <button class="bs" id="s-hdhr-scan" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Scan HDHR Devices</button>
@@ -2286,6 +2287,7 @@ function getHdhrCfg() {
   settings.hdhr.mobileTranscode = String(settings.hdhr.mobileTranscode || 'mobile').trim() || 'mobile';
   settings.hdhr.mobileProxyEnabled = !!settings.hdhr.mobileProxyEnabled;
   settings.hdhr.mobileProxyUrl = String(settings.hdhr.mobileProxyUrl || '').trim();
+  if (settings.hdhr.enabled === undefined) settings.hdhr.enabled = true;
   return settings.hdhr;
 }
 function normalizeHdhrBase(url) {
@@ -2581,6 +2583,17 @@ function openHdhrPicker(deviceId) {
 }
 function renderHdhrSettings() {
   const cfg = getHdhrCfg();
+  const enabledTgl = $('s-hdhr-enabled-toggle');
+  if (enabledTgl) {
+    enabledTgl.className = 'tgl' + (cfg.enabled !== false ? ' on' : '');
+    enabledTgl.onclick = () => {
+      cfg.enabled = cfg.enabled === false ? true : false;
+      saveSettings();
+      renderHdhrSettings();
+      renderCats(); renderLibModes(); renderLib();
+      toast(cfg.enabled !== false ? 'HDHomeRun enabled' : 'HDHomeRun disabled');
+    };
+  }
   const scanBtn = $('s-hdhr-scan');
   const openBtn = $('s-hdhr-open');
   const manageBtn = $('s-hdhr-manage');
@@ -2716,7 +2729,7 @@ function getLibPageCounts() {
     plex: items.filter(isPlexItem).length,
     local: items.filter(isLocalItem).length,
     network: items.filter(isNetworkItem).length,
-    hdhr: items.filter(isHdhrItem).length
+    hdhr: (getHdhrCfg().enabled !== false) ? items.filter(isHdhrItem).length : 0
   };
 }
 function getTabOrder() {
@@ -2746,7 +2759,7 @@ function getItemsForLibPage() {
   if (activeLibPage === 'itv') return items.filter(isIptvItem);
   if (activeLibPage === 'icam') return items.filter(isCameraItem);
   if (activeLibPage === 'plex') return items.filter(isPlexItem);
-  if (activeLibPage === 'hdhr') return items.filter(isHdhrItem);
+  if (activeLibPage === 'hdhr') return (getHdhrCfg().enabled !== false) ? items.filter(isHdhrItem) : [];
   if (activeLibPage === 'local') return items.filter(isLocalItem);
   if (activeLibPage === 'network') return items.filter(isNetworkItem);
   if (activeLibPage === 'dvr') return []; // DVR shows remote library, not local items
