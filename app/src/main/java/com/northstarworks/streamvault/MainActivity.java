@@ -475,6 +475,31 @@ public class MainActivity extends Activity {
                 client.close(); return;
             }
 
+            if ("GET".equals(method) && "/backup".equals(path)) {
+                // Pull current config from app JS → return as backup JSON
+                final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+                final String[] holder = {null};
+                runOnUiThread(() -> webView.evaluateJavascript(
+                    "(function(){try{return JSON.stringify(typeof makeBackupPayload==='function'?makeBackupPayload():null);}catch(e){return null;}})()",
+                    value -> {
+                        if (value != null && !value.equals("null")) {
+                            try { holder[0] = new org.json.JSONArray("[" + value + "]").getString(0); } catch (Exception ignored) {}
+                        }
+                        latch.countDown();
+                    }
+                ));
+                try { latch.await(8, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) {}
+                if (holder[0] != null) {
+                    sendHttpResponse(out, "200 OK",
+                        CORS + "Content-Type: application/json\r\nContent-Disposition: attachment; filename=\"streamvault-backup.json\"\r\n",
+                        holder[0]);
+                } else {
+                    sendHttpResponse(out, "503 Service Unavailable", CORS + "Content-Type: application/json\r\n",
+                        "{\"error\":\"Could not retrieve backup from app\"}");
+                }
+                client.close(); return;
+            }
+
             if ("POST".equals(method) && "/inject".equals(path)) {
                 if (contentLength <= 0 || contentLength > 8 * 1024 * 1024) {
                     sendHttpResponse(out, "400 Bad Request", CORS, "Invalid Content-Length");

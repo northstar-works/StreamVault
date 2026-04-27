@@ -1,0 +1,3 @@
+5.9.4-b174
+- EPG loading banner: persistent bottom bar shows while guide data is refreshing after startup
+- Reverse config pull: Fire TV inject server now exposes GET /backup so the Electron/Android configurator can pull current device config over the network

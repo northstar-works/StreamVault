@@ -993,6 +993,7 @@ http://stream.example.com/cnn
 </div>
 
 <div class="toast" id="toast"></div>
+<div id="epg-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,20,.82);color:#ccc;text-align:center;font-size:10px;padding:5px 8px;z-index:299;pointer-events:none;letter-spacing:.03em;backdrop-filter:blur(2px)">📡 Updating guide data…</div>
 <!-- Backup File Picker Modal (TV-friendly in-app picker) -->
 <div class="mo" id="mo-bk-pick">
 <div class="mc" style="max-height:80vh">
@@ -1340,6 +1341,14 @@ function toast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2800);
+}
+function showEpgBanner(msg) {
+  const b = $('epg-banner');
+  if (b) { b.textContent = msg || '📡 Updating guide data…'; b.style.display = 'block'; }
+}
+function hideEpgBanner() {
+  const b = $('epg-banner');
+  if (b) b.style.display = 'none';
 }
 
 // ─── Persistence ───
@@ -2187,17 +2196,24 @@ async function fetchEpgSource(src, silent) {
 async function fetchAllEpg(silent) {
   if (window._epgRefreshBusy) return;
   window._epgRefreshBusy = true;
+  if (!silent && epgSrc.length) {
+    showEpgBanner('📡 Updating guide data (' + epgSrc.length + ' source' + (epgSrc.length !== 1 ? 's' : '') + ')…');
+  }
   try {
   for (let i = 0; i < epgSrc.length; i++) {
     const s = epgSrc[i];
     if (window._setSplashStatus && document.getElementById('sv-splash') && document.getElementById('sv-splash').style.display !== 'none') {
       window._setSplashStatus('Guide ' + (i + 1) + '/' + epgSrc.length + ': ' + (s.name || 'EPG') + '…');
     }
+    if (!silent && epgSrc.length > 1) {
+      showEpgBanner('📡 Guide ' + (i + 1) + '/' + epgSrc.length + ': ' + (s.name || 'EPG') + '…');
+    }
     await fetchEpgSource(s, silent);
     await new Promise(r => setTimeout(r, 25));
   }
   } finally {
     window._epgRefreshBusy = false;
+    hideEpgBanner();
   }
 }
 
