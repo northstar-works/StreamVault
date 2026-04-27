@@ -377,7 +377,7 @@ body.tv-mode .slb button.tv-f,body.tv-mode .slb button:focus{box-shadow:0 0 0 2p
 
 <!-- ═══ LIBRARY ═══ -->
 <div id="lib-scr" class="scr on">
-  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b@@VERSION_CODE@@</span>
+  <div class="hd"><h1>StreamVault</h1><div class="hd-r"><span class="tg">b176</span>
     <button class="ib" id="btn-lib-edit" title="Toggle edit controls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
     <button class="ib" id="btn-add-top" title="Add stream"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
     <button class="ib" id="btn-hdhr-settings" title="HDHR Settings" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83-2.83l-.06.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06c.38-.47.5-1.1.33-1.82a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9c.17-.73.05-1.35-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06c.47.38 1.1.5 1.82.33a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51c.73.17 1.35.05 1.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06c-.38.47-.5 1.1-.33 1.82a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button>
@@ -808,7 +808,7 @@ document.addEventListener('keydown', function(e) {
     </div>
   </div>
   <div class="ss"><h3>About</h3>
-    <p style="font-size:9px;color:var(--t2)">StreamVault v@@VERSION_NAME@@ (Build @@VERSION_CODE@@)<br>ITV · Plex · iCam · Local · Network · EPG Guide · DPad TV Navigation · HLS Recording · Failover · Scheduled Recording.</p>
+    <p style="font-size:9px;color:var(--t2)">StreamVault v5.9.6 (Build 176)<br>ITV · Plex · iCam · Local · Network · EPG Guide · DPad TV Navigation · HLS Recording · Failover · Scheduled Recording.</p>
   </div>
 </div>
 
@@ -1179,7 +1179,7 @@ http://stream.example.com/cnn
 "use strict";
 
 // ─── Constants & State ───
-const VERSION = '@@VERSION_NAME@@', BUILD = @@VERSION_CODE@@;
+const VERSION = '5.9.6', BUILD = 176;
 const KEYS = { items: 'sv_items_v3', repos: 'sv_repos_v2', epgSrc: 'sv_epg_src', epgData: 'sv_epg_data', settings: 'sv_settings_v2', sportCache: 'sv_sport_game_cache' };
 
 // ─── Cache TTLs ───────────────────────────────────────────────────────────────
