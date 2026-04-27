@@ -1,0 +1,3 @@
+5.9.5-b175
+- Fix: HDHR relay always bypassed — tailscaleMode defaulted to true (undefined !== false) due to resolution experiment change, causing raw MPEG-2 URL to be sent to Fire TV instead of relay URL; Fire TV has no software MPEG-2 decoder so all streams failed
+- Cleanup: removed mobileProxyEnabled / mobileProxyUrl normalization left over from resolution experiment (fields were written to SharedPrefs but never read)

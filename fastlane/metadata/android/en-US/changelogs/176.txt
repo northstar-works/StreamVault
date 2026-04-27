@@ -1,0 +1,3 @@
+5.9.6-b176
+- Fix: HDHR relay streams all fail — resolveHdhrPlayableUrl was rewriting /auto/v4.1 to /proxy/v4.1 (added during resolution experiment) but hdhr.sidneyshelton.com points to Caddy → HDHR device:5004 which has no /proxy/ endpoint; reverted to pass path through as-is
+- Caddyfile: reverted hdhr.sidneyshelton.com from 127.0.0.1:3210 (EPG service) back to 192.168.0.27:5004 (HDHR device streaming port) with flush_interval -1

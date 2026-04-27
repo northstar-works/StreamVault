@@ -2405,8 +2405,6 @@ function getHdhrCfg() {
   settings.hdhr.xmltvUrl = String(settings.hdhr.xmltvUrl || '').trim();
   settings.hdhr.xmltvProvider = String(settings.hdhr.xmltvProvider || 'schedulesdirect').trim() || 'schedulesdirect';
   settings.hdhr.mobileTranscode = String(settings.hdhr.mobileTranscode || 'mobile').trim() || 'mobile';
-  settings.hdhr.mobileProxyEnabled = !!settings.hdhr.mobileProxyEnabled;
-  settings.hdhr.mobileProxyUrl = String(settings.hdhr.mobileProxyUrl || '').trim();
   if (settings.hdhr.enabled === undefined) settings.hdhr.enabled = true;
   return settings.hdhr;
 }
@@ -2502,19 +2500,14 @@ function resolveHdhrPlayableUrl(item, url) {
   // Tailscale / VPN subnet mode: phone reaches HDHR directly via VPN — use LAN IP as-is.
   // The media3-decoder-ffmpeg extension handles MPEG-2 decoding natively on mobile.
   if (cfg.tailscaleMode) return extractUrl(url || item.url || '');
-  // Remote relay mode: route through the hdhr-xmltv proxy for non-VPN remote access.
-  // Rewrites /auto/v4.1 → /proxy/v4.1 so the ffmpeg transcode endpoint is used.
+  // Remote relay mode: Caddy reverse-proxies hdhr.yourdomain.com → HDHR device:5004.
+  // Pass the path through as-is (/auto/v4.1 etc) — no rewriting needed.
   if (cfg.preferRemote && remoteBase) {
     const streamPath = hd.streamPath || (() => {
       try { return new URL(extractUrl(url || item.url || ''), location.href).pathname; }
       catch (e) { return ''; }
     })();
-    if (streamPath) {
-      // Convert /auto/v4.1 → /proxy/v4.1 for the hdhr-xmltv proxy endpoint
-      const vMatch = streamPath.match(/\/(v[\d.]+)(?:[?#]|$)/);
-      const proxyPath = vMatch ? '/proxy/' + vMatch[1] : streamPath;
-      return remoteBase + proxyPath;
-    }
+    if (streamPath) return remoteBase + streamPath;
   }
   return extractUrl(url || item.url || '');
 }
