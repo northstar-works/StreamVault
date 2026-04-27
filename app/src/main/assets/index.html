@@ -2401,7 +2401,7 @@ function getHdhrCfg() {
   settings.hdhr.selectedChannelKeys = Array.isArray(settings.hdhr.selectedChannelKeys) ? settings.hdhr.selectedChannelKeys : [];
   settings.hdhr.remoteBaseUrl = String(settings.hdhr.remoteBaseUrl || '').trim();
   settings.hdhr.preferRemote = !!settings.hdhr.preferRemote;
-  settings.hdhr.tailscaleMode = settings.hdhr.tailscaleMode !== false;
+  settings.hdhr.tailscaleMode = !!settings.hdhr.tailscaleMode;
   settings.hdhr.xmltvUrl = String(settings.hdhr.xmltvUrl || '').trim();
   settings.hdhr.xmltvProvider = String(settings.hdhr.xmltvProvider || 'schedulesdirect').trim() || 'schedulesdirect';
   settings.hdhr.mobileTranscode = String(settings.hdhr.mobileTranscode || 'mobile').trim() || 'mobile';
