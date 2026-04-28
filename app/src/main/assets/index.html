@@ -1588,7 +1588,21 @@ function restoreBackupPayload(data) {
   repos = Array.isArray(data.repos) ? data.repos : [];
   epgSrc = Array.isArray(data.epgSrc) ? data.epgSrc : [];
   epgData = data.epgData && typeof data.epgData === 'object' ? data.epgData : { channels:{}, programs:{} };
+  // Preserve in-memory sport game caches before overwriting settings.
+  // makeBackupPayload strips cachedGamesByPath, so restored sportLeagues have
+  // no game data. Merge them back by groupName so sports tab stays populated.
+  const _prevSportCaches = {};
+  (settings.sportLeagues || []).forEach(function(lg) {
+    if (lg.cachedGamesByPath && Object.keys(lg.cachedGamesByPath).length) {
+      _prevSportCaches[lg.groupName] = lg.cachedGamesByPath;
+    }
+  });
   settings = { ...settings, ...(data.settings || {}) };
+  // Re-apply preserved caches by groupName match
+  (settings.sportLeagues || []).forEach(function(lg) {
+    lg.cachedGamesByPath = _prevSportCaches[lg.groupName] || {};
+    lg.cacheDate = ''; // force re-fetch so new config takes effect
+  });
 
   // ── TV-safe overrides ──────────────────────────────────────────────────────
   // If we are running on a TV device, never let tvMode be 'off'.
@@ -1621,10 +1635,7 @@ function restoreBackupPayload(data) {
     m.tags = m.tags || [];
     m.baseName = m.baseName || extractBase(m.title || m.name || '');
   });
-  // Run getHdhrCfg() to trigger tailscaleMode migration before saving,
-  // ensuring relay works immediately after settings restore without needing
-  // the user to open HDHR settings first.
-  getHdhrCfg();
+  getHdhrCfg(); // run migration (tailscaleMode fix) before saving
   saveItems(); saveRepos(); saveEpg(); saveSettings();
   // Re-initialize in-place instead of location.reload().
   // location.reload() called from inside a Java bridge evaluateJavascript callback

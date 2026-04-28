@@ -1,0 +1,5 @@
+5.10.5-b185
+- Fix: Sports tab empty after settings restore/inject — restoreBackupPayload spreads data.settings which replaces sportLeagues with backup version (cachedGamesByPath stripped by makeBackupPayload); all in-memory game data wiped on every inject; fixed by preserving cachedGamesByPath keyed by groupName before the spread and re-applying after; fetchAllLeagueSchedules re-fetches with cacheDate reset
+- Fix: Player error screen now shows ExoPlayer error code (e.g. "All 1 source(s) failed · code 2001") for relay diagnosis
+- Fix: HTTP connect/read timeout increased 15s → 30s for relay streams (ffmpeg startup latency)
+- Fix: restoreBackupPayload calls getHdhrCfg() before saveSettings to run tailscaleMode migration immediately on inject
