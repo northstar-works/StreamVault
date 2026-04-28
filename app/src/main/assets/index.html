@@ -1343,10 +1343,17 @@ function toast(msg) {
   setTimeout(() => t.classList.remove('show'), 2800);
 }
 function showEpgBanner(msg) {
+  if (isTvDevice) {
+    // Fire TV: toggling display on a fixed element during async parse crashes the WebView
+    // compositor. Use toast instead — it's already GPU-composited and safe.
+    toast(msg || '📡 Updating guide data…');
+    return;
+  }
   const b = $('epg-banner');
   if (b) { b.textContent = msg || '📡 Updating guide data…'; b.style.display = 'block'; }
 }
 function hideEpgBanner() {
+  if (isTvDevice) return; // toast auto-dismisses, nothing to hide
   const b = $('epg-banner');
   if (b) b.style.display = 'none';
 }
@@ -4582,8 +4589,19 @@ $('epg-add').onclick = async () => {
 $('btn-eref').onclick = async () => {
   _navLocked = true;
   try {
-    await fetchAllEpg();
+    // Only refresh EPG sources relevant to the current library page:
+    // HDHR page → HDHR guide source only; all other pages → non-HDHR sources only.
+    // Startup loads all sources sequentially via fetchAllEpg(true).
+    const isHdhrPage = activeLibPage === 'hdhr';
+    const sources = epgSrc.filter(s => isHdhrPage ? !!s.hdhrGuide : !s.hdhrGuide);
+    if (!sources.length) { toast('No EPG sources configured'); _navLocked = false; return; }
+    for (let i = 0; i < sources.length; i++) {
+      showEpgBanner((sources.length > 1 ? ('📡 Guide ' + (i+1) + '/' + sources.length + ': ') : '📡 ') + (sources[i].name || 'EPG') + '…');
+      await fetchEpgSource(sources[i], false);
+    }
+    hideEpgBanner();
   } catch(e) {
+    hideEpgBanner();
     toast('EPG error: ' + e.message);
   }
   _navLocked = false;

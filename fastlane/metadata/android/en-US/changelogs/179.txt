@@ -1,0 +1,3 @@
+5.9.9-b179
+- Fix: EPG banner crashes Fire TV — toggling display:block/none on a position:fixed element during async parseXMLTV yields crashes the WebView GPU compositor; on TV devices showEpgBanner now uses toast() instead and hideEpgBanner is a no-op (toast auto-dismisses)
+- Fix: Manual EPG refresh (btn-eref) now page-aware — HDHR page refreshes only the HDHR XMLTV source; ITV/all other pages refresh only non-HDHR sources; startup continues to load all sources sequentially via fetchAllEpg(true)
