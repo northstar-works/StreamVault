@@ -756,12 +756,12 @@ document.addEventListener('keydown', function(e) {
           <button class="bc" id="s-hdhr-manage" style="padding:7px 12px;font-size:9px;border-radius:var(--rs)">Choose Channels</button>
         </div>
         <div class="sr" style="margin-top:8px"><div><div class="sl">Tailscale / VPN mode</div><div class="sd">Phone connects to HDHR directly over Tailscale subnet routing. Best option — no proxy needed. Enable this when your phone is on Tailscale and your home network is subnet-routed.</div></div><div class="tgl" id="s-hdhr-ts-toggle"></div></div>
-        <div style="margin-top:8px;padding:8px;background:rgba(255,196,0,.08);border:1px solid rgba(255,196,0,.2);border-radius:var(--rs)"><div style="font-size:9px;color:#ffc400;font-weight:600">📱 Mobile MPEG-2 note</div><div style="font-size:8px;color:var(--t2);margin-top:3px">Phones without a hardware MPEG-2 decoder (e.g. Galaxy S24) typically can't play raw HDHR streams (audio-only). Use Tailscale only on phones with MPEG-2 support, or enable the Remote relay below to route through an ffmpeg H.264 transcoder. Fire TV / Android TV play raw HDHR fine over LAN.</div></div>
-        <div class="sr" style="margin-top:8px"><div><div class="sl">Remote relay (no VPN)</div><div class="sd">Routes HDHR streams through your hdhr-xmltv server's ffmpeg /proxy/ endpoint for an H.264 stream that plays on every device. Phones (which can't decode raw HDHR MPEG-2) need this for video on most channels — keep it on. On Fire TV / TV, the relay auto-bypasses to the direct LAN URL when at home, so you get native HD locally and ffmpeg low-res only when remote.</div></div><div class="tgl" id="s-hdhr-remote-toggle"></div></div>
+        <div style="margin-top:8px;padding:8px;background:rgba(46,213,115,.08);border:1px solid rgba(46,213,115,.2);border-radius:var(--rs)"><div style="font-size:9px;color:var(--gn);font-weight:600">📱 Mobile video</div><div style="font-size:8px;color:var(--t2);margin-top:3px">MPEG-2 playback is handled automatically via the built-in software decoder. No proxy or extra configuration needed.</div></div>
+        <div class="sr" style="margin-top:8px"><div><div class="sl">Remote relay (no VPN)</div><div class="sd">For cellular or networks without Tailscale. Routes HDHR streams through your hdhr-xmltv server's ffmpeg proxy. Set the relay URL to your hdhr subdomain below.</div></div><div class="tgl" id="s-hdhr-remote-toggle"></div></div>
         <div style="margin-top:8px">
           <label>Remote HDHR base URL</label>
-          <input id="s-hdhr-remote-base" placeholder="https://epg.yourdomain.com">
-          <div style="font-size:8px;color:var(--t3);margin-top:4px">Point this at your hdhr-xmltv host (the same server that serves your HDHR XMLTV guide on port 3210). Stream paths /auto/v4.1 are rewritten to /proxy/v4.1 — the ffmpeg transcode endpoint. Example: https://epg.sidneyshelton.com</div>
+          <input id="s-hdhr-remote-base" placeholder="https://tv.yourdomain.com">
+          <div style="font-size:8px;color:var(--t3);margin-top:4px">Enter your hdhr subdomain base URL (e.g. https://hdhr.sidneyshelton.com). Streams are routed to /proxy/v4.1 etc. for ffmpeg H.264 transcoding.</div>
         </div>
         <div style="margin-top:8px">
           <label>HDHR guide provider</label>
@@ -1817,14 +1817,6 @@ function buildFailoverList(item) {
   const region = item.region || '';
   let cands = [];
 
-  // For HDHR items, kick the LAN-reachability probe in the background. The
-  // result lands in _hdhrLanReachable and is honored on the *next* play; the
-  // current play uses the most-recent cached value. With a 60s TTL inside the
-  // probe, this is rate-limited automatically and never blocks the UI.
-  if (isHdhrItem(item) && typeof probeHdhrLanReachability === 'function') {
-    probeHdhrLanReachability(false).catch(() => {});
-  }
-
   // Search playlist
   items.forEach(m => {
     const mb = m.baseName || extractBase(m.title);
@@ -2404,22 +2396,17 @@ function isHdhrItem(item) {
 
 function getHdhrCfg() {
   if (!settings.hdhr) settings.hdhr = {};
-  // Strip vestigial fields written by older builds — they accumulate forever
-  // otherwise because saveSettings() serializes the whole settings object.
-  // mobileProxyEnabled / mobileProxyUrl were superseded by preferRemote /
-  // remoteBaseUrl in the b139-era cleanup; mobileTranscode was never wired
-  // to anything that actually reads it.
-  delete settings.hdhr.mobileProxyEnabled;
-  delete settings.hdhr.mobileProxyUrl;
-  delete settings.hdhr.mobileTranscode;
   settings.hdhr.devices = Array.isArray(settings.hdhr.devices) ? settings.hdhr.devices : [];
   settings.hdhr.repoChannels = Array.isArray(settings.hdhr.repoChannels) ? settings.hdhr.repoChannels : [];
   settings.hdhr.selectedChannelKeys = Array.isArray(settings.hdhr.selectedChannelKeys) ? settings.hdhr.selectedChannelKeys : [];
   settings.hdhr.remoteBaseUrl = String(settings.hdhr.remoteBaseUrl || '').trim();
   settings.hdhr.preferRemote = !!settings.hdhr.preferRemote;
-  settings.hdhr.tailscaleMode = !!settings.hdhr.tailscaleMode;
+  settings.hdhr.tailscaleMode = settings.hdhr.tailscaleMode !== false;
   settings.hdhr.xmltvUrl = String(settings.hdhr.xmltvUrl || '').trim();
   settings.hdhr.xmltvProvider = String(settings.hdhr.xmltvProvider || 'schedulesdirect').trim() || 'schedulesdirect';
+  settings.hdhr.mobileTranscode = String(settings.hdhr.mobileTranscode || 'mobile').trim() || 'mobile';
+  settings.hdhr.mobileProxyEnabled = !!settings.hdhr.mobileProxyEnabled;
+  settings.hdhr.mobileProxyUrl = String(settings.hdhr.mobileProxyUrl || '').trim();
   if (settings.hdhr.enabled === undefined) settings.hdhr.enabled = true;
   return settings.hdhr;
 }
@@ -2506,101 +2493,30 @@ async function ensureHdhrXmltvLoaded(force) {
   fillEpgSourceSelect(getDefaultEpgSourceUrl());
   return true;
 }
-// HDHR LAN-reachability cache. The probe fires on app startup (after loadSettings)
-// and again before each playback attempt. When the phone is on the same LAN as
-// the HDHR device, the direct LAN URL is used even with relay enabled — so HD
-// playback works locally on Fire TV / TV builds without forcing low-res transcode.
-let _hdhrLanReachable = false;
-let _hdhrLanProbeMs = 0;
-const _HDHR_LAN_PROBE_TTL_MS = 60_000; // re-probe at most once per minute
-
-async function probeHdhrLanReachability(force) {
-  // Only TV/Fire TV hardware uses the LAN-bypass result; on phones the relay
-  // (when enabled) always goes through /proxy/ regardless of network, so
-  // probing is wasted work on mobile.
-  const isTvHw = (typeof nativeIsTvDevice === 'function') ? nativeIsTvDevice() : false;
-  if (!isTvHw) { _hdhrLanReachable = false; return false; }
-  const cfg = getHdhrCfg();
-  const devices = (cfg.devices || []).filter(d => d && d.baseUrl);
-  if (!devices.length) { _hdhrLanReachable = false; return false; }
-  const now = Date.now();
-  if (!force && (now - _hdhrLanProbeMs) < _HDHR_LAN_PROBE_TTL_MS) return _hdhrLanReachable;
-  _hdhrLanProbeMs = now;
-  // Try every registered device in parallel; first reachable wins.
-  const probes = devices.map(d => {
-    const probeUrl = normalizeHdhrBase(d.baseUrl) + '/discover.json';
-    return new Promise(resolve => {
-      const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-      const timer = setTimeout(() => { try { ctrl && ctrl.abort(); } catch(e){} resolve(false); }, 1500);
-      fetch(probeUrl, { method: 'GET', cache: 'no-store', signal: ctrl ? ctrl.signal : undefined })
-        .then(r => { clearTimeout(timer); resolve(!!(r && r.ok)); })
-        .catch(() => { clearTimeout(timer); resolve(false); });
-    });
-  });
-  try {
-    const results = await Promise.all(probes);
-    _hdhrLanReachable = results.some(Boolean);
-  } catch (e) {
-    _hdhrLanReachable = false;
-  }
-  return _hdhrLanReachable;
-}
-
-// Synchronous URL resolver — uses the cached _hdhrLanReachable flag.
-//
-// IMPORTANT: phones (incl. Galaxy S24) cannot decode raw HDHR MPEG-2 streams —
-// the OS lacks an MPEG-2 decoder and this APK does not bundle one. On phones,
-// raw streams play as audio-only on almost every channel; only the rare H.264
-// source channels play with video. The "Remote relay" routes streams through
-// the hdhr-xmltv server's ffmpeg /proxy/ endpoint, which outputs H.264 — that
-// is the ONLY path that gives the phone video on most channels. So when relay
-// is enabled on mobile, we ALWAYS go through /proxy/ regardless of network.
-//
-// The auto-LAN bypass exists for TV/Fire TV hardware, which has a hardware
-// MPEG-2 decoder and plays raw streams natively at full HD. Bypassing the
-// relay on LAN gives those devices native HD instead of low-res transcode.
-//
-// Routing rules (in order):
-//   1. Non-HDHR item → return its raw URL.
-//   2. Tailscale/VPN subnet mode → direct LAN URL (user-asserted: their device
-//      can decode raw MPEG-2 over the VPN tunnel).
-//   3. Relay enabled AND device is TV hardware AND on LAN → bypass relay, use
-//      direct LAN URL for native HD. (Auto-LAN bypass — TV-hardware only.)
-//   4. Relay enabled (any other case — phone always lands here, TV off-LAN
-//      lands here) → rewrite /auto/vN.N → /proxy/vN.N and route through the
-//      remote base. ffmpeg server-side transcode → H.264, plays everywhere.
-//   5. Otherwise (relay disabled) → direct LAN URL. Works on TV; on phones
-//      this is the audio-only path for non-H.264 channels.
 function resolveHdhrPlayableUrl(item, url) {
   if (!isHdhrItem(item)) return extractUrl(url || item.url || '');
   const cfg = getHdhrCfg();
   const hd = item.hdhrMeta || {};
-  const directUrl = extractUrl(url || item.url || '');
+
   const remoteBase = normalizeHdhrBase(cfg.remoteBaseUrl || '');
-
-  if (cfg.tailscaleMode) return directUrl;
-
+  // Tailscale / VPN subnet mode: phone reaches HDHR directly via VPN — use LAN IP as-is.
+  // The media3-decoder-ffmpeg extension handles MPEG-2 decoding natively on mobile.
+  if (cfg.tailscaleMode) return extractUrl(url || item.url || '');
+  // Remote relay mode: route through the hdhr-xmltv proxy for non-VPN remote access.
+  // Rewrites /auto/v4.1 → /proxy/v4.1 so the ffmpeg transcode endpoint is used.
   if (cfg.preferRemote && remoteBase) {
-    // Auto-LAN bypass is TV-hardware only. Phones must always go through the
-    // ffmpeg /proxy/ endpoint when relay is enabled — direct streams are
-    // audio-only on mobile hardware, regardless of LAN reachability.
-    const isTvHw = (typeof nativeIsTvDevice === 'function') ? nativeIsTvDevice() : false;
-    const canBypass = isTvHw && _hdhrLanReachable;
-
-    if (!canBypass) {
-      const streamPath = hd.streamPath || (() => {
-        try { return new URL(directUrl, location.href).pathname; }
-        catch (e) { return ''; }
-      })();
-      if (streamPath) {
-        // /auto/v4.1 → /proxy/v4.1 → hdhr-xmltv ffmpeg transcode endpoint.
-        const vMatch = streamPath.match(/\/(v[\d.]+)(?:[?#]|$)/);
-        const proxyPath = vMatch ? '/proxy/' + vMatch[1] : streamPath;
-        return remoteBase + proxyPath;
-      }
+    const streamPath = hd.streamPath || (() => {
+      try { return new URL(extractUrl(url || item.url || ''), location.href).pathname; }
+      catch (e) { return ''; }
+    })();
+    if (streamPath) {
+      // Convert /auto/v4.1 → /proxy/v4.1 for the hdhr-xmltv proxy endpoint
+      const vMatch = streamPath.match(/\/(v[\d.]+)(?:[?#]|$)/);
+      const proxyPath = vMatch ? '/proxy/' + vMatch[1] : streamPath;
+      return remoteBase + proxyPath;
     }
   }
-  return directUrl;
+  return extractUrl(url || item.url || '');
 }
 async function loadHdhrChannelsFromDevice(deviceId, options) {
   const dev = getHdhrDeviceById(deviceId);
@@ -10044,16 +9960,28 @@ setInterval(() => {
 }, 30 * 60000);
 
 // ─── Init ───
+// Seed SharedPreferences with saved HDHR transcode preference so PlayerActivity
+// uses the right quality before the user opens Settings.
+(function() {
+  try {
+    const sv = localStorage.getItem('sv_settings');
+    if (sv) {
+      const parsed = JSON.parse(sv);
+      const q = parsed && parsed.hdhr && parsed.hdhr.mobileTranscode;
+      if (q && window.NativePlayer && typeof window.NativePlayer.setHdhrTranscode === 'function') {
+        window.NativePlayer.setHdhrTranscode(q);
+      }
+      const proxyOn = parsed && parsed.hdhr && parsed.hdhr.mobileProxyEnabled;
+      if (window.NativePlayer && typeof window.NativePlayer.setHdhrProxyEnabled === 'function') {
+        window.NativePlayer.setHdhrProxyEnabled(proxyOn ? 'true' : 'false');
+      }
+    }
+  } catch(e) {}
+})();
 loadItems();
 loadRepos();
 loadEpg();
 loadSettings();
-// Fire HDHR LAN-reachability probe once at startup. Auto-LAN bypass uses the
-// cached result so resolveHdhrPlayableUrl can stay synchronous. Re-probes
-// happen when the player opens (see openPlayer/_playStream paths).
-if (typeof probeHdhrLanReachability === 'function') {
-  probeHdhrLanReachability(true).catch(() => {});
-}
 _loadSportGameCache(); // restore today's sport schedule data before fetchAllLeagueSchedules runs
 _pruneRepoStreamCaches(); // clean up cache keys for deleted repos
 loadPlayLog();
