@@ -1,0 +1,4 @@
+5.10.3-b183
+- Fix (root cause): parseXMLTV completely broken since b180 — Python triple-quoted strings treat  as backspace \x08, not regex word boundary; all 6 regex patterns in parseXMLTV (channel id, icon src, programme channel/start/stop attributes) never matched; every EPG fetch returned 0 channels and 0 programmes silently; fixed to use explicit \s whitespace and attribute patterns
+- Fix: 4h background EPG interval now passes silent=true — was triggering banner/toast unnecessarily during background refresh
+- Known tech debt: setHdhrTranscode and setHdhrProxyEnabled in MainActivity write SharedPreferences that PlayerActivity never reads (leftover from resolution experiment) — harmless but will be cleaned up in a future build

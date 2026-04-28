@@ -1,0 +1,3 @@
+5.10.2-b182
+- Fix: parseXMLTV regex completely broken since b180 — Python triple-quoted string  is backspace \x08, not regex word boundary; both <channel> and <programme> regexes never matched any element, causing every EPG fetch to silently return 0 channels and 0 programmes regardless of source; fixed to use [\s] whitespace match which correctly handles the space before attributes in XMLTV
+- This is the root cause of all EPG failures on TV and phone since b180

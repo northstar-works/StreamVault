@@ -2078,10 +2078,10 @@ async function parseXMLTV(xml, epgIdFilter) {
   }
 
   // ── Channels ──────────────────────────────────────────────────────────────
-  const chanRx = /<channel([^>]*)>/g;
+  const chanRx = /<channel([\s][^>]*)>/g;
   let cx;
   while ((cx = chanRx.exec(xml)) !== null) {
-    const idM = cx[1].match(/id="([^"]*)"/);
+    const idM = cx[1].match(/(?:^| )id="([^"]*)"/);
     if (!idM) continue;
     const id = idM[1];
     const end = xml.indexOf('</channel>', cx.index);
@@ -2098,7 +2098,7 @@ async function parseXMLTV(xml, epgIdFilter) {
       if (/lang="x-affiliate"/.test(dm[1])) affiliate = name;
       else displayNames.push(name);
     }
-    const iconM = body.match(/<icon[^>]*src="([^"]*)"/);
+    const iconM = body.match(/<icon[^>]+src="([^"]*)"/);
     channels[id] = {
       name: displayNames[0] || allDn[0] || id,
       displayNames,
@@ -2109,17 +2109,22 @@ async function parseXMLTV(xml, epgIdFilter) {
   }
 
   // ── Programmes ────────────────────────────────────────────────────────────
-  const progRx = /<programme([^>]*)>/g;
+  // If filter provided but empty: no matched channels yet, skip ALL programme
+  // parsing to prevent OOM. Nothing passes epgIds.has() anyway.
+  if (epgIdFilter && epgIdFilter.size === 0) {
+    return { channels, programs: {} };
+  }
+  const progRx = /<programme([\s][^>]*)>/g;
   let count = 0;
   while ((cx = progRx.exec(xml)) !== null) {
     if (++count % CHUNK === 0) await yield_();
     const attrs = cx[1];
-    const chM = attrs.match(/channel="([^"]*)"/);
+    const chM = attrs.match(/(?:^| )channel="([^"]*)"/);
     if (!chM) continue;
     const chId = chM[1];
     if (epgIdFilter && epgIdFilter.size > 0 && !epgIdFilter.has(chId)) continue;
-    const startM = attrs.match(/start="([^"]*)"/);
-    const stopM  = attrs.match(/stop="([^"]*)"/);
+    const startM = attrs.match(/(?:^| )start="([^"]*)"/);
+    const stopM  = attrs.match(/(?:^| )stop="([^"]*)"/);
     if (!startM || !stopM) continue;
     const start = parseXMLDate(startM[1]);
     const stop  = parseXMLDate(stopM[1]);
@@ -10003,7 +10008,7 @@ window.addEventListener('popstate', () => {
 
 // ─── Background EPG Refresh (every 4 hours) ───
 setInterval(() => {
-  if (epgSrc.length) fetchAllEpg();
+  if (epgSrc.length) fetchAllEpg(true); // silent — background refresh, no toast
 }, 4 * 3600000);
 
 // ─── Guide auto-refresh every 30 min (keeps "now" line and current show updated) ───
@@ -10099,32 +10104,17 @@ setTimeout(async () => {
   // ── Hide splash after repos. EPG runs in background. ──
   // TV: hold splash 10s extra so EPG can finish before D-pad is active.
   if (isTvDevice && epgSrc.length) {
-    const _epgSkipped = epgSrc.filter(s => _epgIsStillValid(s)).length;
-    const _epgNeeded  = epgSrc.length - _epgSkipped;
-    _splashStatus(_epgNeeded > 0 ? 'Loading guide data…' : 'Guide data cached — ready…');
-    // Fire EPG in background, hide splash after EPG OR 10s timeout (whichever first)
-    var _splashDone = false;
-    var _hideSplashOnce = function() {
-      if (_splashDone) return;
-      _splashDone = true;
-      window._hideSplash && window._hideSplash('Ready');
-      _navLocked = false;
-      setTimeout(refreshTvFocus, 80);
-      setTimeout(function() { fetchAllLeagueSchedules(false); }, 300);
-    };
-    var _tvTimeout = setTimeout(_hideSplashOnce, 10000);
-    fetchAllEpg(true).then(function() {
-      clearTimeout(_tvTimeout);
-      _hideSplashOnce();
-      // After EPG loads, eagerly load HDHR XMLTV guide and re-match channel IDs.
-      // Runs non-blocking so it never delays splash or D-pad activation.
-      _startupEnsureHdhrEpg();
-      // Re-render library and guide so EPG data is immediately visible in ITV channel list
-      renderLib(); renderGuide();
-    }).catch(function() {
-      clearTimeout(_tvTimeout);
-      _hideSplashOnce();
-    });
+    // Never block D-pad on EPG — Fire TV OOMs on large XMLTV and the splash
+    // freeze makes the app appear hung. Hide splash immediately, EPG background.
+    window._hideSplash && window._hideSplash('Ready');
+    _navLocked = false;
+    setTimeout(refreshTvFocus, 80);
+    setTimeout(function() { fetchAllLeagueSchedules(false); }, 300);
+    setTimeout(function() {
+      fetchAllEpg(true).then(function() {
+        renderLib(); renderGuide();
+      }).catch(function(e){console.warn('[SV] startup EPG:',e&&e.message);});
+    }, 1500);
   } else {
     // Mobile or no EPG: hide splash immediately after repos
     window._hideSplash && window._hideSplash('Ready');
