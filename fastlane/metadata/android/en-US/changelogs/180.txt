@@ -1,0 +1,4 @@
+5.10.0-b180
+- Fix: EPG refresh crashes Fire TV — replaced DOMParser-based parseXMLTV with regex parser; DOMParser created a DOM tree 5-10× the XML string size in RAM, causing OOM on large Schedules Direct XMLTV feeds; regex approach uses only the XML string + filtered output objects
+- Fix: Startup EPG always empty — saveEpg was skipping epgData entirely when channel count > 500 (Schedules Direct has thousands); now always saves programs (filtered/capped, small) and only skips channels if too many; guide data now persists across restarts
+- Fix: EPG re-fetched unnecessarily / not re-fetched when needed — _epgIsStillValid now checks that programs are actually in memory before honoring the 4h cache window; if programs are empty (data was not saved), forces re-fetch regardless of lastFetch timestamp

@@ -1276,8 +1276,14 @@ function _pruneRepoStreamCaches() {
 // re-fetching the XMLTV source can be skipped on this startup.
 function _epgIsStillValid(src) {
   if (!src.lastFetch) return false;
-  // Always honour minimum re-fetch interval regardless of coverage
-  if (Date.now() - src.lastFetch < EPG_MIN_REFETCH_MS) return true;
+  // Always honour minimum re-fetch interval regardless of coverage —
+  // BUT only if programs are actually cached. saveEpg skips epgData.channels
+  // when there are too many (Schedules Direct), so programs may be empty even
+  // with a recent lastFetch. In that case, re-fetch regardless of timestamp.
+  if (Date.now() - src.lastFetch < EPG_MIN_REFETCH_MS) {
+    const hasPrograms = Object.keys(epgData.programs || {}).length > 0;
+    return hasPrograms; // false → force re-fetch even within 4h window
+  }
   // Check that stored programs extend at least EPG_VALID_BUFFER_MS into the future
   const programs = epgData.programs || {};
   let maxStop = 0;
@@ -1412,13 +1418,15 @@ function loadRepos() {
 function saveEpg() {
   try {
     localStorage.setItem(KEYS.epgSrc, JSON.stringify(epgSrc));
-    // Skip serializing large EPG datasets — JSON.stringify on 9000+ channels
-    // blocks the JS thread for minutes on Fire TV. EPG sources are saved above
-    // so it re-fetches automatically on next startup.
+    // Always save programs (filtered + capped — small regardless of source size).
+    // Skip channels if large (5000+ from Schedules Direct) — only needed for EPG picker,
+    // re-populated on next fetch. This ensures guide data survives app restart even
+    // when the channel list is too large to fit alongside programs in localStorage.
     const chCount = Object.keys(epgData.channels || {}).length;
-    if (chCount <= 500) {
-      localStorage.setItem(KEYS.epgData, JSON.stringify(epgData));
-    }
+    const dataToSave = chCount > 500
+      ? { channels: {}, programs: epgData.programs }
+      : epgData;
+    localStorage.setItem(KEYS.epgData, JSON.stringify(dataToSave));
   } catch(e) {}
 }
 function normalizeEpgUrl(url) {
@@ -2057,57 +2065,73 @@ function queueStartupAltCheck() {
 
 // ─── EPG ───
 async function parseXMLTV(xml, epgIdFilter) {
-  // Parse in async chunks to keep the UI/D-pad responsive on Fire TV.
-  // DOMParser itself is synchronous but we yield the event loop between
-  // batches of programme elements so input events can still be processed.
-  // Fire TV has ~4ms setTimeout overhead per yield. Larger chunks = fewer yields = faster parse.
-  // 500 items = ~1/5 the yields vs 100, while still yielding often enough to stay responsive.
-  // epgIdFilter: if provided (Set of epgTitle strings), only programme elements for matching
-  // channel IDs are kept — dramatically reduces peak memory on large Schedules Direct feeds.
-  const CHUNK = 500;
+  // Regex-based parser — avoids DOMParser which creates a full DOM tree (5-10× string size)
+  // and crashes Fire TV WebView with OOM on large Schedules Direct feeds.
+  // XMLTV is predictable enough that regex extraction is safe and much leaner.
+  const CHUNK = 1000; // programmes between yields
   const yield_ = () => new Promise(r => setTimeout(r, 0));
-
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(xml, 'text/xml');
   const channels = {}, programs = {};
   const now = Date.now(), cutoff = now + 48 * 3600000;
 
-  // Channels are usually small — process all at once
-  doc.querySelectorAll('channel').forEach(ch => {
-    const id = ch.getAttribute('id');
-    // Collect display-name elements — hdhr-xmltv emits call-sign, guide number,
-    // and optionally lang="x-affiliate" (e.g. "Fox", "NBC") as separate entries.
-    const allDnEls = Array.from(ch.querySelectorAll('display-name'));
-    const allDn = allDnEls.map(n => n.textContent.trim()).filter(Boolean);
-    const affiliateEl = allDnEls.find(n => n.getAttribute('lang') === 'x-affiliate');
-    const affiliate = affiliateEl ? affiliateEl.textContent.trim() : '';
-    // Filter affiliate out of the general displayNames list
-    const displayNames = allDn.filter(n => n !== affiliate);
-    const dn = displayNames[0] || id;
-    const ic = ch.querySelector('icon');
-    channels[id] = {
-      name: dn,
-      displayNames,          // stored for suffix/number matching in autoMatchHdhrEpgId
-      affiliate,             // e.g. "Fox", "NBC", "ABC" — from lineup.json Affiliate field
-      icon: ic ? (ic.getAttribute('src') || '') : ''
-    };
-  });
-
-  // Programmes can be 50k+ — process in chunks and yield between each
-  const progs = Array.from(doc.querySelectorAll('programme'));
-  for (let i = 0; i < progs.length; i++) {
-    if (i > 0 && i % CHUNK === 0) await yield_();
-    const p = progs[i];
-    const chId = p.getAttribute('channel');
-    if (epgIdFilter && epgIdFilter.size > 0 && !epgIdFilter.has(chId)) continue;
-    const start = parseXMLDate(p.getAttribute('start'));
-    const stop = parseXMLDate(p.getAttribute('stop'));
-    if (stop < now - 10800000 || start > cutoff) continue;
-    const title = p.querySelector('title');
-    if (!programs[chId]) programs[chId] = [];
-    programs[chId].push({ start, stop, title: title ? title.textContent : '' });
+  function decodeXml(s) {
+    return (s || '').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'");
   }
 
+  // ── Channels ──────────────────────────────────────────────────────────────
+  const chanRx = /<channel([^>]*)>/g;
+  let cx;
+  while ((cx = chanRx.exec(xml)) !== null) {
+    const idM = cx[1].match(/id="([^"]*)"/);
+    if (!idM) continue;
+    const id = idM[1];
+    const end = xml.indexOf('</channel>', cx.index);
+    if (end < 0) break;
+    const body = xml.slice(cx.index + cx[0].length, end);
+    const displayNames = [], allDn = [];
+    let affiliate = '';
+    const dnRx = /<display-name([^>]*)>([^<]*)<\/display-name>/g;
+    let dm;
+    while ((dm = dnRx.exec(body)) !== null) {
+      const name = decodeXml(dm[2].trim());
+      if (!name) continue;
+      allDn.push(name);
+      if (/lang="x-affiliate"/.test(dm[1])) affiliate = name;
+      else displayNames.push(name);
+    }
+    const iconM = body.match(/<icon[^>]*src="([^"]*)"/);
+    channels[id] = {
+      name: displayNames[0] || allDn[0] || id,
+      displayNames,
+      affiliate,
+      icon: iconM ? iconM[1] : ''
+    };
+    chanRx.lastIndex = end + 10;
+  }
+
+  // ── Programmes ────────────────────────────────────────────────────────────
+  const progRx = /<programme([^>]*)>/g;
+  let count = 0;
+  while ((cx = progRx.exec(xml)) !== null) {
+    if (++count % CHUNK === 0) await yield_();
+    const attrs = cx[1];
+    const chM = attrs.match(/channel="([^"]*)"/);
+    if (!chM) continue;
+    const chId = chM[1];
+    if (epgIdFilter && epgIdFilter.size > 0 && !epgIdFilter.has(chId)) continue;
+    const startM = attrs.match(/start="([^"]*)"/);
+    const stopM  = attrs.match(/stop="([^"]*)"/);
+    if (!startM || !stopM) continue;
+    const start = parseXMLDate(startM[1]);
+    const stop  = parseXMLDate(stopM[1]);
+    if (stop < now - 10800000 || start > cutoff) continue;
+    const end = xml.indexOf('</programme>', cx.index);
+    const titleM = end >= 0
+      ? xml.slice(cx.index + cx[0].length, end).match(/<title[^>]*>([^<]*)<\/title>/)
+      : null;
+    if (!programs[chId]) programs[chId] = [];
+    programs[chId].push({ start, stop, title: decodeXml(titleM ? titleM[1] : '') });
+    if (end >= 0) progRx.lastIndex = end + 12;
+  }
   Object.keys(programs).forEach(k => programs[k].sort((a, b) => a.start - b.start));
   return { channels, programs };
 }
