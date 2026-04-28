@@ -1621,6 +1621,10 @@ function restoreBackupPayload(data) {
     m.tags = m.tags || [];
     m.baseName = m.baseName || extractBase(m.title || m.name || '');
   });
+  // Run getHdhrCfg() to trigger tailscaleMode migration before saving,
+  // ensuring relay works immediately after settings restore without needing
+  // the user to open HDHR settings first.
+  getHdhrCfg();
   saveItems(); saveRepos(); saveEpg(); saveSettings();
   // Re-initialize in-place instead of location.reload().
   // location.reload() called from inside a Java bridge evaluateJavascript callback

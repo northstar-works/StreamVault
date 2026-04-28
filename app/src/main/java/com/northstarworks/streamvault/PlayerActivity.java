@@ -547,7 +547,7 @@ public class PlayerActivity extends Activity {
 
         DataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
             .setUserAgent("StreamVault/5.7 ExoPlayer")
-            .setConnectTimeoutMs(15000).setReadTimeoutMs(15000)
+            .setConnectTimeoutMs(30000).setReadTimeoutMs(30000)
             .setAllowCrossProtocolRedirects(true)
             .setContentTypePredicate(value -> true);
         // Wake lock keeps CPU alive during HLS segment downloads
@@ -678,7 +678,7 @@ public class PlayerActivity extends Activity {
                 }
                 if (!locked&&foAuto&&networkAvailable) tryNextVariant();
                 else if (!networkAvailable) { showMsg("Network lost — waiting…"); loadingView.setVisibility(View.VISIBLE); }
-                else showStreamFailed();
+                else showStreamFailed("code "+error.errorCode);
             }
         });
         player.setMediaSource(src);
@@ -1011,8 +1011,10 @@ public class PlayerActivity extends Activity {
         if (lastSuccessUrl!=null) { for(int i=0;i<variants.size();i++) if(lastSuccessUrl.equals(variants.get(i).url)){playVariant(i);return;} }
         showAllFailed();
     }
-    private void showAllFailed()    { loadingView.setVisibility(View.GONE); errorContainer.setVisibility(View.VISIBLE); errorText.setText("All "+variants.size()+" source(s) failed"); }
-    private void showStreamFailed() { loadingView.setVisibility(View.GONE); errorContainer.setVisibility(View.VISIBLE); errorText.setText("Stream failed"); }
+    private void showAllFailed()    { showAllFailed(""); }
+    private void showAllFailed(String detail) { loadingView.setVisibility(View.GONE); errorContainer.setVisibility(View.VISIBLE); errorText.setText("All "+variants.size()+" source(s) failed"+(detail.isEmpty()?"":" · "+detail)); }
+    private void showStreamFailed() { showStreamFailed(""); }
+    private void showStreamFailed(String detail) { loadingView.setVisibility(View.GONE); errorContainer.setVisibility(View.VISIBLE); errorText.setText("Stream failed"+(detail.isEmpty()?"":" · "+detail)); }
     private void startFailoverTimeout() {
         cancelFailoverTimeout();
         failoverTimeoutRunnable = ()->{

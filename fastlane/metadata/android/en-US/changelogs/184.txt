@@ -1,0 +1,5 @@
+5.10.4-b184
+- Relay diagnostic: player error screen now shows ExoPlayer error code (e.g. "All 1 source(s) failed · code 2001") so we can identify the exact failure reason without logcat
+- Relay fix: HTTP connect/read timeout increased from 15s to 30s — hdhr-xmltv ffmpeg startup (connect HDHR → receive MPEG-2 → encode H.264) can take 2-5s on first connection, plus TLS handshake; 15s was marginal
+- Relay fix: restoreBackupPayload now calls getHdhrCfg() before saveSettings() — ensures tailscaleMode migration runs immediately on settings inject rather than waiting for first play attempt
+- Audit: isHdhrProxyUrl() in PlayerActivity is defined but never called — dead code; no functional impact but flagged
