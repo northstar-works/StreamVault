@@ -993,7 +993,7 @@ http://stream.example.com/cnn
 </div>
 
 <div class="toast" id="toast"></div>
-<div id="epg-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,20,.82);color:#ccc;text-align:center;font-size:10px;padding:5px 8px;z-index:299;pointer-events:none;letter-spacing:.03em;backdrop-filter:blur(2px)">📡 Updating guide data…</div>
+<div id="epg-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,20,.92);color:#ccc;text-align:center;font-size:10px;padding:5px 8px;z-index:299;pointer-events:none;letter-spacing:.03em">📡 Updating guide data…</div>
 <!-- Backup File Picker Modal (TV-friendly in-app picker) -->
 <div class="mo" id="mo-bk-pick">
 <div class="mc" style="max-height:80vh">
@@ -2189,7 +2189,7 @@ async function fetchEpgSource(src, silent) {
     // Defer heavy DOM rebuild so the toast can render first
     setTimeout(function() { renderLib(); renderGuide(); }, 80);
   } catch(e) {
-    toast('EPG error: ' + e.message);
+    if (!silent) toast('EPG error: ' + e.message);
   }
 }
 
@@ -2402,6 +2402,10 @@ function getHdhrCfg() {
   settings.hdhr.remoteBaseUrl = String(settings.hdhr.remoteBaseUrl || '').trim();
   settings.hdhr.preferRemote = !!settings.hdhr.preferRemote;
   settings.hdhr.tailscaleMode = !!settings.hdhr.tailscaleMode;
+  // Migration: the resolution experiment accidentally defaulted tailscaleMode to true
+  // for all users. The two modes are mutually exclusive in the UI. If both are true
+  // simultaneously (impossible via normal toggles), preferRemote wins.
+  if (settings.hdhr.tailscaleMode && settings.hdhr.preferRemote) settings.hdhr.tailscaleMode = false;
   settings.hdhr.xmltvUrl = String(settings.hdhr.xmltvUrl || '').trim();
   settings.hdhr.xmltvProvider = String(settings.hdhr.xmltvProvider || 'schedulesdirect').trim() || 'schedulesdirect';
   settings.hdhr.mobileTranscode = String(settings.hdhr.mobileTranscode || 'mobile').trim() || 'mobile';
@@ -2500,14 +2504,20 @@ function resolveHdhrPlayableUrl(item, url) {
   // Tailscale / VPN subnet mode: phone reaches HDHR directly via VPN — use LAN IP as-is.
   // The media3-decoder-ffmpeg extension handles MPEG-2 decoding natively on mobile.
   if (cfg.tailscaleMode) return extractUrl(url || item.url || '');
-  // Remote relay mode: Caddy reverse-proxies hdhr.yourdomain.com → HDHR device:5004.
-  // Pass the path through as-is (/auto/v4.1 etc) — no rewriting needed.
+  // Remote relay mode: Caddy proxies hdhr.yourdomain.com → port 3210 (hdhr-xmltv bridge).
+  // hdhr-xmltv's /proxy/v4.1 endpoint transcodes MPEG-2 → H.264 via ffmpeg.
+  // Fire TV has no hardware MPEG-2 decoder, so raw /auto/ streams always fail.
+  // Rewrite /auto/v4.1 → /proxy/v4.1 to hit the transcoding endpoint.
   if (cfg.preferRemote && remoteBase) {
     const streamPath = hd.streamPath || (() => {
       try { return new URL(extractUrl(url || item.url || ''), location.href).pathname; }
       catch (e) { return ''; }
     })();
-    if (streamPath) return remoteBase + streamPath;
+    if (streamPath) {
+      const vMatch = streamPath.match(/\/(v[\d.]+)(?:[?#]|$)/);
+      const proxyPath = vMatch ? '/proxy/' + vMatch[1] : streamPath;
+      return remoteBase + proxyPath;
+    }
   }
   return extractUrl(url || item.url || '');
 }

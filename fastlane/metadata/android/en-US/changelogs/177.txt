@@ -1,0 +1,5 @@
+5.9.7-b177
+- Fix: Startup "EPG error: failed" toast — fetchEpgSource now suppresses error toast when called silently (startup); error toast only shows on manual refresh
+- Fix: HDHR relay streams crash/fail — epg-banner used backdrop-filter:blur() which hard-crashes the WebView renderer on Fire TV hardware; replaced with solid background
+- Fix: Relay URL was wrong — b176 incorrectly changed hdhr.sidneyshelton.com to port 5004 (raw MPEG-2); restored to port 3210 (hdhr-xmltv bridge) and restored /auto/ → /proxy/ path rewrite so Fire TV gets ffmpeg-transcoded H.264 it can actually decode
+- Fix: tailscaleMode stored as true from resolution experiment bug — migration in getHdhrCfg clears tailscaleMode automatically when preferRemote is also true (mutually exclusive in UI, simultaneous=bug artifact)
