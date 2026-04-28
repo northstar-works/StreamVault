@@ -2049,12 +2049,14 @@ function queueStartupAltCheck() {
 }
 
 // ─── EPG ───
-async function parseXMLTV(xml) {
+async function parseXMLTV(xml, epgIdFilter) {
   // Parse in async chunks to keep the UI/D-pad responsive on Fire TV.
   // DOMParser itself is synchronous but we yield the event loop between
   // batches of programme elements so input events can still be processed.
   // Fire TV has ~4ms setTimeout overhead per yield. Larger chunks = fewer yields = faster parse.
   // 500 items = ~1/5 the yields vs 100, while still yielding often enough to stay responsive.
+  // epgIdFilter: if provided (Set of epgTitle strings), only programme elements for matching
+  // channel IDs are kept — dramatically reduces peak memory on large Schedules Direct feeds.
   const CHUNK = 500;
   const yield_ = () => new Promise(r => setTimeout(r, 0));
 
@@ -2090,6 +2092,7 @@ async function parseXMLTV(xml) {
     if (i > 0 && i % CHUNK === 0) await yield_();
     const p = progs[i];
     const chId = p.getAttribute('channel');
+    if (epgIdFilter && epgIdFilter.size > 0 && !epgIdFilter.has(chId)) continue;
     const start = parseXMLDate(p.getAttribute('start'));
     const stop = parseXMLDate(p.getAttribute('stop'));
     if (stop < now - 10800000 || start > cutoff) continue;
@@ -2164,10 +2167,12 @@ async function fetchEpgSource(src, silent) {
     } else {
       text = await resp.text();
     }
-    const parsed = await parseXMLTV(text);
+    // Build epgIds before parsing so parseXMLTV can skip non-matching programmes
+    // entirely — prevents OOM on large Schedules Direct feeds on Fire TV.
+    const epgIds = new Set(items.map(m => m.epgTitle).filter(Boolean));
+    const parsed = await parseXMLTV(text, epgIds);
     // Keep ALL channel names in epgData.channels (lightweight — just {name, icon}).
     // Only filter PROGRAMS to matched library items — that's the heavy data (50MB+).
-    const epgIds = new Set(items.map(m => m.epgTitle).filter(Boolean));
     const filteredPrograms = {};
     Object.keys(parsed.channels).forEach(id => {
       if (epgIds.has(id) && parsed.programs[id]) {
@@ -2785,10 +2790,14 @@ function renderHdhrSettings() {
     const _missingToasts = { 'schedulesdirect': 'Enter your Schedules Direct XMLTV export URL first', 'hdhr-native': 'Enter your hdhr-xmltv bridge URL first (e.g. https://epg.yourdomain.com/hdhr-epg.xmltv)', 'custom': 'Set an HDHR XMLTV guide URL first' };
     if (!cfg.xmltvUrl) { toast(_missingToasts[cfg.xmltvProvider] || _missingToasts['custom']); return; }
     try {
-      await ensureHdhrXmltvLoaded(true);
+      // Step 1: auto-match epgTitles and sync to items[] FIRST so that when
+      // fetchEpgSource runs inside ensureHdhrXmltvLoaded, epgIds already includes
+      // HDHR channel IDs — otherwise programs get filtered out and nothing shows.
       cfg.repoChannels = (cfg.repoChannels || []).map(ch => ({ ...ch, epgTitle: autoMatchHdhrEpgId({ GuideNumber: ch.guideNumber, GuideName: ch.guideName }, null) || ch.epgTitle || '' }));
       saveSettings();
       syncHdhrSelectionToLibrary();
+      // Step 2: now fetch + parse XMLTV — programs will be kept for matched channels
+      await ensureHdhrXmltvLoaded(true);
       renderHdhrSettings();
       toast('HDHR guide refreshed');
     } catch (e) {

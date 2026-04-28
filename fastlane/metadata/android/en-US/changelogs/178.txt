@@ -1,0 +1,3 @@
+5.9.8-b178
+- Fix: HDHR XMLTV fetch crashes Fire TV (OOM) — parseXMLTV now accepts an epgIdFilter set and skips programme elements for non-matching channels during parse, preventing peak memory from holding all Schedules Direct programs simultaneously
+- Fix: HDHR guide refresh shows "refreshed" but no EPG data appears — fetchGuideBtn now auto-matches epgTitles and syncs channels to items[] BEFORE fetching XMLTV, so epgIds is populated when fetchEpgSource filters programs
